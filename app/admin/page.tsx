@@ -1,0 +1,25 @@
+import { prisma } from "@/lib/prisma";
+
+export const dynamic = "force-dynamic";
+
+export default async function AdminPage() {
+  const leads = await prisma.lead.findMany({ orderBy: { createdAt: "desc" }, take: 200 });
+  return (
+    <div>
+      <h1>Leads</h1>
+      <p className="small">Newest first. Basic Auth protects this route.</p>
+      {leads.length === 0 ? (
+        <div className="card">No leads yet.</div>
+      ) : (
+        leads.map((l) => (
+          <div key={l.id} className="card">
+            <div className="small">{new Date(l.createdAt).toISOString()}</div>
+            <div><strong>{l.email}</strong>{l.name ? ` — ${l.name}` : ""}</div>
+            {l.source ? <div className="small">Source: {l.source}</div> : null}
+            {l.message ? <p style={{ whiteSpace: "pre-wrap" }}>{l.message}</p> : null}
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
