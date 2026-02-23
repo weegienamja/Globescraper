@@ -4,8 +4,12 @@ import type { NextRequest } from "next/server";
 export function middleware(req: NextRequest) {
   if (!req.nextUrl.pathname.startsWith("/admin")) return NextResponse.next();
 
-  const user = process.env.BASIC_AUTH_USER || "";
-  const pass = process.env.BASIC_AUTH_PASS || "";
+
+  if (!process.env.BASIC_AUTH_USER || !process.env.BASIC_AUTH_PASS) {
+    throw new Error("BASIC_AUTH_USER and BASIC_AUTH_PASS environment variables are required but not set.");
+  }
+  const user = process.env.BASIC_AUTH_USER;
+  const pass = process.env.BASIC_AUTH_PASS;
 
   const auth = req.headers.get("authorization");
   if (!auth || !auth.startsWith("Basic ")) {

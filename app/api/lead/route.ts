@@ -20,16 +20,21 @@ export async function POST(req: Request) {
     });
   }
 
-  const lead = await prisma.lead.create({
-    data: {
-      name: parsed.data.name,
-      email: parsed.data.email,
-      message: parsed.data.message,
-      source: parsed.data.source,
-    },
-  });
-
-  return new Response(JSON.stringify({ ok: true, id: lead.id }), {
-    headers: { "content-type": "application/json" },
-  });
+  try {
+    const lead = await prisma.lead.create({
+      data: {
+        name: parsed.data.name,
+        email: parsed.data.email,
+        message: parsed.data.message,
+        source: parsed.data.source,
+      },
+    });
+    return new Response(JSON.stringify({ ok: true, id: lead.id }), {
+      headers: { "content-type": "application/json" },
+    });
+  } catch (err) {
+    // Log error server-side for debugging, but do not leak details to client
+    console.error("[API /lead] Prisma error:", err);
+    return new Response("Database error", { status: 500 });
+  }
 }

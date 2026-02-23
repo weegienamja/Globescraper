@@ -15,8 +15,15 @@ scalability.
 -   `sitemap.xml` and `robots.txt`
 -   Lead capture API (`POST /api/lead`)
 -   Simple admin leads dashboard (`/admin`) protected by Basic Auth
--   Prisma + SQLite for development (easy to switch to MySQL later on
-    Hostinger)
+
+    -   Prisma + SQLite for development, MySQL in production (Hostinger)
+
+## Environment variables required
+
+-   `DATABASE_URL` (MySQL connection string for production)
+-   `BASIC_AUTH_USER` and `BASIC_AUTH_PASS` (for /admin access)
+
+App will fail to start if these are missing.
 
 ## Local setup
 
