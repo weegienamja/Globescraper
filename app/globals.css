@@ -1,3 +1,63 @@
+.static-header {
+	width: 100%;
+	background: #fff;
+	box-shadow: 0 2px 8px rgba(25, 118, 210, 0.06);
+	border-radius: 0 0 18px 18px;
+	margin-bottom: 32px;
+	position: relative;
+	z-index: 10;
+}
+.static-header__container {
+	max-width: 980px;
+	margin: 0 auto;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 18px 16px 14px 16px;
+}
+.static-header__logo {
+	width: 44px;
+	height: 44px;
+	object-fit: cover;
+	border-radius: 12px;
+	box-shadow: 0 2px 8px rgba(25, 118, 210, 0.08);
+	background: #f3f6fa;
+	margin-right: 18px;
+}
+.static-header__nav {
+	display: flex;
+	gap: 18px;
+}
+.static-header__nav a {
+	color: var(--link, #1976d2);
+	font-weight: 600;
+	padding: 7px 16px;
+	border-radius: 7px;
+	transition: background 0.15s, color 0.15s;
+	text-decoration: none;
+	font-size: 1rem;
+}
+.static-header__nav a:hover {
+	background: var(--primary, #1976d2);
+	color: #fff;
+}
+
+@media (max-width: 600px) {
+	.static-header__container {
+		flex-direction: column;
+		gap: 10px;
+		padding: 10px 6px 8px 6px;
+	}
+	.static-header__nav {
+		gap: 8px;
+		flex-wrap: wrap;
+		justify-content: center;
+	}
+	.static-header__logo {
+		margin-right: 0;
+		margin-bottom: 8px;
+	}
+}
 /* Article / HTML content styling */
 
 .prose {
