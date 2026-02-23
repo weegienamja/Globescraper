@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && prisma migrate deploy && next build",
-    "start": "next start -H 0.0.0.0 -p $PORT",
+    "start": "node -e \"console.log('PORT='+ (process.env.PORT||'')); console.log('NODE='+process.version); require('child_process').spawn(process.platform==='win32'?'npx.cmd':'npx', ['next','start','-H','0.0.0.0','-p', String(process.env.PORT || 3000)], { stdio: 'inherit' })\"",
     "lint": "next lint",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
