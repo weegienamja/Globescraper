@@ -1,3 +1,134 @@
+.header {
+	width: 100%;
+	background: #fff;
+	box-shadow: 0 2px 8px rgba(25, 118, 210, 0.06);
+	border-radius: 0 0 18px 18px;
+	margin-bottom: 32px;
+	position: relative;
+	z-index: 10;
+}
+.header__container {
+	max-width: 980px;
+	margin: 0 auto;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 18px 16px 14px 16px;
+}
+.header__logo-link {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	text-decoration: none;
+}
+.header__logo {
+	width: 44px;
+	height: 44px;
+	object-fit: cover;
+	border-radius: 12px;
+	box-shadow: 0 2px 8px rgba(25, 118, 210, 0.08);
+	background: #f3f6fa;
+}
+.header__wordmark {
+	font-size: 1.3rem;
+	font-weight: 700;
+	color: #1976d2;
+	letter-spacing: -0.01em;
+}
+.header__nav {
+	display: none;
+}
+.header__nav-list {
+	display: flex;
+	gap: 18px;
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+.header__nav-list li a {
+	color: var(--link, #1976d2);
+	font-weight: 600;
+	padding: 7px 16px;
+	border-radius: 7px;
+	transition: background 0.15s, color 0.15s;
+	text-decoration: none;
+	font-size: 1rem;
+}
+.header__nav-list li a:hover,
+.header__nav-list li a:focus {
+	background: var(--primary, #1976d2);
+	color: #fff;
+}
+.header__burger {
+	display: none;
+	flex-direction: column;
+	gap: 4px;
+	background: none;
+	border: none;
+	cursor: pointer;
+	padding: 8px;
+}
+.header__burger-bar {
+	width: 28px;
+	height: 3px;
+	background: #1976d2;
+	border-radius: 2px;
+}
+.header__nav-mobile {
+	display: none;
+	position: absolute;
+	top: 100%;
+	left: 0;
+	width: 100%;
+	background: #fff;
+	box-shadow: 0 4px 16px rgba(25, 118, 210, 0.12);
+	border-radius: 0 0 18px 18px;
+	z-index: 20;
+}
+.header__nav-mobile--open {
+	display: block;
+}
+.header__nav-mobile .header__nav-list {
+	flex-direction: column;
+	gap: 0;
+}
+.header__nav-mobile .header__nav-list li a {
+	padding: 14px 18px;
+	font-size: 1.1rem;
+	border-radius: 0;
+	border-bottom: 1px solid #e5e5e5;
+}
+.header__nav-mobile .header__nav-list li:last-child a {
+	border-bottom: none;
+}
+
+@media (min-width: 700px) {
+	.header__nav {
+		display: block;
+	}
+	.header__burger {
+		display: none;
+	}
+	.header__nav-mobile {
+		display: none !important;
+	}
+}
+@media (max-width: 699px) {
+	.header__nav {
+		display: none;
+	}
+	.header__burger {
+		display: flex;
+	}
+}
+
+/* Improve hero text contrast */
+.prose h1, .prose h2, .prose h3 {
+	color: #1a202c;
+}
+.prose p {
+	color: #2d3748;
+}
 .static-header {
 	width: 100%;
 	background: #fff;
