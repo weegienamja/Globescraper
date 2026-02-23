@@ -12,23 +12,24 @@
     "postinstall": "prisma generate",
     "migrate:deploy": "prisma migrate deploy"
   },
-    "engines": {
-      "node": ">=18.17.0"
-    },
+  "engines": {
+    "node": ">=18.17.0"
+  },
   "dependencies": {
+    "@prisma/client": "5.18.0",
+    "@vercel/analytics": "^1.6.1",
     "next": "14.2.5",
     "react": "18.3.1",
     "react-dom": "18.3.1",
-    "@prisma/client": "5.18.0",
     "zod": "3.23.8"
   },
   "devDependencies": {
-    "typescript": "5.5.4",
     "@types/node": "20.14.10",
     "@types/react": "18.3.3",
     "@types/react-dom": "18.3.0",
-    "prisma": "5.18.0",
     "eslint": "8.57.0",
-    "eslint-config-next": "14.2.5"
+    "eslint-config-next": "14.2.5",
+    "prisma": "5.18.0",
+    "typescript": "5.5.4"
   }
 }
