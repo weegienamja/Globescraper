@@ -5,10 +5,8 @@ export async function GET() {
     ok: true,
     time: new Date().toISOString(),
     env: {
+      hasPort: Boolean(process.env.PORT),
       hasDatabaseUrl: Boolean(process.env.DATABASE_URL),
-      hasBasicAuthUser: Boolean(process.env.BASIC_AUTH_USER),
-      hasBasicAuthPass: Boolean(process.env.BASIC_AUTH_PASS),
-      hasBasicAuthCombined: Boolean(process.env.BASIC_AUTH),
     },
   });
 }
