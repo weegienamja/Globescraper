@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && prisma migrate deploy && next build",
-    "start": "node scripts/check-build.js && node -e \"const { spawnSync } = require('child_process'); const port = process.env.PORT || '3000'; console.log('NODE', process.version); console.log('PORT', port); const r = spawnSync(process.platform==='win32'?'npx.cmd':'npx', ['next','start','-H','0.0.0.0','-p', String(port)], { stdio: 'inherit' }); process.exit(r.status ?? 1);\"",
+    "start": "node scripts/startup-log.js && node scripts/check-build.js && node -e \"const { spawnSync } = require('child_process'); const port = process.env.PORT || '3000'; const r = spawnSync(process.platform==='win32'?'npx.cmd':'npx', ['next','start','-H','0.0.0.0','-p', String(port)], { stdio: 'inherit' }); process.exit(r.status ?? 1);\"",
     "lint": "next lint",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
