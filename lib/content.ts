@@ -17,12 +17,22 @@ export function getPagesMeta(): Record<string, PageMeta> {
 }
 
 export function getHtmlForPost(slug: string): string {
-  const p = path.join(contentRoot, "posts", `${slug}.html`);
-  return fs.readFileSync(p, "utf-8");
+  const safeName = path.basename(slug);
+  const p = path.join(contentRoot, "posts", `${safeName}.html`);
+  const resolved = path.resolve(p);
+  if (!resolved.startsWith(path.resolve(contentRoot, "posts"))) {
+    throw new Error("Invalid post slug");
+  }
+  return fs.readFileSync(resolved, "utf-8");
 }
 
 export function getHtmlForPage(slug: string): string {
-  const filename = slug === "index" ? "index.html" : `${slug}.html`;
+  const safeName = path.basename(slug);
+  const filename = safeName === "index" ? "index.html" : `${safeName}.html`;
   const p = path.join(contentRoot, "pages", filename);
-  return fs.readFileSync(p, "utf-8");
+  const resolved = path.resolve(p);
+  if (!resolved.startsWith(path.resolve(contentRoot, "pages"))) {
+    throw new Error("Invalid page slug");
+  }
+  return fs.readFileSync(resolved, "utf-8");
 }

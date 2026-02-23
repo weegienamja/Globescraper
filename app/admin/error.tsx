@@ -15,9 +15,8 @@ export default function AdminError({
 
   return (
     <div style={{ padding: 24, fontFamily: "system-ui, sans-serif" }}>
-      <h1>Admin crashed</h1>
-      <p><b>Message:</b> {error.message}</p>
-      {error.digest ? <p><b>Digest:</b> {error.digest}</p> : null}
+      <h1>Something went wrong</h1>
+      <p>An unexpected error occurred. Please try again later or check server logs.</p>
       <button onClick={() => reset()} style={{ padding: "8px 12px" }}>
         Try again
       </button>

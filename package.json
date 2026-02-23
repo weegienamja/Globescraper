@@ -5,30 +5,31 @@
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && prisma migrate deploy && next build",
-    "start": "node -e \"const { spawnSync } = require('child_process'); const path = require('path'); const fs = require('fs'); const cwd = process.cwd(); const inNext = path.basename(cwd) === '.next'; const root = inNext ? path.resolve(cwd, '..') : cwd; const port = process.env.PORT || '3000'; console.log('[startup] cwd', cwd); console.log('[startup] root', root); console.log('[startup] node', process.version); console.log('[startup] PORT', port); console.log('[startup] root has .next', fs.existsSync(path.join(root, '.next'))); const r = spawnSync(process.platform==='win32'?'npx.cmd':'npx', ['next','start','-H','0.0.0.0','-p', String(port)], { stdio: 'inherit', cwd: root }); process.exit(r.status ?? 1);\"",
+    "start": "next start -H 0.0.0.0 -p $PORT",
     "lint": "next lint",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "postinstall": "prisma generate",
     "migrate:deploy": "prisma migrate deploy"
   },
-    "engines": {
-      "node": ">=18.17.0"
-    },
+  "engines": {
+    "node": ">=18.17.0"
+  },
   "dependencies": {
+    "@prisma/client": "5.18.0",
+    "isomorphic-dompurify": "^3.0.0",
     "next": "14.2.5",
     "react": "18.3.1",
     "react-dom": "18.3.1",
-    "@prisma/client": "5.18.0",
     "zod": "3.23.8"
   },
   "devDependencies": {
-    "typescript": "5.5.4",
     "@types/node": "20.14.10",
     "@types/react": "18.3.3",
     "@types/react-dom": "18.3.0",
-    "prisma": "5.18.0",
     "eslint": "8.57.0",
-    "eslint-config-next": "14.2.5"
+    "eslint-config-next": "14.2.5",
+    "prisma": "5.18.0",
+    "typescript": "5.5.4"
   }
 }

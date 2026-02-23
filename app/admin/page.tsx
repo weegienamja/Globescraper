@@ -1,20 +1,21 @@
 import { prisma } from "@/lib/prisma";
 import { unstable_noStore as noStore } from "next/cache";
+import type { Lead } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function AdminPage() {
   noStore();
-  let leads = [];
+  let leads: Lead[] = [];
   try {
     leads = await prisma.lead.findMany({ orderBy: { createdAt: "desc" }, take: 200 });
   } catch (err) {
     console.error("[/admin] Prisma error:", err);
     return (
       <div style={{ padding: 24, fontFamily: "system-ui, sans-serif" }}>
-        <h1>Admin crashed</h1>
-        <p><b>Error:</b> {String(err)}</p>
+        <h1>Admin Error</h1>
+        <p>Could not load leads. Check server logs for details.</p>
       </div>
     );
   }

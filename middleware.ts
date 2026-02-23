@@ -26,31 +26,33 @@ function unauthorized() {
 }
 
 export function middleware(req: NextRequest) {
-  // DEBUG: Disable admin auth temporarily
-  // ---
-  // if (!req.nextUrl.pathname.startsWith("/admin")) return NextResponse.next();
-  // const creds = parseBasicAuthFromEnv();
-  // if (!creds) {
-  //   return new NextResponse(
-  //     "Admin auth is misconfigured. Set BASIC_AUTH_USER and BASIC_AUTH_PASS (or BASIC_AUTH as user:pass).",
-  //     { status: 500 }
-  //   );
-  // }
-  // const authHeader = req.headers.get("authorization");
-  // if (!authHeader?.startsWith("Basic ")) return unauthorized();
-  // const base64 = authHeader.slice("Basic ".length);
-  // let decoded = "";
-  // try {
-  //   decoded = Buffer.from(base64, "base64").toString("utf8");
-  // } catch {
-  //   return unauthorized();
-  // }
-  // const sep = decoded.indexOf(":");
-  // if (sep === -1) return unauthorized();
-  // const user = decoded.slice(0, sep);
-  // const pass = decoded.slice(sep + 1);
-  // if (user !== creds.user || pass !== creds.pass) return unauthorized();
-  // return NextResponse.next();
+  if (!req.nextUrl.pathname.startsWith("/admin")) return NextResponse.next();
+
+  const creds = parseBasicAuthFromEnv();
+  if (!creds) {
+    return new NextResponse(
+      "Admin auth is misconfigured. Set BASIC_AUTH_USER and BASIC_AUTH_PASS (or BASIC_AUTH as user:pass).",
+      { status: 500 }
+    );
+  }
+
+  const authHeader = req.headers.get("authorization");
+  if (!authHeader?.startsWith("Basic ")) return unauthorized();
+
+  const base64 = authHeader.slice("Basic ".length);
+  let decoded = "";
+  try {
+    decoded = Buffer.from(base64, "base64").toString("utf8");
+  } catch {
+    return unauthorized();
+  }
+
+  const sep = decoded.indexOf(":");
+  if (sep === -1) return unauthorized();
+  const user = decoded.slice(0, sep);
+  const pass = decoded.slice(sep + 1);
+
+  if (user !== creds.user || pass !== creds.pass) return unauthorized();
   return NextResponse.next();
 }
 

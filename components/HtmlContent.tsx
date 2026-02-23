@@ -1,9 +1,13 @@
+import DOMPurify from "isomorphic-dompurify";
 
-// WARNING: This component renders raw HTML. Only use with trusted, static content.
-// If you ever render user input or external content, sanitize it first (e.g. with DOMPurify).
-// WARNING: This component renders raw HTML. Only use with trusted, static content.
-// If you ever render user input or external content, sanitize it first (e.g. with DOMPurify).
-
+/**
+ * Renders sanitized HTML content.
+ * All HTML is run through DOMPurify to prevent XSS even from trusted sources.
+ */
 export function HtmlContent({ html }: { html: string }) {
-  return <article className="prose" dangerouslySetInnerHTML={{ __html: html }} />;
+  const clean = DOMPurify.sanitize(html, {
+    ADD_TAGS: ["iframe"],
+    ADD_ATTR: ["target", "rel", "allow", "allowfullscreen", "frameborder"],
+  });
+  return <article className="prose" dangerouslySetInnerHTML={{ __html: clean }} />;
 }

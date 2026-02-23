@@ -1,6 +1,6 @@
 "use client";
-// ...existing code...
 
+import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -10,7 +10,7 @@ function Header() {
     <header className="header">
       <div className="header__container">
         <Link href="/" className="header__logo-link">
-          <img src="/logo.svg" alt="GlobeScraper logo" className="header__logo" width={44} height={44} />
+          <Image src="/logo.svg" alt="GlobeScraper logo" className="header__logo" width={44} height={44} priority />
           <span className="header__wordmark">GlobeScraper</span>
         </Link>
         <nav className="header__nav" aria-label="Main navigation">
@@ -48,7 +48,7 @@ export function SiteLayout({ children }: { children: React.ReactNode }) {
       <main className="container">{children}</main>
       <footer className="container footer">
         <div>© {new Date().getFullYear()} GlobeScraper</div>
-        <div className="small">Built as a custom Node.js app on Hostinger.</div>
+        <div className="small">Teach English in Cambodia — guides, support, and community.</div>
       </footer>
     </>
   );

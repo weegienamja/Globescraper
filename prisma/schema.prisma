@@ -5,13 +5,25 @@ generator client {
 datasource db {
   provider = "mysql"
   url      = env("DATABASE_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
 }
 
 model Lead {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
   name      String?
-  email     String
-  message   String?
+  email     String   @db.VarChar(255)
+  message   String?  @db.Text
   source    String?
+  deleted   Boolean  @default(false)
+
+  @@index([email])
+  @@index([createdAt])
+}
+
+model WaitlistEntry {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  createdAt DateTime @default(now())
 }

@@ -1,3 +1,11 @@
 ﻿node_modules/
+.next/
+.vercel/
 .env
+.env.local
+.env*.local
 prisma/migrations_init.sql
+*.log
+*.tsbuildinfo
+dist/
+coverage/
