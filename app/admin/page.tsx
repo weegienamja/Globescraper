@@ -6,7 +6,18 @@ export const revalidate = 0;
 
 export default async function AdminPage() {
   noStore();
-  const leads = await prisma.lead.findMany({ orderBy: { createdAt: "desc" }, take: 200 });
+  let leads = [];
+  try {
+    leads = await prisma.lead.findMany({ orderBy: { createdAt: "desc" }, take: 200 });
+  } catch (err) {
+    console.error("[/admin] Prisma error:", err);
+    return (
+      <div style={{ padding: 24, fontFamily: "system-ui, sans-serif" }}>
+        <h1>Admin crashed</h1>
+        <p><b>Error:</b> {String(err)}</p>
+      </div>
+    );
+  }
   return (
     <div>
       <h1>Leads</h1>
