@@ -1,8 +1,11 @@
 import { prisma } from "@/lib/prisma";
+import { unstable_noStore as noStore } from "next/cache";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export default async function AdminPage() {
+  noStore();
   const leads = await prisma.lead.findMany({ orderBy: { createdAt: "desc" }, take: 200 });
   return (
     <div>
