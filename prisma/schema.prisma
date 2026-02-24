@@ -9,7 +9,7 @@ datasource db {
 }
 
 model Lead {
-  id        String   @id @default(cuid())
+  id        String   @id @default(guid())
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   name      String?

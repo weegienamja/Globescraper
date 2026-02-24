@@ -521,3 +521,39 @@ img {
 .prose .body-small {
   color: var(--text) !important;
 }
+
+/* ==========================================================
+   Tables inside blog / page content
+   ========================================================== */
+.prose table {
+  display: block;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: 1.5em 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.prose table th,
+.prose table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.prose table th {
+  background: var(--bg-elevated);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.prose table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.prose table tbody tr:nth-child(even) {
+  background: var(--bg-surface);
+}
