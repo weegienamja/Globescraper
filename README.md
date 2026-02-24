@@ -14,16 +14,16 @@ scalability.
 -   Blog index with crawlable links
 -   `sitemap.xml` and `robots.txt`
 -   Lead capture API (`POST /api/lead`)
--   Simple admin leads dashboard (`/admin`) protected by Basic Auth
-
-    -   Prisma + SQLite for development, MySQL in production (Hostinger)
+-   Admin leads dashboard (`/admin`) protected by Auth.js v5 (Credentials + database sessions)
+-   Prisma + MySQL
 
 ## Environment variables required
 
--   `DATABASE_URL` (MySQL connection string for production)
--   `BASIC_AUTH_USER` and `BASIC_AUTH_PASS` (for /admin access)
+-   `DATABASE_URL` — MySQL connection string
+-   `AUTH_SECRET` — Auth.js session secret (generate with `npx auth secret` or `openssl rand -base64 33`)
+-   `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` — for login rate limiting (production)
 
-App will fail to start if these are missing.
+See `.env.example` for all variables.
 
 ## Local setup
 
@@ -69,6 +69,11 @@ Send JSON:
 2.  Update `prisma/schema.prisma` datasource provider to `mysql`.
 3.  Set `DATABASE_URL` like: `mysql://USER:PASSWORD@HOST:PORT/DATABASE`
 4.  Run migrations: `npx prisma migrate deploy`
+
+> **MySQL version note:** Migrations are written to be compatible with
+> MySQL 5.7+ and MariaDB 10.3+. If you know your exact version, you can
+> check with `SELECT VERSION();`. Hostinger shared plans typically run
+> MariaDB 10.x.
 
 ## Notes
 

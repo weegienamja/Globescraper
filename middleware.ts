@@ -1,61 +1,70 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { getLoginRatelimit } from "@/lib/rate-limit";
 
-function parseBasicAuthFromEnv(): { user: string; pass: string } | null {
-  // Preferred: separate vars
-  const user = process.env.BASIC_AUTH_USER;
-  const pass = process.env.BASIC_AUTH_PASS;
-  if (user && pass) return { user, pass };
+/**
+ * Lightweight middleware:
+ *
+ * 1) Guards /admin routes — checks for session-token cookie presence.
+ *    Full session + role validation happens server-side via `requireAdmin()`.
+ *
+ * 2) Rate-limits POST /api/auth/callback/credentials (login attempts).
+ *    Uses Upstash Redis when configured; skips in local dev otherwise.
+ *
+ * Edge-runtime safe — no Prisma, no argon2.
+ */
 
-  // Backward compatible: single var "user:pass"
-  const combined = process.env.BASIC_AUTH;
-  if (combined && combined.includes(":")) {
-    const idx = combined.indexOf(":");
-    const u = combined.slice(0, idx);
-    const p = combined.slice(idx + 1);
-    if (u && p) return { user: u, pass: p };
+const SESSION_COOKIE = "authjs.session-token";
+const SECURE_SESSION_COOKIE = "__Secure-authjs.session-token";
+
+const CREDENTIALS_CALLBACK = "/api/auth/callback/credentials";
+
+export async function middleware(req: NextRequest) {
+  // ── Rate-limit credential login attempts ──────────────────────
+  if (
+    req.method === "POST" &&
+    req.nextUrl.pathname === CREDENTIALS_CALLBACK
+  ) {
+    const limiter = getLoginRatelimit();
+    if (limiter) {
+      // Prefer req.ip (set by Vercel, non-spoofable), then x-forwarded-for,
+      // then a dev fallback. Use || (not ??) so empty strings are skipped.
+      const ip =
+        req.ip
+        || req.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
+        || "127.0.0.1";
+
+      const { success, reset } = await limiter.limit(ip);
+
+      if (!success) {
+        const retryAfter = Math.ceil((reset - Date.now()) / 1000);
+        return NextResponse.json(
+          { error: "Too many login attempts. Please try again later." },
+          {
+            status: 429,
+            headers: { "Retry-After": String(retryAfter) },
+          },
+        );
+      }
+    }
   }
-  return null;
-}
 
-function unauthorized() {
-  return new NextResponse("Unauthorized", {
-    status: 401,
-    headers: { "WWW-Authenticate": 'Basic realm="Admin"' },
-  });
-}
+  // ── Admin cookie guard ────────────────────────────────────────
+  if (req.nextUrl.pathname.startsWith("/admin")) {
+    const hasSession =
+      req.cookies.has(SESSION_COOKIE) ||
+      req.cookies.has(SECURE_SESSION_COOKIE);
 
-export function middleware(req: NextRequest) {
-  if (!req.nextUrl.pathname.startsWith("/admin")) return NextResponse.next();
-
-  const creds = parseBasicAuthFromEnv();
-  if (!creds) {
-    return new NextResponse(
-      "Admin auth is misconfigured. Set BASIC_AUTH_USER and BASIC_AUTH_PASS (or BASIC_AUTH as user:pass).",
-      { status: 500 }
-    );
+    if (!hasSession) {
+      const loginUrl = new URL("/login", req.url);
+      loginUrl.searchParams.set("callbackUrl", req.nextUrl.pathname);
+      return NextResponse.redirect(loginUrl);
+    }
   }
 
-  const authHeader = req.headers.get("authorization");
-  if (!authHeader?.startsWith("Basic ")) return unauthorized();
-
-  const base64 = authHeader.slice("Basic ".length);
-  let decoded = "";
-  try {
-    decoded = Buffer.from(base64, "base64").toString("utf8");
-  } catch {
-    return unauthorized();
-  }
-
-  const sep = decoded.indexOf(":");
-  if (sep === -1) return unauthorized();
-  const user = decoded.slice(0, sep);
-  const pass = decoded.slice(sep + 1);
-
-  if (user !== creds.user || pass !== creds.pass) return unauthorized();
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/admin/:path*"],
+  matcher: ["/admin/:path*", "/api/auth/callback/credentials"],
 };

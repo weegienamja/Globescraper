@@ -1,4 +1,6 @@
 import { prisma } from "@/lib/prisma";
+import { requireAdmin } from "@/lib/auth";
+import { SignOutButton } from "./sign-out-button";
 import { unstable_noStore as noStore } from "next/cache";
 import type { Lead } from "@prisma/client";
 
@@ -7,6 +9,8 @@ export const revalidate = 0;
 
 export default async function AdminPage() {
   noStore();
+  const session = await requireAdmin();
+
   let leads: Lead[] = [];
   try {
     leads = await prisma.lead.findMany({ orderBy: { createdAt: "desc" }, take: 200 });
@@ -21,8 +25,14 @@ export default async function AdminPage() {
   }
   return (
     <div>
-      <h1>Leads</h1>
-      <p className="small">Newest first. Basic Auth protects this route.</p>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <h1>Leads</h1>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <span className="small">{session.user.email}</span>
+          <SignOutButton />
+        </div>
+      </div>
+      <p className="small">Newest first. Authenticated via Auth.js.</p>
       {leads.length === 0 ? (
         <div className="card">No leads yet.</div>
       ) : (
