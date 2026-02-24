@@ -1,9 +1,19 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useRef } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
+import { useSession } from "next-auth/react";
 import { updateCommunityProfile } from "@/app/community/actions";
+import {
+  uploadAvatar,
+  removeAvatar,
+  uploadGalleryImage,
+  deleteGalleryImage,
+} from "@/app/community/image-actions";
 import { COMMUNITY_COUNTRIES } from "@/lib/validations/community";
+
+type GalleryImage = { id: string; url: string };
 
 type ProfileData = {
   displayName: string;
@@ -16,6 +26,8 @@ type ProfileData = {
   meetupCityTour: boolean;
   meetupJobAdvice: boolean;
   meetupStudyGroup: boolean;
+  avatarUrl: string | null;
+  galleryImages: GalleryImage[];
 };
 
 export function CommunityProfileForm({
@@ -24,16 +36,90 @@ export function CommunityProfileForm({
   initial: ProfileData | null;
 }) {
   const router = useRouter();
+  const { update: updateSession } = useSession();
   const [error, setError] = useState("");
   const [selectedCountries, setSelectedCountries] = useState<string[]>(
     initial?.targetCountries ?? [],
   );
   const [pending, startTransition] = useTransition();
 
+  // Avatar state
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(
+    initial?.avatarUrl ?? null,
+  );
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+
+  // Gallery state
+  const [gallery, setGallery] = useState<GalleryImage[]>(
+    initial?.galleryImages ?? [],
+  );
+  const [galleryUploading, setGalleryUploading] = useState(false);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+
   function toggleCountry(c: string) {
     setSelectedCountries((prev) =>
       prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c],
     );
+  }
+
+  async function handleAvatarUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setAvatarUploading(true);
+    setError("");
+    const fd = new FormData();
+    fd.set("file", file);
+    const res = await uploadAvatar(fd);
+    setAvatarUploading(false);
+    if ("error" in res) {
+      setError(res.error);
+      return;
+    }
+    setAvatarUrl(res.url);
+    await updateSession(); // refresh JWT with new avatarUrl
+  }
+
+  async function handleAvatarRemove() {
+    setAvatarUploading(true);
+    setError("");
+    const res = await removeAvatar();
+    setAvatarUploading(false);
+    if ("error" in res) {
+      setError(res.error);
+      return;
+    }
+    setAvatarUrl(null);
+    if (avatarInputRef.current) avatarInputRef.current.value = "";
+    await updateSession();
+  }
+
+  async function handleGalleryUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setGalleryUploading(true);
+    setError("");
+    const fd = new FormData();
+    fd.set("file", file);
+    const res = await uploadGalleryImage(fd);
+    setGalleryUploading(false);
+    if (galleryInputRef.current) galleryInputRef.current.value = "";
+    if ("error" in res) {
+      setError(res.error);
+      return;
+    }
+    // Refresh to get the new image with its ID
+    router.refresh();
+  }
+
+  async function handleGalleryDelete(imageId: string) {
+    setError("");
+    const res = await deleteGalleryImage(imageId);
+    if ("error" in res) {
+      setError(res.error);
+      return;
+    }
+    setGallery((prev) => prev.filter((img) => img.id !== imageId));
   }
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -73,6 +159,49 @@ export function CommunityProfileForm({
   return (
     <form onSubmit={handleSubmit} className="community-form">
       {error && <div className="form__error">{error}</div>}
+
+      {/* ── Avatar upload ─────────────────────────── */}
+      <div className="form__avatar-section">
+        <div className="form__avatar-preview">
+          {avatarUrl ? (
+            <Image
+              src={avatarUrl}
+              alt="Your profile photo"
+              width={96}
+              height={96}
+              className="form__avatar-img"
+            />
+          ) : (
+            <div className="form__avatar-placeholder">
+              {(initial?.displayName?.[0] ?? "?").toUpperCase()}
+            </div>
+          )}
+        </div>
+        <div className="form__avatar-actions">
+          <label className="btn btn--outline btn--sm form__avatar-upload-label">
+            {avatarUploading ? "Uploading..." : avatarUrl ? "Change Photo" : "Upload Photo"}
+            <input
+              ref={avatarInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={handleAvatarUpload}
+              disabled={avatarUploading}
+              className="sr-only"
+            />
+          </label>
+          {avatarUrl && (
+            <button
+              type="button"
+              onClick={handleAvatarRemove}
+              disabled={avatarUploading}
+              className="btn btn--ghost btn--sm"
+            >
+              Remove
+            </button>
+          )}
+          <span className="form__avatar-hint">JPEG, PNG, or WebP. Max 2 MB.</span>
+        </div>
+      </div>
 
       <label className="form__label">
         Display Name *
@@ -190,6 +319,48 @@ export function CommunityProfileForm({
           <option value="PRIVATE">Private — only you and admins</option>
         </select>
       </label>
+
+      {/* ── Gallery images ────────────────────────── */}
+      <fieldset className="form__fieldset">
+        <legend>Gallery Photos (up to 5)</legend>
+        <p className="form__hint">Share photos with the community — travel, teaching, etc.</p>
+
+        <div className="form__gallery-grid">
+          {gallery.map((img) => (
+            <div key={img.id} className="form__gallery-item">
+              <Image
+                src={img.url}
+                alt="Gallery photo"
+                width={200}
+                height={200}
+                className="form__gallery-img"
+              />
+              <button
+                type="button"
+                onClick={() => handleGalleryDelete(img.id)}
+                className="form__gallery-delete"
+                aria-label="Delete photo"
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+
+          {gallery.length < 5 && (
+            <label className="form__gallery-add">
+              <span>{galleryUploading ? "Uploading..." : "+"}</span>
+              <input
+                ref={galleryInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={handleGalleryUpload}
+                disabled={galleryUploading}
+                className="sr-only"
+              />
+            </label>
+          )}
+        </div>
+      </fieldset>
 
       <button
         type="submit"

@@ -60,17 +60,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         // Check if user has a profile on initial sign-in
         const profile = await prisma.profile.findUnique({
           where: { userId: user.id },
-          select: { id: true },
+          select: { id: true, avatarUrl: true },
         });
         token.hasProfile = !!profile;
+        token.avatarUrl = profile?.avatarUrl ?? null;
       }
       // Allow manual refresh (e.g. after profile creation)
       if (trigger === "update" && token.sub) {
         const profile = await prisma.profile.findUnique({
           where: { userId: token.sub },
-          select: { id: true },
+          select: { id: true, avatarUrl: true },
         });
         token.hasProfile = !!profile;
+        token.avatarUrl = profile?.avatarUrl ?? null;
       }
       return token;
     },
@@ -84,6 +86,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.role = token.role as "USER" | "ADMIN";
       }
       session.user.hasProfile = !!token.hasProfile;
+      session.user.avatarUrl = token.avatarUrl ?? null;
       return session;
     },
   },

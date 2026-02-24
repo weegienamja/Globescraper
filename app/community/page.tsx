@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import Link from "next/link";
+import Image from "next/image";
 import { COMMUNITY_COUNTRIES, INTENT_LABELS } from "@/lib/validations/community";
 
 export const dynamic = "force-dynamic";
@@ -84,6 +85,7 @@ export default async function CommunityPage({
     select: {
       userId: true,
       displayName: true,
+      avatarUrl: true,
       currentCountry: true,
       currentCity: true,
       meetupCoffee: true,
@@ -187,9 +189,19 @@ export default async function CommunityPage({
               className="community-card"
             >
               <div className="community-card__header">
-                <div className="community-card__avatar">
-                  {p.displayName?.[0]?.toUpperCase() ?? "?"}
-                </div>
+                {p.avatarUrl ? (
+                  <Image
+                    src={p.avatarUrl}
+                    alt={p.displayName ?? ""}
+                    width={44}
+                    height={44}
+                    className="community-card__avatar-img"
+                  />
+                ) : (
+                  <div className="community-card__avatar">
+                    {p.displayName?.[0]?.toUpperCase() ?? "?"}
+                  </div>
+                )}
                 <div>
                   <h3 className="community-card__name">{p.displayName}</h3>
                   {(p.currentCity || p.currentCountry) && (

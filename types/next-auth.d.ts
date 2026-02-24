@@ -11,6 +11,7 @@ declare module "next-auth" {
       id: string;
       role: "USER" | "ADMIN";
       hasProfile: boolean;
+      avatarUrl?: string | null;
     } & DefaultSession["user"];
   }
 }
@@ -19,5 +20,6 @@ declare module "next-auth/jwt" {
   interface JWT extends DefaultJWT {
     role?: "USER" | "ADMIN";
     hasProfile?: boolean;
+    avatarUrl?: string | null;
   }
 }

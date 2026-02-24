@@ -22,7 +22,10 @@ export default async function EditCommunityProfilePage() {
 
   const profile = await prisma.profile.findUnique({
     where: { userId: session.user.id },
-    include: { targetCountries: { select: { country: true } } },
+    include: {
+      targetCountries: { select: { country: true } },
+      images: { orderBy: { sortOrder: "asc" }, select: { id: true, url: true } },
+    },
   });
 
   const initial = profile
@@ -39,6 +42,8 @@ export default async function EditCommunityProfilePage() {
         meetupCityTour: profile.meetupCityTour,
         meetupJobAdvice: profile.meetupJobAdvice,
         meetupStudyGroup: profile.meetupStudyGroup,
+        avatarUrl: profile.avatarUrl ?? null,
+        galleryImages: profile.images.map((img) => ({ id: img.id, url: img.url })),
       }
     : null;
 

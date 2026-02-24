@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import Link from "next/link";
+import Image from "next/image";
 import { ConnectButton, BlockButton, ReportButton } from "./profile-actions";
 import { INTENT_LABELS } from "@/lib/validations/community";
 
@@ -44,6 +45,7 @@ export default async function CommunityProfilePage({
     include: {
       targetCountries: { select: { country: true } },
       user: { select: { name: true, disabled: true } },
+      images: { orderBy: { sortOrder: "asc" } },
     },
   });
 
@@ -113,9 +115,19 @@ export default async function CommunityProfilePage({
 
       <div className="profile-view__card">
         <div className="profile-view__header">
-          <div className="community-card__avatar community-card__avatar--lg">
-            {profile.displayName[0]?.toUpperCase() ?? "?"}
-          </div>
+          {profile.avatarUrl ? (
+            <Image
+              src={profile.avatarUrl}
+              alt={profile.displayName}
+              width={96}
+              height={96}
+              className="profile-view__avatar-img"
+            />
+          ) : (
+            <div className="community-card__avatar community-card__avatar--lg">
+              {profile.displayName[0]?.toUpperCase() ?? "?"}
+            </div>
+          )}
           <div>
             <h1 className="profile-view__name">{profile.displayName}</h1>
             {(profile.currentCity || profile.currentCountry) && (
@@ -150,6 +162,24 @@ export default async function CommunityProfilePage({
             <div className="community-card__intents">
               {intents.map((i) => (
                 <span key={i} className="intent-badge">{i}</span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {profile.images.length > 0 && (
+          <div className="profile-view__section">
+            <h2>Gallery</h2>
+            <div className="profile-view__gallery">
+              {profile.images.map((img) => (
+                <Image
+                  key={img.id}
+                  src={img.url}
+                  alt={`Photo by ${profile.displayName}`}
+                  width={400}
+                  height={300}
+                  className="profile-view__gallery-img"
+                />
               ))}
             </div>
           </div>

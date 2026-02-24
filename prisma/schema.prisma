@@ -182,6 +182,7 @@ model Profile {
   bio                   String?             @db.Text
   currentCountry        String?             @db.VarChar(100)
   currentCity           String?             @db.VarChar(100)
+  avatarUrl             String?             @db.VarChar(500)
   visibility            ProfileVisibility   @default(MEMBERS_ONLY)
   meetupCoffee          Boolean             @default(false)
   meetupCityTour        Boolean             @default(false)
@@ -192,6 +193,7 @@ model Profile {
 
   user                  User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   targetCountries       ProfileTargetCountry[]
+  images                ProfileImage[]
 
   @@index([currentCountry])
   @@index([currentCity])
@@ -207,6 +209,18 @@ model ProfileTargetCountry {
   profile   Profile       @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
   @@unique([profileId, country])
+  @@index([profileId])
+}
+
+model ProfileImage {
+  id        String   @id @default(uuid())
+  profileId String
+  url       String   @db.VarChar(500)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
   @@index([profileId])
 }
 
