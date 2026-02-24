@@ -113,8 +113,8 @@ function Header() {
               src={logoPath}
               alt={`${name} logo`}
               className="header__logo"
-              width={44}
-              height={44}
+              width={56}
+              height={56}
               priority
             />
             <span className="header__wordmark">{name}</span>
