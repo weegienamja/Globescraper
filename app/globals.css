@@ -1626,7 +1626,7 @@ body.menu-open {
 
 .form__checkbox-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 10px;
   margin-top: 8px;
 }
@@ -1643,6 +1643,7 @@ body.menu-open {
 .form__checkbox-label input[type="checkbox"] {
   width: 18px;
   height: 18px;
+  flex-shrink: 0;
   accent-color: var(--primary);
 }
 
