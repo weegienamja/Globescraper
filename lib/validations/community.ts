@@ -14,6 +14,7 @@ export const INTENT_LABELS: Record<string, string> = {
   meetupCityTour: "🏙️ City tour",
   meetupJobAdvice: "💼 Job advice",
   meetupStudyGroup: "📚 Study group",
+  meetupLanguageExchange: "🗣️ Language exchange",
 };
 
 export const VISIBILITY_LABELS: Record<string, string> = {
@@ -47,6 +48,7 @@ export const communityProfileSchema = z.object({
   meetupCityTour: z.boolean(),
   meetupJobAdvice: z.boolean(),
   meetupStudyGroup: z.boolean(),
+  meetupLanguageExchange: z.boolean(),
 });
 
 export const connectionRequestSchema = z.object({

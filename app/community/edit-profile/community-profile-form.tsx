@@ -79,6 +79,7 @@ type ProfileData = {
   meetupCityTour: boolean;
   meetupJobAdvice: boolean;
   meetupStudyGroup: boolean;
+  meetupLanguageExchange: boolean;
   avatarUrl: string | null;
   galleryImages: GalleryImage[];
 };
@@ -205,6 +206,7 @@ export function CommunityProfileForm({
       meetupCityTour: fd.has("meetupCityTour"),
       meetupJobAdvice: fd.has("meetupJobAdvice"),
       meetupStudyGroup: fd.has("meetupStudyGroup"),
+      meetupLanguageExchange: fd.has("meetupLanguageExchange"),
     };
 
     if (selectedCountries.length === 0) {
@@ -370,6 +372,14 @@ export function CommunityProfileForm({
               defaultChecked={initial?.meetupStudyGroup}
             />
             📚 Study group
+          </label>
+          <label className="form__checkbox-label">
+            <input
+              type="checkbox"
+              name="meetupLanguageExchange"
+              defaultChecked={initial?.meetupLanguageExchange}
+            />
+            🗣️ Language exchange
           </label>
         </div>
       </fieldset>

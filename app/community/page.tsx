@@ -149,6 +149,7 @@ export default async function CommunityPage({
       meetupCityTour: true,
       meetupJobAdvice: true,
       meetupStudyGroup: true,
+      meetupLanguageExchange: true,
       updatedAt: true,
       targetCountries: { select: { country: true } },
     },
@@ -178,6 +179,7 @@ export default async function CommunityPage({
     if (p.meetupCityTour) intents.push("🏙️ City tour");
     if (p.meetupJobAdvice) intents.push("💼 Job advice");
     if (p.meetupStudyGroup) intents.push("📚 Study group");
+    if (p.meetupLanguageExchange) intents.push("🗣️ Language exchange");
     return intents;
   }
 

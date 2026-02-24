@@ -103,6 +103,7 @@ export default async function CommunityProfilePage({
   if (profile.meetupCityTour) intents.push(INTENT_LABELS.meetupCityTour);
   if (profile.meetupJobAdvice) intents.push(INTENT_LABELS.meetupJobAdvice);
   if (profile.meetupStudyGroup) intents.push(INTENT_LABELS.meetupStudyGroup);
+  if (profile.meetupLanguageExchange) intents.push(INTENT_LABELS.meetupLanguageExchange);
 
   const countries = profile.targetCountries.map(
     (tc) => ENUM_COUNTRY_MAP[tc.country] ?? tc.country,

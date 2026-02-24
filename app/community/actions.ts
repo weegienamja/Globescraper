@@ -53,6 +53,7 @@ export async function updateCommunityProfile(
     meetupCityTour,
     meetupJobAdvice,
     meetupStudyGroup,
+    meetupLanguageExchange,
   } = parsed.data;
 
   // Map community country names to TargetCountry enum values
@@ -85,6 +86,7 @@ export async function updateCommunityProfile(
         meetupCityTour,
         meetupJobAdvice,
         meetupStudyGroup,
+        meetupLanguageExchange,
         targetCountries: {
           create: enumCountries.map((country) => ({ country: country as "VIETNAM" | "THAILAND" | "CAMBODIA" | "PHILIPPINES" | "INDONESIA" | "MALAYSIA" })),
         },
@@ -103,6 +105,7 @@ export async function updateCommunityProfile(
         meetupCityTour,
         meetupJobAdvice,
         meetupStudyGroup,
+        meetupLanguageExchange,
         targetCountries: {
           deleteMany: {},
           create: enumCountries.map((country) => ({ country: country as "VIETNAM" | "THAILAND" | "CAMBODIA" | "PHILIPPINES" | "INDONESIA" | "MALAYSIA" })),

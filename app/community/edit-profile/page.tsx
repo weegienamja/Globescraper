@@ -42,6 +42,7 @@ export default async function EditCommunityProfilePage() {
         meetupCityTour: profile.meetupCityTour,
         meetupJobAdvice: profile.meetupJobAdvice,
         meetupStudyGroup: profile.meetupStudyGroup,
+        meetupLanguageExchange: profile.meetupLanguageExchange,
         avatarUrl: profile.avatarUrl ?? null,
         galleryImages: profile.images.map((img) => ({ id: img.id, url: img.url })),
       }

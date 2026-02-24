@@ -188,6 +188,7 @@ model Profile {
   meetupCityTour        Boolean             @default(false)
   meetupJobAdvice       Boolean             @default(false)
   meetupStudyGroup      Boolean             @default(false)
+  meetupLanguageExchange Boolean            @default(false)
   createdAt             DateTime            @default(now())
   updatedAt             DateTime            @updatedAt
 
