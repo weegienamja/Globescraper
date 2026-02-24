@@ -8,7 +8,7 @@ const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB (client compresses to ~2 MB)
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_GALLERY_IMAGES = 5;
 
-type UploadResult = { url: string } | { error: string };
+type UploadResult = { url: string; id?: string } | { error: string };
 type ActionResult = { ok: true } | { error: string };
 
 async function getSessionUserId(): Promise<string | null> {
@@ -122,7 +122,7 @@ export async function uploadGalleryImage(
     addRandomSuffix: true,
   });
 
-  await prisma.profileImage.create({
+  const image = await prisma.profileImage.create({
     data: {
       profileId: profile.id,
       url: blob.url,
@@ -130,7 +130,7 @@ export async function uploadGalleryImage(
     },
   });
 
-  return { url: blob.url };
+  return { url: blob.url, id: image.id };
 }
 
 /** Delete a gallery image by ID */

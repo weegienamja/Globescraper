@@ -169,8 +169,10 @@ export function CommunityProfileForm({
       setError(res.error);
       return;
     }
-    // Refresh to get the new image with its ID
-    router.refresh();
+    // Add new image to local state immediately
+    if (res.id) {
+      setGallery((prev) => [...prev, { id: res.id!, url: res.url }]);
+    }
     } catch {
       setGalleryUploading(false);
       setError("Failed to process image. Try a different file.");
