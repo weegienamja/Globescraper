@@ -185,7 +185,12 @@ export default async function CommunityProfilePage({
         {currentUserId && !isOwner && (
           <div className="profile-view__actions">
             {connectionStatus === "ACCEPTED" && (
-              <span className="badge badge--ok">✓ Connected</span>
+              <>
+                <span className="badge badge--ok">✓ Connected</span>
+                <Link href={`/dashboard/messages?to=${userId}`} className="btn btn--primary btn--sm">
+                  💬 Message
+                </Link>
+              </>
             )}
             {connectionStatus === "PENDING" && (
               <span className="badge badge--muted">⏳ Request pending</span>
