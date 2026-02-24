@@ -1,5 +1,6 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
+import Google from "next-auth/providers/google";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
@@ -16,6 +17,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     signIn: "/login",
   },
   providers: [
+    Google({
+      clientId: process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+    }),
     Credentials({
       credentials: {
         email: { label: "Email", type: "email" },
@@ -47,6 +52,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ],
 
   callbacks: {
+    // Block disabled users signing in via OAuth
+    async signIn({ user }) {
+      if (user.id) {
+        const dbUser = await prisma.user.findUnique({
+          where: { id: user.id },
+          select: { disabled: true },
+        });
+        if (dbUser?.disabled) return false;
+      }
+      return true;
+    },
+
     // Persist user id + role + profile status into the JWT
     async jwt({ token, user, trigger }) {
       if (user) {
