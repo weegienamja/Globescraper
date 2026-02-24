@@ -4,15 +4,23 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import { siteConfig } from "@/lib/site";
+import { trackNavClick, trackGuideDownload, trackCTAClick } from "@/lib/analytics";
 
 const { navItems, name, logoPath, tagline } = siteConfig;
 
 function Header() {
   const [open, setOpen] = useState(false);
 
+  const handleNavClick = (item: (typeof navItems)[number]) => {
+    setOpen(false);
+    trackNavClick(item.label, "header");
+    if (item.label === "Starter Guide") trackGuideDownload("header_nav");
+    if (item.label === "How it works") trackCTAClick("how_it_works_nav");
+  };
+
   const navLinks = navItems.map((item) => (
     <li key={item.href}>
-      <Link href={item.href} onClick={() => setOpen(false)}>
+      <Link href={item.href} onClick={() => handleNavClick(item)}>
         {item.label}
       </Link>
     </li>
@@ -66,7 +74,10 @@ export function SiteLayout({ children }: { children: React.ReactNode }) {
     <>
       <Header />
       <main className="container">{children}</main>
-      <footer className="footer">
+      <footer className="footer" onClick={(e) => {
+        const anchor = (e.target as HTMLElement).closest("a");
+        if (anchor) trackNavClick(anchor.textContent ?? anchor.href, "footer");
+      }}>
         <div className="footer__inner">
           <div>
             &copy; {new Date().getFullYear()} {name}
