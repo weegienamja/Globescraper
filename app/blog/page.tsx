@@ -25,28 +25,32 @@ export default function BlogIndex() {
     <section>
       <h1>Blog</h1>
       <p className="small">Teaching in Cambodia, without the fluff.</p>
-      {posts.map((p) => (
-        <BlogCardTracker key={p.slug} slug={p.slug}>
-          <article className="card" style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
-            <Link href={`/${p.slug}`} style={{ flexShrink: 0 }}>
-              <Image
-                src={getHeroImage(p.slug)}
-                alt={p.title.replace(" | GlobeScraper", "")}
-                width={160}
-                height={90}
-                style={{ borderRadius: "var(--radius)", objectFit: "cover", width: 160, height: 90 }}
-              />
-            </Link>
-            <div>
-              <div className="small">{p.date}</div>
-              <h2 style={{ margin: "8px 0" }}>
-                <Link href={`/${p.slug}`}>{p.title.replace(" | GlobeScraper", "")}</Link>
-              </h2>
-              <p className="small">{p.description}</p>
-            </div>
-          </article>
-        </BlogCardTracker>
-      ))}
+      <div className="blog-list">
+        {posts.map((p) => (
+          <BlogCardTracker key={p.slug} slug={p.slug}>
+            <article className="card">
+              <Link href={`/${p.slug}`} className="card__image-link">
+                <Image
+                  src={getHeroImage(p.slug)}
+                  alt={p.title.replace(" | GlobeScraper", "")}
+                  width={160}
+                  height={90}
+                  className="card__image"
+                />
+              </Link>
+              <div className="card__body">
+                <div className="small">{p.date}</div>
+                <h2 className="card__title">
+                  <Link href={`/${p.slug}`} className="card__title-clamp">
+                    {p.title.replace(" | GlobeScraper", "")}
+                  </Link>
+                </h2>
+                <p className="small card__excerpt card__excerpt-clamp">{p.description}</p>
+              </div>
+            </article>
+          </BlogCardTracker>
+        ))}
+      </div>
     </section>
   );
 }
