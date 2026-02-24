@@ -165,7 +165,15 @@ export default async function AdminPage() {
                 </tr>
               ))}
               {latestUsers.length === 0 && (
-                <tr><td colSpan={5} style={{ textAlign: "center" }}>No users yet.</td></tr>
+                <tr>
+                  <td colSpan={5}>
+                    <div className="empty-state">
+                      <div className="empty-state__icon">👤</div>
+                      <p className="empty-state__title">No users yet</p>
+                      <p className="empty-state__text">New users will appear here when they sign up.</p>
+                    </div>
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>
@@ -191,7 +199,15 @@ export default async function AdminPage() {
                 <LeadRow key={l.id} lead={l} />
               ))}
               {latestLeads.length === 0 && (
-                <tr><td colSpan={5} style={{ textAlign: "center" }}>No leads yet.</td></tr>
+                <tr>
+                  <td colSpan={5}>
+                    <div className="empty-state">
+                      <div className="empty-state__icon">📋</div>
+                      <p className="empty-state__title">No leads yet</p>
+                      <p className="empty-state__text">Leads from the contact form will appear here.</p>
+                    </div>
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>

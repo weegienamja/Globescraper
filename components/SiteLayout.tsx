@@ -2,11 +2,12 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { siteConfig } from "@/lib/site";
 import { trackNavClick, trackGuideDownload, trackCTAClick } from "@/lib/analytics";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { RevealOnScroll } from "@/components/RevealOnScroll";
 
 const { navItems, name, logoPath, tagline } = siteConfig;
 
@@ -46,6 +47,47 @@ function AuthButtons() {
 
 function Header() {
   const [open, setOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  const menuRef = useRef<HTMLElement>(null);
+
+  // Close on ESC
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+
+  // Body scroll lock
+  useEffect(() => {
+    document.body.classList.toggle("menu-open", open);
+    return () => { document.body.classList.remove("menu-open"); };
+  }, [open]);
+
+  // Focus mobile nav when open
+  useEffect(() => {
+    if (open && menuRef.current) menuRef.current.focus();
+  }, [open]);
+
+  // Inert attribute for accessibility (prevents tab into hidden panel)
+  useEffect(() => {
+    if (menuRef.current) {
+      if (open) {
+        menuRef.current.removeAttribute("inert");
+      } else {
+        menuRef.current.setAttribute("inert", "");
+      }
+    }
+  }, [open]);
+
+  // Navbar scroll detection
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 24);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   const handleNavClick = (item: (typeof navItems)[number]) => {
     setOpen(false);
@@ -63,52 +105,64 @@ function Header() {
   ));
 
   return (
-    <header className="header">
-      <div className="header__container">
-        <Link href="/" className="header__logo-link">
-          <Image
-            src={logoPath}
-            alt={`${name} logo`}
-            className="header__logo"
-            width={44}
-            height={44}
-            priority
-          />
-          <span className="header__wordmark">{name}</span>
-        </Link>
+    <>
+      <header className={`header${scrolled ? " header--scrolled" : ""}`}>
+        <div className="header__container">
+          <Link href="/" className="header__logo-link">
+            <Image
+              src={logoPath}
+              alt={`${name} logo`}
+              className="header__logo"
+              width={44}
+              height={44}
+              priority
+            />
+            <span className="header__wordmark">{name}</span>
+          </Link>
 
-        <nav className="header__nav" aria-label="Main navigation">
-          <ul className="header__nav-list">{navLinks}</ul>
-        </nav>
+          <nav className="header__nav" aria-label="Main navigation">
+            <ul className="header__nav-list">{navLinks}</ul>
+          </nav>
 
-        <AuthButtons />
+          <AuthButtons />
 
-        <ThemeToggle />
+          <ThemeToggle />
 
-        <button
-          className="header__burger"
-          aria-label={open ? "Close menu" : "Open menu"}
-          aria-expanded={open}
-          onClick={() => setOpen(!open)}
-        >
-          <span className="header__burger-bar" />
-          <span className="header__burger-bar" />
-          <span className="header__burger-bar" />
-        </button>
-      </div>
+          <button
+            className={`header__burger${open ? " header__burger--open" : ""}`}
+            aria-label={open ? "Close menu" : "Open menu"}
+            aria-expanded={open}
+            aria-controls="mobile-nav"
+            onClick={() => setOpen(!open)}
+          >
+            <span className="header__burger-bar" />
+            <span className="header__burger-bar" />
+            <span className="header__burger-bar" />
+          </button>
+        </div>
+      </header>
 
-      {open && (
-        <nav
-          className="header__nav-mobile header__nav-mobile--open"
-          aria-label="Mobile navigation"
-        >
-          <ul className="header__nav-list">{navLinks}</ul>
-          <div className="header__auth-mobile">
-            <AuthButtons />
-          </div>
-        </nav>
-      )}
-    </header>
+      {/* Semi-transparent overlay behind mobile menu */}
+      <div
+        className={`mobile-overlay${open ? " mobile-overlay--visible" : ""}`}
+        onClick={() => setOpen(false)}
+        aria-hidden="true"
+      />
+
+      {/* Slide-in mobile nav panel */}
+      <nav
+        id="mobile-nav"
+        ref={menuRef}
+        className={`header__nav-mobile${open ? " header__nav-mobile--open" : ""}`}
+        aria-label="Mobile navigation"
+        tabIndex={-1}
+      >
+        <ul className="header__nav-list">{navLinks}</ul>
+        <div className="header__auth-mobile">
+          <AuthButtons />
+        </div>
+      </nav>
+    </>
   );
 }
 
@@ -128,6 +182,7 @@ export function SiteLayout({ children }: { children: React.ReactNode }) {
           <div className="small">{tagline}</div>
         </div>
       </footer>
+      <RevealOnScroll />
     </>
   );
 }

@@ -96,7 +96,8 @@ img {
   border-bottom: 1px solid var(--border);
   position: sticky;
   top: 0;
-  z-index: 100;
+  z-index: 200;
+  transition: background 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
 }
 
 .header__container {
@@ -177,19 +178,40 @@ img {
   height: 3px;
   background: var(--link);
   border-radius: 2px;
-  transition: background 0.15s;
+  transition: transform 250ms ease, opacity 250ms ease, background 0.15s;
 }
 
-/* Mobile dropdown */
+.header__burger--open .header__burger-bar:nth-child(1) {
+  transform: translateY(8px) rotate(45deg);
+}
+.header__burger--open .header__burger-bar:nth-child(2) {
+  opacity: 0;
+}
+.header__burger--open .header__burger-bar:nth-child(3) {
+  transform: translateY(-8px) rotate(-45deg);
+}
+
+/* Mobile slide-in panel */
 .header__nav-mobile {
-  display: none;
+  display: block;
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: min(320px, 85vw);
+  height: 100vh;
+  height: 100dvh;
+  background: var(--bg-surface);
+  border-left: 1px solid var(--border);
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.3);
+  z-index: 175;
+  transform: translateX(100%);
+  transition: transform 250ms ease;
+  overflow-y: auto;
+  padding-top: 72px;
 }
 
 .header__nav-mobile--open {
-  display: block;
-  background: var(--bg-surface);
-  border-top: 1px solid var(--border);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  transform: translateX(0);
 }
 
 .header__nav-mobile .header__nav-list {
@@ -242,13 +264,19 @@ img {
   color: #fff;
   cursor: pointer;
   text-decoration: none;
-  transition: background 0.15s;
+  transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 }
 
 .header__auth-btn:hover {
   background: var(--primary-hover);
   text-decoration: none;
   color: #fff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+}
+
+.header__auth-btn:active {
+  transform: translateY(0);
 }
 
 .header__auth-btn--outline {
@@ -282,7 +310,8 @@ img {
     display: flex;
   }
   .header__burger,
-  .header__nav-mobile {
+  .header__nav-mobile,
+  .mobile-overlay {
     display: none !important;
   }
 }
@@ -321,12 +350,13 @@ img {
   padding: 20px 18px;
   margin: 18px 0;
   box-shadow: var(--shadow);
-  transition: box-shadow 0.2s, border-color 0.2s;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
 }
 
 .card:hover {
   border-color: var(--link);
   box-shadow: 0 4px 20px rgba(37, 99, 235, 0.18);
+  transform: translateY(-2px);
 }
 
 .card h2 {
@@ -357,13 +387,20 @@ img {
   font-weight: 600;
   cursor: pointer;
   box-shadow: var(--shadow);
-  transition: background 0.15s, box-shadow 0.15s;
+  transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 }
 
 .button:hover,
 .btn:hover {
   background: var(--primary-hover);
   box-shadow: 0 4px 16px rgba(37, 99, 235, 0.25);
+  transform: translateY(-1px);
+}
+
+.button:active,
+.btn:active {
+  transform: translateY(0);
+  box-shadow: var(--shadow);
 }
 
 /* ==========================================================
@@ -751,11 +788,17 @@ img {
   border: none;
   border-radius: 6px;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 }
 
 .auth-button:hover:not(:disabled) {
   background: var(--primary-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(37, 99, 235, 0.25);
+}
+
+.auth-button:active:not(:disabled) {
+  transform: translateY(0);
 }
 
 .auth-button:disabled {
@@ -923,6 +966,13 @@ img {
   border-radius: var(--radius);
   padding: 20px;
   text-align: center;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.admin__card:hover {
+  border-color: var(--link);
+  box-shadow: 0 4px 16px rgba(37, 99, 235, 0.12);
+  transform: translateY(-2px);
 }
 
 .admin__card-value {
@@ -1130,4 +1180,176 @@ img {
 
 .theme-toggle svg {
   display: block;
+}
+
+/* ==========================================================
+   Mobile Menu Overlay
+   ========================================================== */
+.mobile-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 150;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 250ms ease;
+}
+
+.mobile-overlay--visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* ==========================================================
+   Body Scroll Lock (mobile menu)
+   ========================================================== */
+body.menu-open {
+  overflow: hidden;
+}
+
+/* ==========================================================
+   Navbar Scroll State
+   ========================================================== */
+.header--scrolled {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+[data-theme="dark"] .header--scrolled {
+  background: rgba(30, 41, 59, 0.88);
+  box-shadow: 0 1px 12px rgba(0, 0, 0, 0.35);
+}
+
+[data-theme="light"] .header--scrolled {
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.08);
+}
+
+/* ==========================================================
+   Reveal Animation (IntersectionObserver)
+   ========================================================== */
+.reveal-section {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+
+.reveal-section--visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ==========================================================
+   Skeleton Loader
+   ========================================================== */
+.skeleton {
+  background: var(--bg-elevated);
+  border-radius: 6px;
+  position: relative;
+  overflow: hidden;
+}
+
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  animation: skeleton-shimmer 1.5s ease infinite;
+}
+
+[data-theme="dark"] .skeleton::after {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.06) 50%,
+    transparent 100%
+  );
+}
+
+[data-theme="light"] .skeleton::after {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(0, 0, 0, 0.04) 50%,
+    transparent 100%
+  );
+}
+
+@keyframes skeleton-shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.skeleton-text {
+  height: 14px;
+  margin-bottom: 10px;
+  border-radius: 4px;
+}
+
+.skeleton-text--short { width: 40%; }
+.skeleton-text--medium { width: 70%; }
+
+.skeleton-heading {
+  height: 26px;
+  border-radius: 6px;
+}
+
+.skeleton-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+
+.skeleton-row {
+  display: flex;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.skeleton-cell {
+  height: 14px;
+  flex: 1;
+  border-radius: 4px;
+}
+
+/* ==========================================================
+   Empty States
+   ========================================================== */
+.empty-state {
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--text-muted);
+}
+
+.empty-state__icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+  opacity: 0.4;
+}
+
+.empty-state__title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-heading);
+  margin: 0 0 8px;
+}
+
+.empty-state__text {
+  font-size: 14px;
+  margin: 0 0 20px;
+  line-height: 1.5;
+}
+
+/* ==========================================================
+   Reduced Motion
+   ========================================================== */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
