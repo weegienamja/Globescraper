@@ -1,9 +1,14 @@
 /* ==========================================================
-   GlobeScraper — Dark-theme, mobile-first global styles
+   GlobeScraper — Themed, mobile-first global styles
    ========================================================== */
 
 /* ---- Design tokens ---- */
 :root {
+  --radius: 12px;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
   --bg: #0f172a;
   --bg-surface: #1e293b;
   --bg-elevated: #334155;
@@ -16,7 +21,24 @@
   --primary-hover: #3b82f6;
   --border: #334155;
   --shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
-  --radius: 12px;
+  --hover-overlay: rgba(255, 255, 255, 0.02);
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f8fafc;
+  --bg-surface: #ffffff;
+  --bg-elevated: #e2e8f0;
+  --text: #1e293b;
+  --text-muted: #64748b;
+  --text-heading: #0f172a;
+  --link: #2563eb;
+  --link-hover: #1d4ed8;
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --border: #e2e8f0;
+  --shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --hover-overlay: rgba(0, 0, 0, 0.03);
 }
 
 /* ---- Reset / base ---- */
@@ -965,7 +987,7 @@ img {
 }
 
 .admin__table tbody tr:hover {
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--hover-overlay);
 }
 
 .admin__td-date {
@@ -1081,4 +1103,31 @@ img {
   .admin__metrics {
     grid-template-columns: repeat(2, 1fr);
   }
+}
+
+/* ==========================================================
+   Theme Toggle
+   ========================================================== */
+.theme-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px;
+  cursor: pointer;
+  color: var(--text);
+  transition: background 0.15s, color 0.15s;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.theme-toggle:hover {
+  background: var(--primary);
+  color: #fff;
+}
+
+.theme-toggle svg {
+  display: block;
 }

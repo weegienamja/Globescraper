@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { siteConfig } from "@/lib/site";
 import { trackNavClick, trackGuideDownload, trackCTAClick } from "@/lib/analytics";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 const { navItems, name, logoPath, tagline } = siteConfig;
 
@@ -81,6 +82,8 @@ function Header() {
         </nav>
 
         <AuthButtons />
+
+        <ThemeToggle />
 
         <button
           className="header__burger"
