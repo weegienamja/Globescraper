@@ -1,19 +1,15 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { PrismaAdapter } from "@auth/prisma-adapter";
-import { encode as defaultEncode } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
-import { randomUUID } from "crypto";
-
-const adapter = PrismaAdapter(prisma);
 
 const SESSION_MAX_AGE = 30 * 24 * 60 * 60; // 30 days in seconds
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  adapter,
+  adapter: PrismaAdapter(prisma),
   session: {
-    strategy: "database",
+    strategy: "jwt",
     maxAge: SESSION_MAX_AGE,
   },
   pages: {
@@ -47,47 +43,23 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
 
-  // ── Bridge Credentials → database sessions ──────────────────
-  // The Credentials provider doesn't natively create database
-  // sessions, so we intercept jwt.encode to create one manually.
-  jwt: {
-    encode: async function (params) {
-      // When the jwt callback flags a credentials sign-in,
-      // create a real database session instead of a JWT.
-      if (params.token?.credentials) {
-        const sessionToken = randomUUID();
-
-        if (params.token.sub && adapter.createSession) {
-          await adapter.createSession({
-            sessionToken,
-            userId: params.token.sub,
-            expires: new Date(Date.now() + SESSION_MAX_AGE * 1000),
-          });
-          return sessionToken;
-        }
-        // Should not happen — fail the sign-in cleanly
-        return "";
-      }
-
-      // Default encoding for any other provider
-      return defaultEncode(params);
-    },
-  },
-
   callbacks: {
-    // Mark credentials sign-ins so jwt.encode can intercept them
+    // Persist user id + role into the JWT on sign-in
     jwt({ token, user }) {
       if (user) {
-        token.credentials = true;
+        token.sub = user.id;
+        token.role = user.role;
       }
       return token;
     },
 
-    // Attach role + id to the session (database strategy provides `user`)
-    session({ session, user }) {
-      if (user) {
-        session.user.id = user.id;
-        session.user.role = (user as unknown as { role: "USER" | "ADMIN" }).role;
+    // Expose id + role on the client-facing session object
+    session({ session, token }) {
+      if (token.sub) {
+        session.user.id = token.sub;
+      }
+      if (token.role) {
+        session.user.role = token.role as "USER" | "ADMIN";
       }
       return session;
     },
