@@ -13,6 +13,59 @@ import {
 } from "@/app/community/image-actions";
 import { COMMUNITY_COUNTRIES } from "@/lib/validations/community";
 
+const MAX_CLIENT_SIZE = 2 * 1024 * 1024; // 2 MB — compress above this
+const COMPRESS_QUALITY = 0.8;
+const MAX_DIMENSION = 2048; // max width/height after compression
+
+/**
+ * Compress an image file in the browser using Canvas.
+ * Returns the original file if already under MAX_CLIENT_SIZE.
+ */
+async function compressImage(file: File): Promise<File> {
+  if (file.size <= MAX_CLIENT_SIZE) return file;
+
+  return new Promise((resolve, reject) => {
+    const img = new window.Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+
+      let { width, height } = img;
+      // Scale down if either dimension exceeds MAX_DIMENSION
+      if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
+        const ratio = Math.min(MAX_DIMENSION / width, MAX_DIMENSION / height);
+        width = Math.round(width * ratio);
+        height = Math.round(height * ratio);
+      }
+
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) { resolve(file); return; }
+      ctx.drawImage(img, 0, 0, width, height);
+
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) { resolve(file); return; }
+          const compressed = new File([blob], file.name.replace(/\.\w+$/, ".jpg"), {
+            type: "image/jpeg",
+          });
+          // If compression didn't help, return the original
+          resolve(compressed.size < file.size ? compressed : file);
+        },
+        "image/jpeg",
+        COMPRESS_QUALITY,
+      );
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Failed to load image for compression"));
+    };
+    img.src = url;
+  });
+}
+
 type GalleryImage = { id: string; url: string };
 
 type ProfileData = {
@@ -68,9 +121,11 @@ export function CommunityProfileForm({
     if (!file) return;
     setAvatarUploading(true);
     setError("");
-    const fd = new FormData();
-    fd.set("file", file);
-    const res = await uploadAvatar(fd);
+    try {
+      const compressed = await compressImage(file);
+      const fd = new FormData();
+      fd.set("file", compressed);
+      const res = await uploadAvatar(fd);
     setAvatarUploading(false);
     if ("error" in res) {
       setError(res.error);
@@ -78,6 +133,10 @@ export function CommunityProfileForm({
     }
     setAvatarUrl(res.url);
     await updateSession(); // refresh JWT with new avatarUrl
+    } catch {
+      setAvatarUploading(false);
+      setError("Failed to process image. Try a different file.");
+    }
   }
 
   async function handleAvatarRemove() {
@@ -99,8 +158,10 @@ export function CommunityProfileForm({
     if (!file) return;
     setGalleryUploading(true);
     setError("");
-    const fd = new FormData();
-    fd.set("file", file);
+    try {
+      const compressed = await compressImage(file);
+      const fd = new FormData();
+      fd.set("file", compressed);
     const res = await uploadGalleryImage(fd);
     setGalleryUploading(false);
     if (galleryInputRef.current) galleryInputRef.current.value = "";
@@ -110,6 +171,10 @@ export function CommunityProfileForm({
     }
     // Refresh to get the new image with its ID
     router.refresh();
+    } catch {
+      setGalleryUploading(false);
+      setError("Failed to process image. Try a different file.");
+    }
   }
 
   async function handleGalleryDelete(imageId: string) {
