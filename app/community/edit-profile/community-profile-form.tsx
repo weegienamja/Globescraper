@@ -90,7 +90,7 @@ export function CommunityProfileForm({
   initial: ProfileData | null;
 }) {
   const router = useRouter();
-  const { update: updateSession } = useSession();
+  const { data: session, update: updateSession } = useSession();
   const [error, setError] = useState("");
   const [selectedCountries, setSelectedCountries] = useState<string[]>(
     initial?.targetCountries ?? [],
@@ -220,7 +220,7 @@ export function CommunityProfileForm({
         setError(res.error);
         return;
       }
-      router.push("/community");
+      router.push(`/community/${session?.user?.id ?? ""}`);
       router.refresh();
     });
   }
