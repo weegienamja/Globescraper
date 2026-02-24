@@ -13,26 +13,52 @@ import { Redis } from "@upstash/redis";
  * Edge-runtime compatible (used in middleware.ts).
  */
 
-let _instance: Ratelimit | null | undefined;
+let _loginInstance: Ratelimit | null | undefined;
 
 export function getLoginRatelimit(): Ratelimit | null {
-  // Already initialised (or confirmed unavailable)
-  if (_instance !== undefined) return _instance;
+  if (_loginInstance !== undefined) return _loginInstance;
 
   const url = process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
 
   if (!url || !token) {
-    _instance = null; // mark as unavailable — don't check again
+    _loginInstance = null;
     return null;
   }
 
-  _instance = new Ratelimit({
+  _loginInstance = new Ratelimit({
     redis: new Redis({ url, token }),
     limiter: Ratelimit.slidingWindow(5, "15 m"),
     prefix: "ratelimit:login",
     analytics: true,
   });
 
-  return _instance;
+  return _loginInstance;
+}
+
+/**
+ * Connection request rate limiter — 10 requests per 24-hour sliding window per user.
+ */
+
+let _connectionInstance: Ratelimit | null | undefined;
+
+export function getConnectionRatelimit(): Ratelimit | null {
+  if (_connectionInstance !== undefined) return _connectionInstance;
+
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+
+  if (!url || !token) {
+    _connectionInstance = null;
+    return null;
+  }
+
+  _connectionInstance = new Ratelimit({
+    redis: new Redis({ url, token }),
+    limiter: Ratelimit.slidingWindow(10, "24 h"),
+    prefix: "ratelimit:connect",
+    analytics: true,
+  });
+
+  return _connectionInstance;
 }

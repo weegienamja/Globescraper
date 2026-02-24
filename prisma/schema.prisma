@@ -22,6 +22,7 @@ model User {
   emailVerified DateTime?
   passwordHash  String?   @db.VarChar(255)
   role          Role      @default(USER)
+  disabled      Boolean   @default(false)
   image         String?
   lastLoginAt   DateTime?
   createdAt     DateTime  @default(now())
@@ -30,6 +31,13 @@ model User {
   sessions      Session[]
   profile       Profile?
   auditLogs     AdminAuditLog[]
+  connectionsSent     ConnectionRequest[] @relation("ConnectionSender")
+  connectionsReceived ConnectionRequest[] @relation("ConnectionReceiver")
+  meetupsCreated      Meetup[]
+  meetupAttendances   MeetupAttendee[]
+  blocksInitiated     Block[]  @relation("Blocker")
+  blocksReceived      Block[]  @relation("Blocked")
+  reports             Report[]
 }
 
 model Account {
@@ -170,11 +178,25 @@ model Profile {
   certificationStatus   CertificationStatus @default(NONE)
   desiredStartTimeline  DesiredStartTimeline @default(RESEARCHING)
   savingsBand           SavingsBand         @default(MEDIUM)
+  displayName           String?             @db.VarChar(50)
+  bio                   String?             @db.Text
+  currentCountry        String?             @db.VarChar(100)
+  currentCity           String?             @db.VarChar(100)
+  visibility            ProfileVisibility   @default(MEMBERS_ONLY)
+  meetupCoffee          Boolean             @default(false)
+  meetupCityTour        Boolean             @default(false)
+  meetupJobAdvice       Boolean             @default(false)
+  meetupStudyGroup      Boolean             @default(false)
   createdAt             DateTime            @default(now())
   updatedAt             DateTime            @updatedAt
 
   user                  User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   targetCountries       ProfileTargetCountry[]
+
+  @@index([currentCountry])
+  @@index([currentCity])
+  @@index([visibility])
+  @@index([updatedAt])
 }
 
 model ProfileTargetCountry {
@@ -186,4 +208,135 @@ model ProfileTargetCountry {
 
   @@unique([profileId, country])
   @@index([profileId])
+}
+
+// ─── Community enums ─────────────────────────────────────────
+
+enum ProfileVisibility {
+  PRIVATE
+  MEMBERS_ONLY
+  PUBLIC
+}
+
+enum ConnectionStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  BLOCKED
+}
+
+enum MeetupVisibility {
+  MEMBERS_ONLY
+  PUBLIC
+}
+
+enum MeetupStatus {
+  ACTIVE
+  CANCELLED
+}
+
+enum AttendeeStatus {
+  GOING
+  INTERESTED
+  LEFT
+}
+
+enum ReportTargetType {
+  USER
+  MEETUP
+}
+
+enum ReportReason {
+  SPAM
+  HARASSMENT
+  SCAM
+  OTHER
+}
+
+// ─── Community models ────────────────────────────────────────
+
+model ConnectionRequest {
+  id         String           @id @default(uuid())
+  fromUserId String
+  toUserId   String
+  status     ConnectionStatus @default(PENDING)
+  message    String?          @db.VarChar(300)
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  fromUser   User             @relation("ConnectionSender", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUser     User             @relation("ConnectionReceiver", fields: [toUserId], references: [id], onDelete: Cascade)
+
+  @@unique([fromUserId, toUserId])
+  @@index([toUserId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model Meetup {
+  id              String           @id @default(uuid())
+  createdByUserId String
+  title           String           @db.VarChar(200)
+  description     String           @db.Text
+  country         String           @db.VarChar(100)
+  city            String           @db.VarChar(100)
+  dateTime        DateTime
+  locationHint    String?          @db.VarChar(200)
+  maxAttendees    Int?
+  visibility      MeetupVisibility @default(MEMBERS_ONLY)
+  status          MeetupStatus     @default(ACTIVE)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  createdBy       User             @relation(fields: [createdByUserId], references: [id], onDelete: Cascade)
+  attendees       MeetupAttendee[]
+
+  @@index([country])
+  @@index([city])
+  @@index([dateTime])
+  @@index([status])
+  @@index([createdByUserId])
+}
+
+model MeetupAttendee {
+  id        String         @id @default(uuid())
+  meetupId  String
+  userId    String
+  status    AttendeeStatus @default(GOING)
+  createdAt DateTime       @default(now())
+
+  meetup    Meetup         @relation(fields: [meetupId], references: [id], onDelete: Cascade)
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([meetupId, userId])
+  @@index([userId])
+}
+
+model Block {
+  id            String   @id @default(uuid())
+  blockerUserId String
+  blockedUserId String
+  createdAt     DateTime @default(now())
+
+  blocker       User     @relation("Blocker", fields: [blockerUserId], references: [id], onDelete: Cascade)
+  blocked       User     @relation("Blocked", fields: [blockedUserId], references: [id], onDelete: Cascade)
+
+  @@unique([blockerUserId, blockedUserId])
+  @@index([blockedUserId])
+}
+
+model Report {
+  id             String           @id @default(uuid())
+  reporterUserId String
+  targetType     ReportTargetType
+  targetId       String           @db.VarChar(191)
+  reason         ReportReason
+  details        String?          @db.VarChar(1000)
+  createdAt      DateTime         @default(now())
+
+  reporter       User             @relation(fields: [reporterUserId], references: [id], onDelete: Cascade)
+
+  @@index([reporterUserId])
+  @@index([targetType, targetId])
+  @@index([createdAt])
 }

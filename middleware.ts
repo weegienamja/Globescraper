@@ -51,7 +51,7 @@ export async function middleware(req: NextRequest) {
 
   // ── Auth cookie guard ──────────────────────────────────────
   const pathname = req.nextUrl.pathname;
-  const protectedPaths = ["/admin", "/dashboard", "/create-profile"];
+  const protectedPaths = ["/admin", "/dashboard", "/create-profile", "/community", "/meetups"];
   const isProtected = protectedPaths.some((p) => pathname.startsWith(p));
 
   if (isProtected) {
@@ -74,6 +74,8 @@ export const config = {
     "/admin/:path*",
     "/dashboard/:path*",
     "/create-profile/:path*",
+    "/community/:path*",
+    "/meetups/:path*",
     "/api/auth/callback/credentials",
   ],
 };

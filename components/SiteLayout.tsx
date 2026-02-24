@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useState, useEffect, useRef } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { siteConfig } from "@/lib/site";
-import { trackNavClick, trackGuideDownload, trackCTAClick } from "@/lib/analytics";
+import { trackNavClick, trackCTAClick } from "@/lib/analytics";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { RevealOnScroll } from "@/components/RevealOnScroll";
 
@@ -92,7 +92,6 @@ function Header() {
   const handleNavClick = (item: (typeof navItems)[number]) => {
     setOpen(false);
     trackNavClick(item.label, "header");
-    if (item.label === "Starter Guide") trackGuideDownload("header_nav");
     if (item.label === "How it works") trackCTAClick("how_it_works_nav");
   };
 

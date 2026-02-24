@@ -1,0 +1,54 @@
+import { redirect } from "next/navigation";
+import { prisma } from "@/lib/prisma";
+import { auth } from "@/auth";
+import { CommunityProfileForm } from "./community-profile-form";
+
+const ENUM_COUNTRY_MAP: Record<string, string> = {
+  VIETNAM: "Vietnam",
+  THAILAND: "Thailand",
+  CAMBODIA: "Cambodia",
+  PHILIPPINES: "Philippines",
+  INDONESIA: "Indonesia",
+  MALAYSIA: "Malaysia",
+};
+
+export const metadata = {
+  title: "Edit Community Profile",
+};
+
+export default async function EditCommunityProfilePage() {
+  const session = await auth();
+  if (!session?.user?.id) redirect("/login?callbackUrl=/community/edit-profile");
+
+  const profile = await prisma.profile.findUnique({
+    where: { userId: session.user.id },
+    include: { targetCountries: { select: { country: true } } },
+  });
+
+  const initial = profile
+    ? {
+        displayName: profile.displayName ?? "",
+        bio: profile.bio ?? "",
+        currentCountry: profile.currentCountry ?? "",
+        currentCity: profile.currentCity ?? "",
+        targetCountries: profile.targetCountries.map(
+          (tc) => ENUM_COUNTRY_MAP[tc.country] ?? tc.country,
+        ),
+        visibility: profile.visibility,
+        meetupCoffee: profile.meetupCoffee,
+        meetupCityTour: profile.meetupCityTour,
+        meetupJobAdvice: profile.meetupJobAdvice,
+        meetupStudyGroup: profile.meetupStudyGroup,
+      }
+    : null;
+
+  return (
+    <div className="community-form-page">
+      <h1>{profile?.displayName ? "Edit Community Profile" : "Set Up Your Community Profile"}</h1>
+      <p className="community-form-page__sub">
+        This is how you appear to other community members. Your email is never shared.
+      </p>
+      <CommunityProfileForm initial={initial} />
+    </div>
+  );
+}

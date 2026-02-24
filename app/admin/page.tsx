@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
 import { SignOutButton } from "./sign-out-button";
 import { LeadRow } from "./lead-row";
+import { ReportsSection } from "./reports-section";
 import { unstable_noStore as noStore } from "next/cache";
 import { COUNTRY_LABELS } from "@/lib/validations/profile";
 
@@ -28,12 +29,20 @@ export default async function AdminPage() {
     totalLeads,
     newLeadsWeek,
     totalProfiles,
+    totalReports,
+    openReports,
+    totalMeetups,
+    totalConnections,
   ] = await Promise.all([
     prisma.user.count(),
     prisma.user.count({ where: { createdAt: { gte: sevenDaysAgo } } }),
     prisma.lead.count({ where: { deleted: false } }),
     prisma.lead.count({ where: { deleted: false, createdAt: { gte: sevenDaysAgo } } }),
     prisma.profile.count(),
+    prisma.report.count(),
+    prisma.report.count({ where: { createdAt: { gte: sevenDaysAgo } } }),
+    prisma.meetup.count({ where: { status: "ACTIVE" } }),
+    prisma.connectionRequest.count({ where: { status: "ACCEPTED" } }),
   ]);
 
   const profileRate = totalUsers > 0
@@ -121,6 +130,22 @@ export default async function AdminPage() {
         <div className="admin__card">
           <div className="admin__card-value">{profileRate}%</div>
           <div className="admin__card-label">Profile Completion</div>
+        </div>
+        <div className="admin__card">
+          <div className="admin__card-value">{totalConnections}</div>
+          <div className="admin__card-label">Connections</div>
+        </div>
+        <div className="admin__card">
+          <div className="admin__card-value">{totalMeetups}</div>
+          <div className="admin__card-label">Active Meetups</div>
+        </div>
+        <div className="admin__card">
+          <div className="admin__card-value">{totalReports}</div>
+          <div className="admin__card-label">Total Reports</div>
+        </div>
+        <div className="admin__card">
+          <div className="admin__card-value">{openReports}</div>
+          <div className="admin__card-label">Reports (7d)</div>
         </div>
       </div>
 
@@ -213,6 +238,9 @@ export default async function AdminPage() {
           </table>
         </div>
       </section>
+
+      {/* ── Recent Reports ───────────────────────────────── */}
+      <ReportsSection />
     </div>
   );
 }
