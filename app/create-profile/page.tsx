@@ -10,6 +10,11 @@ export default async function CreateProfilePage() {
     redirect("/login");
   }
 
+  // Admins don't need to complete a profile
+  if (session.user.role === "ADMIN") {
+    redirect("/admin");
+  }
+
   // If user already has a profile, redirect to dashboard
   const existing = await prisma.profile.findUnique({
     where: { userId: session.user.id },

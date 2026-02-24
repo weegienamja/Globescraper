@@ -49,6 +49,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (user) {
         token.sub = user.id;
         token.role = user.role;
+        // Track last login
+        prisma.user.update({
+          where: { id: user.id },
+          data: { lastLoginAt: new Date() },
+        }).catch(() => {}); // fire-and-forget
         // Check if user has a profile on initial sign-in
         const profile = await prisma.profile.findUnique({
           where: { userId: user.id },

@@ -23,11 +23,13 @@ model User {
   passwordHash  String?   @db.VarChar(255)
   role          Role      @default(USER)
   image         String?
+  lastLoginAt   DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   accounts      Account[]
   sessions      Session[]
   profile       Profile?
+  auditLogs     AdminAuditLog[]
 }
 
 model Account {
@@ -69,24 +71,49 @@ model VerificationToken {
 
 // ─── Application models ──────────────────────────────────────
 
+enum LeadStatus {
+  NEW
+  CONTACTED
+  CONVERTED
+  CLOSED
+}
+
 model Lead {
-  id        String   @id @default(uuid())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  name      String?
-  email     String   @db.VarChar(255)
-  message   String?  @db.Text
-  source    String?
-  deleted   Boolean  @default(false)
+  id         String     @id @default(uuid())
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  name       String?
+  email      String     @db.VarChar(255)
+  message    String?    @db.Text
+  source     String?
+  status     LeadStatus @default(NEW)
+  adminNotes String?    @db.Text
+  deleted    Boolean    @default(false)
 
   @@index([email])
   @@index([createdAt])
+  @@index([status])
 }
 
 model WaitlistEntry {
   id        String   @id @default(uuid())
   email     String   @unique
   createdAt DateTime @default(now())
+}
+
+model AdminAuditLog {
+  id          String   @id @default(uuid())
+  adminUserId String
+  actionType  String   @db.VarChar(50)
+  targetType  String   @db.VarChar(50)
+  targetId    String   @db.VarChar(191)
+  metadata    String?  @db.Text
+  createdAt   DateTime @default(now())
+
+  admin       User     @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+
+  @@index([adminUserId])
+  @@index([createdAt])
 }
 
 // ─── Profile models ──────────────────────────────────────────
