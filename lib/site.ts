@@ -9,7 +9,7 @@ export const siteConfig = {
   description:
     "Teach English in Cambodia. Guides, costs, visas, and support.",
   tagline: "Teach English in Cambodia — guides, support, and community.",
-  logoPath: "/logo.svg",
+  logoPath: "/logo.png",
   email: "info@globescraper.com",
   socials: {
     instagram: "https://www.instagram.com/mancavejamie/",
