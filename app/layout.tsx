@@ -4,6 +4,7 @@ import Script from "next/script";
 import { Inter } from "next/font/google";
 import { SiteLayout } from "@/components/SiteLayout";
 import { AnalyticsProvider } from "@/components/AnalyticsProvider";
+import { Providers } from "@/components/Providers";
 import { siteConfig } from "@/lib/site";
 
 const inter = Inter({ subsets: ["latin"], display: "swap" });
@@ -46,7 +47,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </>
         )}
         <AnalyticsProvider />
-        <SiteLayout>{children}</SiteLayout>
+        <Providers>
+          <SiteLayout>{children}</SiteLayout>
+        </Providers>
       </body>
     </html>
   );

@@ -44,16 +44,30 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ],
 
   callbacks: {
-    // Persist user id + role into the JWT on sign-in
-    jwt({ token, user }) {
+    // Persist user id + role + profile status into the JWT
+    async jwt({ token, user, trigger }) {
       if (user) {
         token.sub = user.id;
         token.role = user.role;
+        // Check if user has a profile on initial sign-in
+        const profile = await prisma.profile.findUnique({
+          where: { userId: user.id },
+          select: { id: true },
+        });
+        token.hasProfile = !!profile;
+      }
+      // Allow manual refresh (e.g. after profile creation)
+      if (trigger === "update" && token.sub) {
+        const profile = await prisma.profile.findUnique({
+          where: { userId: token.sub },
+          select: { id: true },
+        });
+        token.hasProfile = !!profile;
       }
       return token;
     },
 
-    // Expose id + role on the client-facing session object
+    // Expose id + role + hasProfile on the client-facing session
     session({ session, token }) {
       if (token.sub) {
         session.user.id = token.sub;
@@ -61,6 +75,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (token.role) {
         session.user.role = token.role as "USER" | "ADMIN";
       }
+      session.user.hasProfile = !!token.hasProfile;
       return session;
     },
   },

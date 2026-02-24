@@ -49,8 +49,12 @@ export async function middleware(req: NextRequest) {
     }
   }
 
-  // ── Admin cookie guard ────────────────────────────────────────
-  if (req.nextUrl.pathname.startsWith("/admin")) {
+  // ── Auth cookie guard ──────────────────────────────────────
+  const pathname = req.nextUrl.pathname;
+  const protectedPaths = ["/admin", "/dashboard", "/create-profile"];
+  const isProtected = protectedPaths.some((p) => pathname.startsWith(p));
+
+  if (isProtected) {
     const hasSession =
       req.cookies.has(SESSION_COOKIE) ||
       req.cookies.has(SECURE_SESSION_COOKIE);
@@ -66,5 +70,10 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/api/auth/callback/credentials"],
+  matcher: [
+    "/admin/:path*",
+    "/dashboard/:path*",
+    "/create-profile/:path*",
+    "/api/auth/callback/credentials",
+  ],
 };

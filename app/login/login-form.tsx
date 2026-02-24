@@ -9,7 +9,7 @@ export function LoginForm() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl") || "/admin";
+  const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -35,101 +35,44 @@ export function LoginForm() {
   }
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        fontFamily: "system-ui, -apple-system, sans-serif",
-        background: "#f5f5f5",
-      }}
-    >
-      <form
-        onSubmit={handleSubmit}
-        style={{
-          width: "100%",
-          maxWidth: 380,
-          padding: 32,
-          background: "#fff",
-          borderRadius: 8,
-          boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
-        }}
-      >
-        <h1 style={{ fontSize: 24, marginBottom: 24, textAlign: "center" }}>
-          Sign In
-        </h1>
+    <div className="auth-page">
+      <form onSubmit={handleSubmit} className="auth-card">
+        <h1 className="auth-title">Sign In</h1>
 
-        {error && (
-          <p
-            style={{
-              color: "#dc2626",
-              fontSize: 14,
-              marginBottom: 16,
-              textAlign: "center",
-            }}
-          >
-            {error}
-          </p>
-        )}
+        {error && <p className="auth-error">{error}</p>}
 
-        <label style={{ display: "block", marginBottom: 16 }}>
-          <span style={{ display: "block", fontSize: 14, marginBottom: 4 }}>
-            Email
-          </span>
+        <label className="auth-label">
+          <span className="auth-label-text">Email</span>
           <input
             name="email"
             type="email"
             required
             autoComplete="email"
-            style={{
-              width: "100%",
-              padding: "8px 12px",
-              fontSize: 16,
-              border: "1px solid #d1d5db",
-              borderRadius: 6,
-              boxSizing: "border-box",
-            }}
+            className="auth-input"
           />
         </label>
 
-        <label style={{ display: "block", marginBottom: 24 }}>
-          <span style={{ display: "block", fontSize: 14, marginBottom: 4 }}>
-            Password
-          </span>
+        <label className="auth-label">
+          <span className="auth-label-text">Password</span>
           <input
             name="password"
             type="password"
             required
             autoComplete="current-password"
-            style={{
-              width: "100%",
-              padding: "8px 12px",
-              fontSize: 16,
-              border: "1px solid #d1d5db",
-              borderRadius: 6,
-              boxSizing: "border-box",
-            }}
+            className="auth-input"
           />
         </label>
 
-        <button
-          type="submit"
-          disabled={loading}
-          style={{
-            width: "100%",
-            padding: "10px 0",
-            fontSize: 16,
-            fontWeight: 600,
-            color: "#fff",
-            background: loading ? "#9ca3af" : "#2563eb",
-            border: "none",
-            borderRadius: 6,
-            cursor: loading ? "not-allowed" : "pointer",
-          }}
-        >
+        <button type="submit" disabled={loading} className="auth-button">
           {loading ? "Signing in…" : "Sign In"}
         </button>
+
+        <p className="auth-footer">
+          Don&apos;t have an account?{" "}
+          <a href="/signup" className="auth-link">
+            Sign up
+          </a>
+        </p>
       </form>
     </div>
   );

@@ -27,6 +27,7 @@ model User {
   updatedAt     DateTime  @updatedAt
   accounts      Account[]
   sessions      Session[]
+  profile       Profile?
 }
 
 model Account {
@@ -86,4 +87,76 @@ model WaitlistEntry {
   id        String   @id @default(uuid())
   email     String   @unique
   createdAt DateTime @default(now())
+}
+
+// ─── Profile models ──────────────────────────────────────────
+
+enum DegreeStatus {
+  NONE
+  IN_PROGRESS
+  BACHELORS
+  MASTERS
+}
+
+enum TeachingExperience {
+  NONE
+  LT1_YEAR
+  ONE_TO_THREE
+  THREE_PLUS
+}
+
+enum CertificationStatus {
+  NONE
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum TargetCountry {
+  VIETNAM
+  THAILAND
+  CAMBODIA
+  INDONESIA
+  PHILIPPINES
+  MALAYSIA
+}
+
+enum DesiredStartTimeline {
+  ASAP
+  ONE_TO_THREE_MONTHS
+  THREE_TO_SIX_MONTHS
+  RESEARCHING
+}
+
+enum SavingsBand {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+model Profile {
+  id                    String              @id @default(uuid())
+  userId                String              @unique
+  passportCountry       String?             @db.VarChar(100)
+  degreeStatus          DegreeStatus        @default(NONE)
+  nativeEnglish         Boolean             @default(false)
+  teachingExperience    TeachingExperience  @default(NONE)
+  certificationStatus   CertificationStatus @default(NONE)
+  desiredStartTimeline  DesiredStartTimeline @default(RESEARCHING)
+  savingsBand           SavingsBand         @default(MEDIUM)
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  user                  User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  targetCountries       ProfileTargetCountry[]
+}
+
+model ProfileTargetCountry {
+  id        String        @id @default(uuid())
+  profileId String
+  country   TargetCountry
+
+  profile   Profile       @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, country])
+  @@index([profileId])
 }
