@@ -10,14 +10,15 @@ export function generateStaticParams() {
 export function generateMetadata({ params }: { params: { slug: string } }): Metadata {
   const post = getPostsMeta().find((p) => p.slug === params.slug);
   if (!post) return {};
+  const cleanTitle = post.title.replace(" | GlobeScraper", "");
   return {
     title: post.title,
     description: post.description,
-    alternates: { canonical: `https://globescraper.com/${post.slug}` },
+    alternates: { canonical: `/${post.slug}` },
     openGraph: {
-      title: post.title.replace(" | GlobeScraper", ""),
+      title: cleanTitle,
       description: post.description,
-      url: `https://globescraper.com/${post.slug}`,
+      url: `/${post.slug}`,
       type: "article",
     },
   };

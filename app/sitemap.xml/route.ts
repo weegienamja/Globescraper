@@ -1,7 +1,8 @@
 import { getPostsMeta } from "@/lib/content";
+import { siteConfig } from "@/lib/site";
 
 export function GET() {
-  const base = "https://globescraper.com";
+  const base = siteConfig.url;
   const today = new Date().toISOString().split("T")[0];
 
   const staticEntries = [

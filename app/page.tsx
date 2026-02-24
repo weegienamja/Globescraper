@@ -4,7 +4,16 @@ import type { Metadata } from "next";
 
 export function generateMetadata(): Metadata {
   const meta = getPagesMeta().index;
-  return { title: meta.title, description: meta.description };
+  return {
+    title: meta.title,
+    description: meta.description,
+    alternates: { canonical: "/" },
+    openGraph: {
+      title: meta.title,
+      description: meta.description,
+      url: "/",
+    },
+  };
 }
 
 export default function HomePage() {

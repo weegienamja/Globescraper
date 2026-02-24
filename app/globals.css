@@ -1,364 +1,522 @@
-.header {
-	width: 100%;
-	background: #fff;
-	box-shadow: 0 2px 8px rgba(25, 118, 210, 0.06);
-	border-radius: 0 0 18px 18px;
-	margin-bottom: 32px;
-	position: relative;
-	z-index: 10;
-}
-.header__container {
-	max-width: 980px;
-	margin: 0 auto;
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	padding: 18px 16px 14px 16px;
-}
-.header__logo-link {
-	display: flex;
-	align-items: center;
-	gap: 12px;
-	text-decoration: none;
-}
-.header__logo {
-	width: 44px;
-	height: 44px;
-	object-fit: cover;
-	border-radius: 12px;
-	box-shadow: 0 2px 8px rgba(25, 118, 210, 0.08);
-	background: #f3f6fa;
-}
-.header__wordmark {
-	font-size: 1.3rem;
-	font-weight: 700;
-	color: #1976d2;
-	letter-spacing: -0.01em;
-}
-.header__nav {
-	display: none;
-}
-.header__nav-list {
-	display: flex;
-	gap: 18px;
-	list-style: none;
-	margin: 0;
-	padding: 0;
-}
-.header__nav-list li a {
-	color: var(--link, #1976d2);
-	font-weight: 600;
-	padding: 7px 16px;
-	border-radius: 7px;
-	transition: background 0.15s, color 0.15s;
-	text-decoration: none;
-	font-size: 1rem;
-}
-.header__nav-list li a:hover,
-.header__nav-list li a:focus {
-	background: var(--primary, #1976d2);
-	color: #fff;
-}
-.header__burger {
-	display: none;
-	flex-direction: column;
-	gap: 4px;
-	background: none;
-	border: none;
-	cursor: pointer;
-	padding: 8px;
-}
-.header__burger-bar {
-	width: 28px;
-	height: 3px;
-	background: #1976d2;
-	border-radius: 2px;
-}
-.header__nav-mobile {
-	display: none;
-	position: absolute;
-	top: 100%;
-	left: 0;
-	width: 100%;
-	background: #fff;
-	box-shadow: 0 4px 16px rgba(25, 118, 210, 0.12);
-	border-radius: 0 0 18px 18px;
-	z-index: 20;
-}
-.header__nav-mobile--open {
-	display: block;
-}
-.header__nav-mobile .header__nav-list {
-	flex-direction: column;
-	gap: 0;
-}
-.header__nav-mobile .header__nav-list li a {
-	padding: 14px 18px;
-	font-size: 1.1rem;
-	border-radius: 0;
-	border-bottom: 1px solid #e5e5e5;
-}
-.header__nav-mobile .header__nav-list li:last-child a {
-	border-bottom: none;
+/* ==========================================================
+   GlobeScraper — Dark-theme, mobile-first global styles
+   ========================================================== */
+
+/* ---- Design tokens ---- */
+:root {
+  --bg: #0f172a;
+  --bg-surface: #1e293b;
+  --bg-elevated: #334155;
+  --text: #e2e8f0;
+  --text-muted: #94a3b8;
+  --text-heading: #f1f5f9;
+  --link: #60a5fa;
+  --link-hover: #93c5fd;
+  --primary: #2563eb;
+  --primary-hover: #3b82f6;
+  --border: #334155;
+  --shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  --radius: 12px;
 }
 
-@media (min-width: 700px) {
-	.header__nav {
-		display: block;
-	}
-	.header__burger {
-		display: none;
-	}
-	.header__nav-mobile {
-		display: none !important;
-	}
-}
-@media (max-width: 699px) {
-	.header__nav {
-		display: none;
-	}
-	.header__burger {
-		display: flex;
-	}
+/* ---- Reset / base ---- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
 }
 
-/* Improve hero text contrast */
-.prose h1, .prose h2, .prose h3 {
-	color: #1a202c;
+html,
+body {
+  margin: 0;
+  padding: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
-.prose p {
-	color: #2d3748;
+
+a {
+  color: var(--link);
+  text-decoration: none;
+  transition: color 0.15s;
 }
-.static-header {
-	width: 100%;
-	background: #fff;
-	box-shadow: 0 2px 8px rgba(25, 118, 210, 0.06);
-	border-radius: 0 0 18px 18px;
-	margin-bottom: 32px;
-	position: relative;
-	z-index: 10;
+a:hover {
+  color: var(--link-hover);
+  text-decoration: underline;
 }
-.static-header__container {
-	max-width: 980px;
-	margin: 0 auto;
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	padding: 18px 16px 14px 16px;
+
+img {
+  max-width: 100%;
+  height: auto;
 }
-.static-header__logo {
-	width: 44px;
-	height: 44px;
-	object-fit: cover;
-	border-radius: 12px;
-	box-shadow: 0 2px 8px rgba(25, 118, 210, 0.08);
-	background: #f3f6fa;
-	margin-right: 18px;
-}
-.static-header__nav {
-	display: flex;
-	gap: 18px;
-}
-.static-header__nav a {
-	color: var(--link, #1976d2);
-	font-weight: 600;
-	padding: 7px 16px;
-	border-radius: 7px;
-	transition: background 0.15s, color 0.15s;
-	text-decoration: none;
-	font-size: 1rem;
-}
-.static-header__nav a:hover {
-	background: var(--primary, #1976d2);
-	color: #fff;
+
+/* ---- Layout container ---- */
+.container {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 24px 16px;
 }
 
 @media (max-width: 600px) {
-	.static-header__container {
-		flex-direction: column;
-		gap: 10px;
-		padding: 10px 6px 8px 6px;
-	}
-	.static-header__nav {
-		gap: 8px;
-		flex-wrap: wrap;
-		justify-content: center;
-	}
-	.static-header__logo {
-		margin-right: 0;
-		margin-bottom: 8px;
-	}
+  .container {
+    padding: 16px 8px;
+  }
 }
-/* Article / HTML content styling */
 
+/* ==========================================================
+   Header
+   ========================================================== */
+.header {
+  width: 100%;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.header__container {
+  max-width: 980px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+}
+
+.header__logo-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+}
+
+.header__logo {
+  width: 44px;
+  height: 44px;
+  object-fit: cover;
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow);
+}
+
+.header__wordmark {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--link);
+  letter-spacing: -0.01em;
+}
+
+/* Desktop nav — hidden on mobile */
+.header__nav {
+  display: none;
+}
+
+.header__nav-list {
+  display: flex;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.header__nav-list li a {
+  color: var(--text);
+  font-weight: 600;
+  padding: 7px 14px;
+  border-radius: 8px;
+  transition: background 0.15s, color 0.15s;
+  text-decoration: none;
+  font-size: 0.95rem;
+}
+
+.header__nav-list li a:hover,
+.header__nav-list li a:focus-visible {
+  background: var(--primary);
+  color: #fff;
+}
+
+/* Burger — shown on mobile */
+.header__burger {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+}
+
+.header__burger-bar {
+  width: 26px;
+  height: 3px;
+  background: var(--link);
+  border-radius: 2px;
+  transition: background 0.15s;
+}
+
+/* Mobile dropdown */
+.header__nav-mobile {
+  display: none;
+}
+
+.header__nav-mobile--open {
+  display: block;
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.header__nav-mobile .header__nav-list {
+  flex-direction: column;
+  gap: 0;
+}
+
+.header__nav-mobile .header__nav-list li a {
+  display: block;
+  padding: 14px 20px;
+  border-radius: 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 1.05rem;
+}
+
+.header__nav-mobile .header__nav-list li:last-child a {
+  border-bottom: none;
+}
+
+/* Desktop breakpoint */
+@media (min-width: 700px) {
+  .header__nav {
+    display: block;
+  }
+  .header__burger,
+  .header__nav-mobile {
+    display: none !important;
+  }
+}
+
+/* ==========================================================
+   Footer
+   ========================================================== */
+.footer {
+  border-top: 1px solid var(--border);
+  background: var(--bg-surface);
+  margin-top: 48px;
+  padding: 32px 16px 20px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.footer__inner {
+  max-width: 980px;
+  margin: 0 auto;
+}
+
+.small {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+/* ==========================================================
+   Cards (blog index)
+   ========================================================== */
+.card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px 18px;
+  margin: 18px 0;
+  box-shadow: var(--shadow);
+  transition: box-shadow 0.2s, border-color 0.2s;
+}
+
+.card:hover {
+  border-color: var(--link);
+  box-shadow: 0 4px 20px rgba(37, 99, 235, 0.18);
+}
+
+.card h2 {
+  color: var(--text-heading);
+}
+
+.card h2 a {
+  color: inherit;
+}
+
+.card h2 a:hover {
+  color: var(--link);
+  text-decoration: none;
+}
+
+/* ==========================================================
+   Buttons
+   ========================================================== */
+.button,
+.btn {
+  display: inline-block;
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: 24px;
+  padding: 10px 28px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+  transition: background 0.15s, box-shadow 0.15s;
+}
+
+.button:hover,
+.btn:hover {
+  background: var(--primary-hover);
+  box-shadow: 0 4px 16px rgba(37, 99, 235, 0.25);
+}
+
+/* ==========================================================
+   Prose — scraped HTML content styling
+   ==========================================================
+   Zyrosite-scraped HTML is deeply nested and uses inline
+   styles with light-theme colours.  The rules below:
+   • override inline text/bg colours for the dark theme
+   • collapse the non-functional Zyrosite grid into a
+     simple flowing column
+   • hide decorative chrome (backgrounds, SVG shapes,
+     duplicate mobile images)
+   ========================================================== */
 .prose {
-	max-width: 70ch;
-	margin: 0 auto;
-	line-height: 1.7;
-	font-size: 18px;
+  max-width: 70ch;
+  margin: 0 auto;
+  line-height: 1.75;
+  font-size: 1.125rem;
+  color: var(--text);
 }
 
+/* ---- Headings ---- */
 .prose h1,
 .prose h2,
-.prose h3 {
-	line-height: 1.25;
-	margin-top: 1.8em;
-	margin-bottom: 0.6em;
-	font-weight: 800;
-	letter-spacing: -0.01em;
+.prose h3,
+.prose h4,
+.prose h5,
+.prose h6 {
+  color: var(--text-heading) !important;
+  line-height: 1.25;
+  margin-top: 1.8em;
+  margin-bottom: 0.6em;
+  font-weight: 800;
+  letter-spacing: -0.01em;
 }
 
-.prose h1 { font-size: 40px; }
-.prose h2 { font-size: 28px; }
-.prose h3 { font-size: 22px; }
+.prose h1 { font-size: 2.25rem; }
+.prose h2 { font-size: 1.6rem; }
+.prose h3 { font-size: 1.3rem; }
+.prose h4 { font-size: 1.15rem; }
 
-.prose p {
-	margin: 1em 0;
-	color: var(--text);
+/* ---- Body text — force dark-theme colour over inline styles ---- */
+.prose p,
+.prose span,
+.prose li,
+.prose strong,
+.prose em,
+.prose label,
+.prose td,
+.prose th,
+.prose blockquote,
+.prose figcaption {
+  color: var(--text) !important;
+}
+
+.prose a {
+  color: var(--link) !important;
+  font-weight: 600;
 }
 
 .prose ul,
 .prose ol {
-	margin: 1em 0 1em 1.6em;
-	padding: 0;
+  margin: 1em 0 1em 1.6em;
+  padding: 0;
 }
 
 .prose li {
-	margin: 0.4em 0;
+  margin: 0.4em 0;
 }
 
-.prose a {
-	color: var(--link);
-	font-weight: 600;
-}
-
+/* ---- Images ---- */
 .prose img {
-	margin: 1.5em 0;
-	border-radius: 12px;
-	box-shadow: var(--shadow);
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius);
+  margin: 1.5em auto;
+  box-shadow: var(--shadow);
 }
 
-html, body {
-	padding: 0;
-	margin: 0;
-	font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-	background: var(--bg, #f7fafc);
-	color: var(--text, #1a202c);
+/* ---- Zyrosite layout overrides ---- */
+
+/* Collapse the grid into a flowing column */
+.prose .block-layout {
+  display: flex !important;
+  flex-direction: column;
+  gap: 1.5rem;
+  max-width: 70ch;
+  margin: 0 auto;
 }
 
-a {
-	color: var(--link, #1976d2);
-	text-decoration: none;
-	transition: color 0.15s;
-}
-a:hover {
-	color: var(--link-hover, #0d47a1);
-	text-decoration: underline;
+.prose .layout-element {
+  width: 100% !important;
+  position: static !important;
 }
 
-:root {
-	--bg: #f7fafc;
-	--text: #1a202c;
-	--link: #1976d2;
-	--link-hover: #0d47a1;
-	--primary: #1976d2;
-	--primary-dark: #0d47a1;
-	--shadow: 0 2px 8px rgba(25, 118, 210, 0.08);
-	--border: #e5e5e5;
-	--radius: 12px;
+/* Section blocks */
+.prose .block {
+  padding: 1rem 0;
+  position: relative;
+  overflow: hidden;
 }
 
-.container {
-	max-width: 980px;
-	margin: 0 auto;
-	padding: 24px 16px;
+/* Hide non-functional backgrounds & overlays */
+.prose .block-background {
+  display: none !important;
 }
 
-.nav {
-	display: flex;
-	gap: 16px;
-	align-items: center;
-	justify-content: space-between;
-	padding: 18px 0 14px 0;
-	border-bottom: 1px solid var(--border);
-	background: #fff;
-	box-shadow: 0 2px 8px rgba(25, 118, 210, 0.03);
-	border-radius: 0 0 var(--radius) var(--radius);
-}
-.nav a {
-	text-decoration: none;
-	font-weight: 600;
-	padding: 6px 14px;
-	border-radius: 6px;
-	transition: background 0.15s, color 0.15s;
-}
-.nav a:hover {
-	background: var(--primary, #1976d2);
-	color: #fff;
+.prose .block-background__overlay {
+  display: none !important;
 }
 
-@media (max-width: 600px) {
-	.container {
-		padding: 16px 6px;
-	}
-	.nav {
-		flex-direction: column;
-		gap: 8px;
-		padding: 10px 0 8px 0;
-	}
+/* Hide decorative SVG blob shapes */
+.prose .grid-shape {
+  display: none !important;
 }
 
-.footer {
-	border-top: 1px solid var(--border);
-	margin-top: 48px;
-	padding: 32px 0 16px 0;
-	font-size: 15px;
-	color: #444;
-	background: #f3f6fa;
-	border-radius: var(--radius) var(--radius) 0 0;
-	text-align: center;
-	box-shadow: 0 -2px 8px rgba(25, 118, 210, 0.03);
+/* Hide duplicate mobile image variants */
+.prose .image-wrapper--mobile {
+  display: none !important;
 }
 
-.prose :is(h1, h2, h3) {
-	line-height: 1.2;
-}
-.prose p {
-	line-height: 1.6;
-}
-
-.card {
-	border: 1px solid var(--border);
-	border-radius: var(--radius);
-	padding: 20px 18px;
-	margin: 18px 0;
-	background: #fff;
-	box-shadow: var(--shadow);
-	transition: box-shadow 0.15s;
-}
-.card:hover {
-	box-shadow: 0 4px 16px rgba(25, 118, 210, 0.12);
+/* Desktop image wrapper — fill width */
+.prose .image-wrapper--desktop {
+  width: 100% !important;
+  height: auto !important;
 }
 
-.button, .btn {
-	display: inline-block;
-	background: var(--primary);
-	color: #fff;
-	border: none;
-	border-radius: 24px;
-	padding: 10px 28px;
-	font-size: 1rem;
-	font-weight: 600;
-	cursor: pointer;
-	box-shadow: var(--shadow);
-	transition: background 0.15s, box-shadow 0.15s;
-}
-.button:hover, .btn:hover {
-	background: var(--primary-dark);
-	box-shadow: 0 4px 16px rgba(25, 118, 210, 0.16);
+.prose .image-wrapper--desktop .image__image {
+  width: 100% !important;
+  height: auto !important;
 }
 
-.small {
-	font-size: 14px;
-	color: #444;
+/* Blog header (special scraped component) */
+.prose .block-blog-header {
+  padding-bottom: 1rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.prose .block-blog-header__title {
+  color: var(--text-heading) !important;
+  font-size: 2.25rem;
+  margin-top: 0;
+}
+
+.prose .block-blog-header__description {
+  color: var(--text-muted) !important;
+}
+
+/* Empty grid-embed placeholders */
+.prose .grid-embed:empty,
+.prose .grid-embed:not(:has(*:not(br):not(hr))) {
+  display: none;
+}
+
+/* ---- Forms inside scraped content ---- */
+.prose input,
+.prose textarea {
+  display: block;
+  width: 100%;
+  background: var(--bg-surface);
+  color: var(--text) !important;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 1rem;
+  margin-top: 6px;
+}
+
+.prose input:focus,
+.prose textarea:focus {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+  border-color: var(--primary);
+}
+
+.prose .grid-button,
+.prose button[type="submit"] {
+  background: var(--primary) !important;
+  color: #fff !important;
+  border: none !important;
+  border-radius: 24px;
+  padding: 10px 24px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 10px;
+  transition: background 0.15s;
+}
+
+.prose .grid-button:hover,
+.prose button[type="submit"]:hover {
+  background: var(--primary-hover) !important;
+}
+
+/* ---- Zyrosite inline colour overrides (catch-all) ---- */
+
+/* Force dark bg on any scraped section/div with white bg */
+.prose section,
+.prose section > div {
+  background-color: transparent !important;
+  background: transparent !important;
+}
+
+/* Social icons in any remaining scraped markup */
+.prose .social-icons__link svg {
+  fill: var(--text) !important;
+  color: var(--text) !important;
+}
+
+/* Pagination buttons from scraped blog.html (not used, but harmless) */
+.prose .pagination__button {
+  background: var(--bg-surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+/* ---- Zyrosite-specific reset: remove all inline grid behaviour ---- */
+.prose [style*="grid-template"] {
+  display: flex !important;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.prose [style*="grid-row"] {
+  grid-row: unset !important;
+  grid-column: unset !important;
+}
+
+/* Categories / meta in blog post headers */
+.prose .categories {
+  color: var(--link) !important;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+
+.prose .body,
+.prose .body-large,
+.prose .body-small {
+  color: var(--text) !important;
 }
