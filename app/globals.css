@@ -411,6 +411,17 @@ img {
   transform: translateY(-2px);
 }
 
+.card--link {
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.card--link:hover {
+  text-decoration: none;
+  color: inherit;
+}
+
 .card h2 {
   color: var(--text-heading);
 }

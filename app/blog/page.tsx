@@ -35,8 +35,8 @@ export default function BlogIndex() {
       <div className="blog-list">
         {posts.map((p) => (
           <BlogCardTracker key={p.slug} slug={p.slug}>
-            <article className="card">
-              <Link href={`/${p.slug}`} className="card__image-link">
+            <Link href={`/${p.slug}`} className="card card--link">
+              <div className="card__image-wrapper">
                 <Image
                   src={getHeroImage(p.slug)}
                   alt={p.title.replace(" | GlobeScraper", "")}
@@ -44,17 +44,15 @@ export default function BlogIndex() {
                   height={90}
                   className="card__image"
                 />
-              </Link>
+              </div>
               <div className="card__body">
                 <div className="small">{p.date}</div>
-                <h2 className="card__title">
-                  <Link href={`/${p.slug}`} className="card__title-clamp">
-                    {p.title.replace(" | GlobeScraper", "")}
-                  </Link>
+                <h2 className="card__title card__title-clamp">
+                  {p.title.replace(" | GlobeScraper", "")}
                 </h2>
                 <p className="small card__excerpt card__excerpt-clamp">{p.description}</p>
               </div>
-            </article>
+            </Link>
           </BlogCardTracker>
         ))}
       </div>
