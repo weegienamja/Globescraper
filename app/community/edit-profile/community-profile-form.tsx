@@ -12,6 +12,7 @@ import {
   deleteGalleryImage,
 } from "@/app/community/image-actions";
 import { COMMUNITY_COUNTRIES } from "@/lib/validations/community";
+import { GalleryGrid } from "@/components/Lightbox";
 
 const MAX_CLIENT_SIZE = 2 * 1024 * 1024; // 2 MB — compress above this
 const COMPRESS_QUALITY = 0.8;
@@ -391,6 +392,13 @@ export function CommunityProfileForm({
       <fieldset className="form__fieldset">
         <legend>Gallery Photos (up to 5)</legend>
         <p className="form__hint">Share photos with the community — travel, teaching, etc.</p>
+
+        {gallery.length > 0 && (
+          <GalleryGrid
+            images={gallery.map((img) => ({ url: img.url, alt: "Gallery photo" }))}
+            className="form__gallery-preview-grid"
+          />
+        )}
 
         <div className="form__gallery-grid">
           {gallery.map((img) => (

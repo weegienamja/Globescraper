@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { ConnectButton, BlockButton, ReportButton } from "./profile-actions";
 import { INTENT_LABELS } from "@/lib/validations/community";
+import { GalleryGrid } from "@/components/Lightbox";
 
 const ENUM_COUNTRY_MAP: Record<string, string> = {
   VIETNAM: "Vietnam",
@@ -170,18 +171,12 @@ export default async function CommunityProfilePage({
         {profile.images.length > 0 && (
           <div className="profile-view__section">
             <h2>Gallery</h2>
-            <div className="profile-view__gallery">
-              {profile.images.map((img) => (
-                <Image
-                  key={img.id}
-                  src={img.url}
-                  alt={`Photo by ${profile.displayName}`}
-                  width={400}
-                  height={300}
-                  className="profile-view__gallery-img"
-                />
-              ))}
-            </div>
+            <GalleryGrid
+              images={profile.images.map((img) => ({
+                url: img.url,
+                alt: `Photo by ${profile.displayName}`,
+              }))}
+            />
           </div>
         )}
 
