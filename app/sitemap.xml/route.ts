@@ -1,19 +1,25 @@
 import { getPostsMeta } from "@/lib/content";
 import { siteConfig } from "@/lib/site";
 
+/** Last significant update to static pages (update when content changes). */
+const STATIC_LASTMOD = "2026-02-24";
+
 export function GET() {
   const base = siteConfig.url;
-  const today = new Date().toISOString().split("T")[0];
 
   const staticEntries = [
-    "",
-    "/blog",
-    "/about",
-    "/how-it-works-to-teach-english",
-  ].map((p) => `  <url><loc>${base}${p}</loc><lastmod>${today}</lastmod></url>`);
+    { path: "", priority: "1.0", changefreq: "weekly" },
+    { path: "/blog", priority: "0.9", changefreq: "weekly" },
+    { path: "/about", priority: "0.7", changefreq: "monthly" },
+    { path: "/how-it-works-to-teach-english", priority: "0.8", changefreq: "monthly" },
+  ].map(
+    (p) =>
+      `  <url><loc>${base}${p.path}</loc><lastmod>${STATIC_LASTMOD}</lastmod><changefreq>${p.changefreq}</changefreq><priority>${p.priority}</priority></url>`
+  );
 
   const postEntries = getPostsMeta().map(
-    (p) => `  <url><loc>${base}/${p.slug}</loc><lastmod>${p.date}</lastmod></url>`
+    (p) =>
+      `  <url><loc>${base}/${p.slug}</loc><lastmod>${p.modifiedDate ?? p.date}</lastmod><changefreq>monthly</changefreq><priority>0.8</priority></url>`
   );
 
   const xml = `<?xml version="1.0" encoding="UTF-8"?>

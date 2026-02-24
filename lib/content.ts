@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-export type PostMeta = { slug: string; title: string; description: string; date: string };
+export type PostMeta = { slug: string; title: string; description: string; date: string; modifiedDate?: string; author?: string };
 export type PageMeta = { title: string; description: string };
 
 const contentRoot = path.join(process.cwd(), "content");

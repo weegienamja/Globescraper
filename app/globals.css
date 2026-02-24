@@ -1425,6 +1425,95 @@ body.menu-open {
 }
 
 /* ==========================================================
+   Skip Navigation Link
+   ========================================================== */
+.skip-nav {
+  position: absolute;
+  top: -100%;
+  left: 16px;
+  z-index: 999;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--primary);
+  border-radius: 0 0 8px 8px;
+  text-decoration: none;
+  transition: top 0.2s ease;
+}
+
+.skip-nav:focus {
+  top: 0;
+}
+
+/* ==========================================================
+   404 Not Found
+   ========================================================== */
+.not-found {
+  text-align: center;
+  padding: 80px 24px 64px;
+}
+
+.not-found__code {
+  font-size: 72px;
+  font-weight: 800;
+  color: var(--text-heading);
+  margin: 0 0 8px;
+  line-height: 1;
+}
+
+.not-found__title {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-heading);
+  margin: 0 0 8px;
+}
+
+.not-found__text {
+  font-size: 15px;
+  color: var(--text-muted);
+  margin: 0 0 28px;
+  line-height: 1.5;
+}
+
+.not-found__links {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.not-found__link {
+  color: var(--link);
+  font-weight: 600;
+  font-size: 15px;
+}
+
+/* ==========================================================
+   Footer Navigation
+   ========================================================== */
+.footer__nav {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 20px;
+  margin-top: 12px;
+}
+
+.footer__nav a {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.footer__nav a:hover {
+  color: var(--link);
+  text-decoration: underline;
+}
+
+/* ==========================================================
    Reduced Motion
    ========================================================== */
 @media (prefers-reduced-motion: reduce) {

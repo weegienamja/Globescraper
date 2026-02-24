@@ -15,6 +15,13 @@ export function generateMetadata(): Metadata {
       title: meta.title,
       description: meta.description,
       url: "/blog",
+      images: [{ url: "/og-default.png", width: 1200, height: 630 }],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: meta.title,
+      description: meta.description,
+      images: ["/og-default.png"],
     },
   };
 }
@@ -24,7 +31,7 @@ export default function BlogIndex() {
   return (
     <section>
       <h1>Blog</h1>
-      <p className="small">Teaching in Cambodia, without the fluff.</p>
+      <p className="small">Teaching in Southeast Asia, without the fluff.</p>
       <div className="blog-list">
         {posts.map((p) => (
           <BlogCardTracker key={p.slug} slug={p.slug}>

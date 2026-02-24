@@ -9,7 +9,7 @@ import { trackNavClick, trackGuideDownload, trackCTAClick } from "@/lib/analytic
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { RevealOnScroll } from "@/components/RevealOnScroll";
 
-const { navItems, name, logoPath, tagline } = siteConfig;
+const { navItems, name, logoPath, tagline, socials } = siteConfig;
 
 function AuthButtons() {
   const { data: session, status } = useSession();
@@ -169,8 +169,9 @@ function Header() {
 export function SiteLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
+      <a href="#main-content" className="skip-nav">Skip to content</a>
       <Header />
-      <main className="container">{children}</main>
+      <main id="main-content" className="container">{children}</main>
       <footer className="footer" onClick={(e) => {
         const anchor = (e.target as HTMLElement).closest("a");
         if (anchor) trackNavClick(anchor.textContent ?? anchor.href, "footer");
@@ -180,6 +181,13 @@ export function SiteLayout({ children }: { children: React.ReactNode }) {
             &copy; {new Date().getFullYear()} {name}
           </div>
           <div className="small">{tagline}</div>
+          <nav className="footer__nav" aria-label="Footer navigation">
+            {navItems.map((item) => (
+              <Link key={item.href} href={item.href}>{item.label}</Link>
+            ))}
+            <a href={socials.instagram} target="_blank" rel="noopener noreferrer">Instagram</a>
+            <a href={socials.tiktok} target="_blank" rel="noopener noreferrer">TikTok</a>
+          </nav>
         </div>
       </footer>
       <RevealOnScroll />
