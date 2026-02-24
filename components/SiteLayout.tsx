@@ -299,7 +299,7 @@ function Header() {
 
 export function SiteLayout({ children }: { children: React.ReactNode }) {
   return (
-    <>
+    <div className="site-wrapper">
       <a href="#main-content" className="skip-nav">Skip to content</a>
       <Header />
       <main id="main-content" className="container">{children}</main>
@@ -322,6 +322,6 @@ export function SiteLayout({ children }: { children: React.ReactNode }) {
         </div>
       </footer>
       <RevealOnScroll />
-    </>
+    </div>
   );
 }

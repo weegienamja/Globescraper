@@ -101,13 +101,12 @@ img {
 }
 
 .header__container {
-  max-width: 100%;
-  margin: 0 auto;
+  width: 100%;
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 4px 24px;
-  gap: 12px;
 }
 
 .header__left {
@@ -150,9 +149,13 @@ img {
   font-family: inherit;
 }
 
-/* Desktop nav — hidden on mobile */
+/* Desktop nav — hidden on mobile, absolutely centered */
 .header__nav {
   display: none;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
 }
 
 .header__nav-list {
@@ -343,6 +346,17 @@ img {
 /* ==========================================================
    Footer
    ========================================================== */
+/* Site wrapper — sticky footer */
+.site-wrapper {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.site-wrapper > main {
+  flex: 1;
+}
+
 .footer {
   border-top: 1px solid var(--border);
   background: var(--bg-surface);
