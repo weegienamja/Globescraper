@@ -51,8 +51,14 @@ export async function middleware(req: NextRequest) {
 
   // ── Auth cookie guard ──────────────────────────────────────
   const pathname = req.nextUrl.pathname;
-  const protectedPaths = ["/admin", "/dashboard", "/create-profile", "/community", "/meetups"];
-  const isProtected = protectedPaths.some((p) => pathname.startsWith(p));
+  const protectedPaths = ["/admin", "/dashboard", "/create-profile"];
+  // /community and /meetups root pages show invite content for logged-out users;
+  // all sub-routes (edit-profile, [userId], new, [id]) remain protected.
+  const publicExactPages = ["/community", "/meetups"];
+  const isProtected =
+    protectedPaths.some((p) => pathname.startsWith(p)) ||
+    ((pathname.startsWith("/community") || pathname.startsWith("/meetups")) &&
+     !publicExactPages.includes(pathname));
 
   if (isProtected) {
     const hasSession =
@@ -74,7 +80,9 @@ export const config = {
     "/admin/:path*",
     "/dashboard/:path*",
     "/create-profile/:path*",
+    "/community",
     "/community/:path*",
+    "/meetups",
     "/meetups/:path*",
     "/api/auth/callback/credentials",
   ],
