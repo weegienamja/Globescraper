@@ -7,8 +7,8 @@ export const siteConfig = {
   name: "GlobeScraper",
   url: "https://globescraper.com",
   description:
-    "Teach English in Cambodia. Guides, costs, visas, and support.",
-  tagline: "Teach English in Cambodia — guides, support, and community.",
+    "Teach English in Southeast Asia. Guides, costs, visas, and support for Vietnam, Thailand, Cambodia, and the Philippines.",
+  tagline: "Teach English in Southeast Asia — guides, support, and community.",
   logoPath: "/logo.png",
   email: "info@globescraper.com",
   socials: {
