@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth";
 import { SignOutButton } from "./sign-out-button";
 import { LeadRow } from "./lead-row";
 import { ReportsSection } from "./reports-section";
+import { AdminUserManagement, AdminAuditLog, AdminBlockedIps } from "./admin-client-sections";
 import { unstable_noStore as noStore } from "next/cache";
 import { COUNTRY_LABELS } from "@/lib/validations/profile";
 
@@ -33,6 +34,10 @@ export default async function AdminPage() {
     openReports,
     totalMeetups,
     totalConnections,
+    totalMessages,
+    blockedIpCount,
+    bannedUsers,
+    suspendedUsers,
   ] = await Promise.all([
     prisma.user.count(),
     prisma.user.count({ where: { createdAt: { gte: sevenDaysAgo } } }),
@@ -43,6 +48,10 @@ export default async function AdminPage() {
     prisma.report.count({ where: { createdAt: { gte: sevenDaysAgo } } }),
     prisma.meetup.count({ where: { status: "ACTIVE" } }),
     prisma.connectionRequest.count({ where: { status: "ACCEPTED" } }),
+    prisma.message.count(),
+    prisma.blockedIp.count({ where: { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] } }),
+    prisma.user.count({ where: { status: "BANNED" } }),
+    prisma.user.count({ where: { status: "SUSPENDED" } }),
   ]);
 
   const profileRate = totalUsers > 0
@@ -147,6 +156,22 @@ export default async function AdminPage() {
           <div className="admin__card-value">{openReports}</div>
           <div className="admin__card-label">Reports (7d)</div>
         </div>
+        <div className="admin__card">
+          <div className="admin__card-value">{totalMessages}</div>
+          <div className="admin__card-label">Messages</div>
+        </div>
+        <div className="admin__card">
+          <div className="admin__card-value">{blockedIpCount}</div>
+          <div className="admin__card-label">Blocked IPs</div>
+        </div>
+        <div className="admin__card">
+          <div className="admin__card-value">{bannedUsers}</div>
+          <div className="admin__card-label">Banned Users</div>
+        </div>
+        <div className="admin__card">
+          <div className="admin__card-value">{suspendedUsers}</div>
+          <div className="admin__card-label">Suspended Users</div>
+        </div>
       </div>
 
       {/* ── Latest Users ─────────────────────────────────── */}
@@ -241,6 +266,15 @@ export default async function AdminPage() {
 
       {/* ── Recent Reports ───────────────────────────────── */}
       <ReportsSection />
+
+      {/* ── User Management (Client) ────────────────────── */}
+      <AdminUserManagement />
+
+      {/* ── Blocked IPs (Client) ─────────────────────────── */}
+      <AdminBlockedIps />
+
+      {/* ── Audit Log (Client) ───────────────────────────── */}
+      <AdminAuditLog />
     </div>
   );
 }

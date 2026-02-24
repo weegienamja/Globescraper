@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { siteConfig } from "@/lib/site";
 import { trackNavClick, trackCTAClick } from "@/lib/analytics";
@@ -13,7 +13,7 @@ const { navItems, name, logoPath, tagline, socials } = siteConfig;
 
 /* ── Avatar dropdown (logged-in users) ──────────────────── */
 
-function AvatarDropdown() {
+function AvatarDropdown({ pendingCount }: { pendingCount: number }) {
   const { data: session, status } = useSession();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -73,6 +73,11 @@ function AvatarDropdown() {
         ) : (
           <span className="avatar-dropdown__initial">{initial}</span>
         )}
+        {pendingCount > 0 && (
+          <span className="avatar-badge" aria-label={`${pendingCount} pending connection requests`}>
+            {pendingCount > 9 ? "9+" : pendingCount}
+          </span>
+        )}
       </button>
 
       {open && (
@@ -97,6 +102,13 @@ function AvatarDropdown() {
           <Link href="/dashboard/requests" className="avatar-dropdown__item" role="menuitem" onClick={() => setOpen(false)}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
             Connections
+            {pendingCount > 0 && (
+              <span className="menu-badge">{pendingCount > 9 ? "9+" : pendingCount}</span>
+            )}
+          </Link>
+          <Link href="/dashboard/messages" className="avatar-dropdown__item" role="menuitem" onClick={() => setOpen(false)}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            Messages
           </Link>
           {isAdmin && (
             <Link href="/admin" className="avatar-dropdown__item" role="menuitem" onClick={() => setOpen(false)}>
@@ -127,8 +139,24 @@ function AvatarDropdown() {
 function Header() {
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
   const menuRef = useRef<HTMLElement>(null);
   const { data: session } = useSession();
+
+  // Fetch pending connection request count
+  const fetchPendingCount = useCallback(() => {
+    if (!session?.user) return;
+    fetch("/api/connections/pending-count")
+      .then((r) => r.json())
+      .then((data) => setPendingCount(data.count ?? 0))
+      .catch(() => {});
+  }, [session?.user]);
+
+  useEffect(() => {
+    fetchPendingCount();
+    const interval = setInterval(fetchPendingCount, 30_000);
+    return () => clearInterval(interval);
+  }, [fetchPendingCount]);
 
   // Close on ESC
   useEffect(() => {
@@ -211,7 +239,7 @@ function Header() {
           {/* Right zone: avatar dropdown (desktop) + burger (mobile) */}
           <div className="header__right">
             <div className="header__right-desktop">
-              <AvatarDropdown />
+              <AvatarDropdown pendingCount={pendingCount} />
             </div>
             <button
               className={`header__burger${open ? " header__burger--open" : ""}`}
@@ -274,7 +302,15 @@ function Header() {
             <div className="mobile-nav__actions">
               <Link href="/dashboard" className="mobile-nav__action-link" onClick={() => setOpen(false)}>Dashboard</Link>
               <Link href="/community/edit-profile" className="mobile-nav__action-link" onClick={() => setOpen(false)}>Edit Profile</Link>
-              <Link href="/dashboard/requests" className="mobile-nav__action-link" onClick={() => setOpen(false)}>Connections</Link>
+              <Link href="/dashboard/requests" className="mobile-nav__action-link" onClick={() => setOpen(false)}>
+                Connections
+                {pendingCount > 0 && (
+                  <span className="menu-badge">{pendingCount > 9 ? "9+" : pendingCount}</span>
+                )}
+              </Link>
+              <Link href="/dashboard/messages" className="mobile-nav__action-link" onClick={() => setOpen(false)}>
+                Messages
+              </Link>
               {session.user.role === "ADMIN" && (
                 <Link href="/admin" className="mobile-nav__action-link" onClick={() => setOpen(false)}>Admin Panel</Link>
               )}

@@ -3,14 +3,6 @@ import { Redis } from "@upstash/redis";
 
 /**
  * Login rate limiter — 5 attempts per 15-minute sliding window per IP.
- *
- * Uses Upstash Redis in production (set UPSTASH_REDIS_REST_URL and
- * UPSTASH_REDIS_REST_TOKEN in env vars).
- *
- * Returns `null` when Upstash is not configured so callers can
- * gracefully skip rate limiting during local development.
- *
- * Edge-runtime compatible (used in middleware.ts).
  */
 
 let _loginInstance: Ratelimit | null | undefined;
@@ -61,4 +53,31 @@ export function getConnectionRatelimit(): Ratelimit | null {
   });
 
   return _connectionInstance;
+}
+
+/**
+ * DM rate limiter — 30 messages per 1-minute sliding window per user.
+ */
+
+let _dmInstance: Ratelimit | null | undefined;
+
+export function getDmRatelimit(): Ratelimit | null {
+  if (_dmInstance !== undefined) return _dmInstance;
+
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+
+  if (!url || !token) {
+    _dmInstance = null;
+    return null;
+  }
+
+  _dmInstance = new Ratelimit({
+    redis: new Redis({ url, token }),
+    limiter: Ratelimit.slidingWindow(30, "1 m"),
+    prefix: "ratelimit:dm",
+    analytics: true,
+  });
+
+  return _dmInstance;
 }

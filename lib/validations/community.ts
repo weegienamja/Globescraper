@@ -83,7 +83,14 @@ export const reportSchema = z.object({
   details: z.string().max(1000).optional().or(z.literal("")),
 });
 
+export const messageSchema = z.object({
+  conversationId: z.string().uuid().optional(),
+  toUserId: z.string().uuid().optional(),
+  body: z.string().min(1, "Message cannot be empty").max(2000),
+});
+
 export type CommunityProfileInput = z.infer<typeof communityProfileSchema>;
 export type ConnectionRequestInput = z.infer<typeof connectionRequestSchema>;
 export type MeetupInput = z.infer<typeof meetupSchema>;
 export type ReportInput = z.infer<typeof reportSchema>;
+export type MessageInput = z.infer<typeof messageSchema>;

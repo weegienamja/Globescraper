@@ -8,9 +8,14 @@ type ActionResult = { ok: true } | { error: string };
 export async function adminDisableUser(userId: string): Promise<ActionResult> {
   const session = await requireAdmin();
 
+  const before = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { disabled: true, status: true },
+  });
+
   await prisma.user.update({
     where: { id: userId },
-    data: { disabled: true },
+    data: { disabled: true, status: "SUSPENDED" },
   });
 
   // Set profile to private
@@ -19,6 +24,9 @@ export async function adminDisableUser(userId: string): Promise<ActionResult> {
     data: { visibility: "PRIVATE" },
   });
 
+  // Invalidate sessions
+  await prisma.session.deleteMany({ where: { userId } });
+
   // Audit log
   await prisma.adminAuditLog.create({
     data: {
@@ -26,7 +34,80 @@ export async function adminDisableUser(userId: string): Promise<ActionResult> {
       actionType: "DISABLE_USER",
       targetType: "USER",
       targetId: userId,
-      metadata: JSON.stringify({ action: "disabled user and set profile to PRIVATE" }),
+      targetUserId: userId,
+      beforeJson: JSON.stringify(before),
+      afterJson: JSON.stringify({ disabled: true, status: "SUSPENDED" }),
+    },
+  });
+
+  return { ok: true };
+}
+
+export async function adminBanUser(userId: string): Promise<ActionResult> {
+  const session = await requireAdmin();
+
+  const before = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { disabled: true, status: true },
+  });
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: { disabled: true, status: "BANNED" },
+  });
+
+  // Set profile to private
+  await prisma.profile.updateMany({
+    where: { userId },
+    data: { visibility: "PRIVATE" },
+  });
+
+  // Invalidate sessions
+  await prisma.session.deleteMany({ where: { userId } });
+
+  // Delete connections
+  await prisma.connection.deleteMany({
+    where: { OR: [{ userLowId: userId }, { userHighId: userId }] },
+  });
+
+  // Audit log
+  await prisma.adminAuditLog.create({
+    data: {
+      adminUserId: session.user.id,
+      actionType: "BAN_USER",
+      targetType: "USER",
+      targetId: userId,
+      targetUserId: userId,
+      beforeJson: JSON.stringify(before),
+      afterJson: JSON.stringify({ disabled: true, status: "BANNED" }),
+    },
+  });
+
+  return { ok: true };
+}
+
+export async function adminReactivateUser(userId: string): Promise<ActionResult> {
+  const session = await requireAdmin();
+
+  const before = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { disabled: true, status: true },
+  });
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: { disabled: false, status: "ACTIVE" },
+  });
+
+  await prisma.adminAuditLog.create({
+    data: {
+      adminUserId: session.user.id,
+      actionType: "REACTIVATE_USER",
+      targetType: "USER",
+      targetId: userId,
+      targetUserId: userId,
+      beforeJson: JSON.stringify(before),
+      afterJson: JSON.stringify({ disabled: false, status: "ACTIVE" }),
     },
   });
 

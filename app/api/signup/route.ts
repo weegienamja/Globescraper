@@ -2,9 +2,24 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { signupSchema } from "@/lib/validations/profile";
+import { logSecurityEvent, isIpBlocked } from "@/lib/security";
+import { headers } from "next/headers";
 
 export async function POST(request: Request) {
   try {
+    // IP block check
+    const hdrs = await headers();
+    const ip = hdrs.get("x-forwarded-for")?.split(",")[0]?.trim()
+      || hdrs.get("x-real-ip")
+      || "";
+
+    if (ip && await isIpBlocked(ip)) {
+      return NextResponse.json(
+        { error: "Access denied." },
+        { status: 403 },
+      );
+    }
+
     const body = await request.json();
     const parsed = signupSchema.safeParse(body);
 
@@ -31,7 +46,7 @@ export async function POST(request: Request) {
 
     const passwordHash = await bcrypt.hash(password, 12);
 
-    await prisma.user.create({
+    const user = await prisma.user.create({
       data: {
         name,
         email: email.toLowerCase(),
@@ -39,6 +54,10 @@ export async function POST(request: Request) {
         role: "USER",
       },
     });
+
+    // Log security event
+    const ua = hdrs.get("user-agent") || undefined;
+    await logSecurityEvent(user.id, "signup", { ipAddress: ip || undefined, userAgent: ua });
 
     return NextResponse.json({ ok: true }, { status: 201 });
   } catch {
