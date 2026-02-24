@@ -1,7 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { COMMUNITY_COUNTRIES } from "@/lib/validations/community";
 
 export const dynamic = "force-dynamic";
@@ -11,13 +10,71 @@ export const metadata = {
   description: "Browse and join community meetups for teachers in Southeast Asia.",
 };
 
+/* ── Invite page for logged-out visitors ──────────────────── */
+function MeetupsInvite() {
+  return (
+    <div className="invite-page">
+      <div className="invite-hero">
+        <span className="invite-hero__emoji">📅</span>
+        <h1 className="invite-hero__title">Teacher Meetups</h1>
+        <p className="invite-hero__sub">
+          Grab coffee, explore a new city, or swap teaching stories — join meetups
+          organised by teachers across Southeast Asia.
+        </p>
+        <div className="invite-hero__cta">
+          <Link href="/signup?callbackUrl=/meetups" className="btn btn--primary">
+            Create a free account
+          </Link>
+          <Link href="/login?callbackUrl=/meetups" className="btn btn--outline">
+            Sign in
+          </Link>
+        </div>
+      </div>
+
+      <div className="invite-features">
+        <div className="invite-feature">
+          <span className="invite-feature__icon">🗓️</span>
+          <h3 className="invite-feature__title">Browse Upcoming Events</h3>
+          <p className="invite-feature__text">
+            See what&apos;s happening in your area. Filter by country or city to find
+            meetups near you.
+          </p>
+        </div>
+        <div className="invite-feature">
+          <span className="invite-feature__icon">🙋</span>
+          <h3 className="invite-feature__title">RSVP &amp; Attend</h3>
+          <p className="invite-feature__text">
+            Mark yourself as going or interested. See who else is attending and
+            connect before the event.
+          </p>
+        </div>
+        <div className="invite-feature">
+          <span className="invite-feature__icon">✨</span>
+          <h3 className="invite-feature__title">Create Your Own</h3>
+          <p className="invite-feature__text">
+            Hosting a coffee morning or weekend trip? Create a meetup in seconds and
+            invite the community.
+          </p>
+        </div>
+      </div>
+
+      <div className="invite-bottom">
+        <p className="invite-bottom__text">
+          Already have an account?{" "}
+          <Link href="/login?callbackUrl=/meetups">Sign in</Link> to browse meetups.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export default async function MeetupsPage({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const session = await auth();
-  if (!session?.user?.id) redirect("/login?callbackUrl=/meetups");
+  if (!session?.user?.id) return <MeetupsInvite />;
 
   const params = await searchParams;
   const countryFilter = typeof params.country === "string" ? params.country : "";

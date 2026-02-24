@@ -1,4 +1,3 @@
-import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import Link from "next/link";
@@ -28,13 +27,71 @@ export const metadata = {
   description: "Connect with teachers moving to or living in Southeast Asia.",
 };
 
+/* ── Invite page for logged-out visitors ──────────────────── */
+function CommunityInvite() {
+  return (
+    <div className="invite-page">
+      <div className="invite-hero">
+        <span className="invite-hero__emoji">🌏</span>
+        <h1 className="invite-hero__title">Join the Community</h1>
+        <p className="invite-hero__sub">
+          Connect with teachers who are moving to — or already living in — Southeast Asia.
+          Share tips, find friends, and make your move easier.
+        </p>
+        <div className="invite-hero__cta">
+          <Link href="/signup?callbackUrl=/community" className="btn btn--primary">
+            Create a free account
+          </Link>
+          <Link href="/login?callbackUrl=/community" className="btn btn--outline">
+            Sign in
+          </Link>
+        </div>
+      </div>
+
+      <div className="invite-features">
+        <div className="invite-feature">
+          <span className="invite-feature__icon">👋</span>
+          <h3 className="invite-feature__title">Browse Profiles</h3>
+          <p className="invite-feature__text">
+            Find teachers heading to the same country or city as you. See who&apos;s looking
+            for coffee meetups, city tours, job advice, or study groups.
+          </p>
+        </div>
+        <div className="invite-feature">
+          <span className="invite-feature__icon">💬</span>
+          <h3 className="invite-feature__title">Send Connection Requests</h3>
+          <p className="invite-feature__text">
+            Reach out to people with similar plans. Once connected, you can share
+            contact details and start planning together.
+          </p>
+        </div>
+        <div className="invite-feature">
+          <span className="invite-feature__icon">📸</span>
+          <h3 className="invite-feature__title">Share Your Story</h3>
+          <p className="invite-feature__text">
+            Create a profile with your photo, gallery, target countries, and what
+            you&apos;re looking for. Let others find you.
+          </p>
+        </div>
+      </div>
+
+      <div className="invite-bottom">
+        <p className="invite-bottom__text">
+          Already have an account?{" "}
+          <Link href="/login?callbackUrl=/community">Sign in</Link> to browse the community.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export default async function CommunityPage({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const session = await auth();
-  if (!session?.user?.id) redirect("/login?callbackUrl=/community");
+  if (!session?.user?.id) return <CommunityInvite />;
 
   const params = await searchParams;
   const countryFilter = typeof params.country === "string" ? params.country : "";
