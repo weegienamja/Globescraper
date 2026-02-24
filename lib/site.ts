@@ -9,7 +9,7 @@ export const siteConfig = {
   description:
     "Teach English in Southeast Asia. Guides, costs, visas, and support for Vietnam, Thailand, Cambodia, and the Philippines.",
   tagline: "Teach English in Southeast Asia — guides, support, and community.",
-  logoPath: "/logo.png",
+  logoPath: "/main_logo.png",
   email: "info@globescraper.com",
   socials: {
     instagram: "https://www.instagram.com/mancavejamie/",
