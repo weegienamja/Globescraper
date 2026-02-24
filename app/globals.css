@@ -187,10 +187,77 @@ img {
   border-bottom: none;
 }
 
+/* Auth buttons in nav */
+.header__auth {
+  display: none;
+  align-items: center;
+  gap: 8px;
+}
+
+.header__auth-link {
+  color: var(--text);
+  font-weight: 600;
+  font-size: 0.9rem;
+  padding: 7px 14px;
+  border-radius: 8px;
+  text-decoration: none;
+  transition: background 0.15s, color 0.15s;
+}
+
+.header__auth-link:hover {
+  background: var(--bg-elevated);
+  color: var(--text-heading);
+  text-decoration: none;
+}
+
+.header__auth-btn {
+  font-weight: 600;
+  font-size: 0.9rem;
+  padding: 7px 18px;
+  border-radius: 8px;
+  border: 1px solid var(--primary);
+  background: var(--primary);
+  color: #fff;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.15s;
+}
+
+.header__auth-btn:hover {
+  background: var(--primary-hover);
+  text-decoration: none;
+  color: #fff;
+}
+
+.header__auth-btn--outline {
+  background: transparent;
+  color: var(--text);
+}
+
+.header__auth-btn--outline:hover {
+  background: var(--bg-elevated);
+  color: var(--text-heading);
+}
+
+.header__auth-mobile {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--border);
+}
+
+.header__auth-mobile .header__auth {
+  display: flex;
+}
+
 /* Desktop breakpoint */
 @media (min-width: 700px) {
   .header__nav {
     display: block;
+  }
+  .header__auth {
+    display: flex;
   }
   .header__burger,
   .header__nav-mobile {

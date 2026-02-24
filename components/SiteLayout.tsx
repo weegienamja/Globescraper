@@ -3,10 +3,45 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
+import { useSession, signOut } from "next-auth/react";
 import { siteConfig } from "@/lib/site";
 import { trackNavClick, trackGuideDownload, trackCTAClick } from "@/lib/analytics";
 
 const { navItems, name, logoPath, tagline } = siteConfig;
+
+function AuthButtons() {
+  const { data: session, status } = useSession();
+
+  // Don't render anything while loading to avoid flash
+  if (status === "loading") return null;
+
+  if (session?.user) {
+    return (
+      <div className="header__auth">
+        <Link href="/dashboard" className="header__auth-link">
+          Dashboard
+        </Link>
+        <button
+          onClick={() => signOut({ callbackUrl: "/" })}
+          className="header__auth-btn header__auth-btn--outline"
+        >
+          Sign out
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="header__auth">
+      <Link href="/login" className="header__auth-link">
+        Sign in
+      </Link>
+      <Link href="/signup" className="header__auth-btn">
+        Sign up
+      </Link>
+    </div>
+  );
+}
 
 function Header() {
   const [open, setOpen] = useState(false);
@@ -45,6 +80,8 @@ function Header() {
           <ul className="header__nav-list">{navLinks}</ul>
         </nav>
 
+        <AuthButtons />
+
         <button
           className="header__burger"
           aria-label={open ? "Close menu" : "Open menu"}
@@ -63,6 +100,9 @@ function Header() {
           aria-label="Mobile navigation"
         >
           <ul className="header__nav-list">{navLinks}</ul>
+          <div className="header__auth-mobile">
+            <AuthButtons />
+          </div>
         </nav>
       )}
     </header>
