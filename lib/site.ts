@@ -8,7 +8,7 @@ export const siteConfig = {
   url: "https://globescraper.com",
   description:
     "Teach English in Southeast Asia. Guides, costs, visas, and support for Vietnam, Thailand, Cambodia, and the Philippines.",
-  tagline: "Teach English in Southeast Asia — guides, support, and community.",
+  tagline: "Teach English in Southeast Asia. Guides, support, and community.",
   logoPath: "/main_logo.png",
   email: "info@globescraper.com",
   socials: {

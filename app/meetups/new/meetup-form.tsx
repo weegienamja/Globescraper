@@ -110,7 +110,7 @@ export function MeetupForm() {
           type="text"
           maxLength={200}
           className="form__input"
-          placeholder='e.g. "near Riverside" — never share an exact address'
+          placeholder='e.g. "near Riverside" (never share an exact address)'
         />
       </label>
 
@@ -129,8 +129,8 @@ export function MeetupForm() {
       <label className="form__label">
         Visibility
         <select name="visibility" defaultValue="MEMBERS_ONLY" className="form__input">
-          <option value="MEMBERS_ONLY">Members only — logged-in users</option>
-          <option value="PUBLIC">Public — anyone can view</option>
+          <option value="MEMBERS_ONLY">Members only (logged-in users)</option>
+          <option value="PUBLIC">Public (anyone can view)</option>
         </select>
       </label>
 

@@ -35,7 +35,7 @@ function CommunityInvite() {
         <span className="invite-hero__emoji">🌏</span>
         <h1 className="invite-hero__title">Join the Community</h1>
         <p className="invite-hero__sub">
-          Connect with teachers who are moving to — or already living in — Southeast Asia.
+          Connect with teachers who are moving to or already living in Southeast Asia.
           Share tips, find friends, and make your move easier.
         </p>
         <div className="invite-hero__cta">
