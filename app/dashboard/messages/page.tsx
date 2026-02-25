@@ -24,15 +24,24 @@ export default async function MessagesPage({
 
   // If ?to=userId, find or create conversation and redirect
   if (toUserId && toUserId !== userId) {
-    // Check connection
-    const connected = await prisma.connection.findFirst({
-      where: {
-        status: "ACCEPTED",
-        OR: [
-          { userLowId: userId < toUserId ? userId : toUserId, userHighId: userId < toUserId ? toUserId : userId },
-        ],
-      },
-    });
+    // Check connection in new table, then fall back to legacy
+    const connected =
+      (await prisma.connection.findFirst({
+        where: {
+          status: "ACCEPTED",
+          userLowId: userId < toUserId ? userId : toUserId,
+          userHighId: userId < toUserId ? toUserId : userId,
+        },
+      })) ??
+      (await prisma.connectionRequest.findFirst({
+        where: {
+          status: "ACCEPTED",
+          OR: [
+            { fromUserId: userId, toUserId: toUserId },
+            { fromUserId: toUserId, toUserId: userId },
+          ],
+        },
+      }));
 
     if (!connected) {
       return (
@@ -110,21 +119,21 @@ export default async function MessagesPage({
         },
       },
     }),
-    // Accepted connections for the sidebar
-    prisma.connection.findMany({
+    // Accepted connections from legacy table for the sidebar
+    prisma.connectionRequest.findMany({
       where: {
         status: "ACCEPTED",
-        OR: [{ userLowId: userId }, { userHighId: userId }],
+        OR: [{ fromUserId: userId }, { toUserId: userId }],
       },
       include: {
-        userLow: {
+        fromUser: {
           select: {
             id: true,
             name: true,
             profile: { select: { displayName: true, avatarUrl: true } },
           },
         },
-        userHigh: {
+        toUser: {
           select: {
             id: true,
             name: true,
@@ -132,7 +141,7 @@ export default async function MessagesPage({
           },
         },
       },
-      orderBy: { acceptedAt: "desc" },
+      orderBy: { updatedAt: "desc" },
     }),
   ]);
 
@@ -164,7 +173,7 @@ export default async function MessagesPage({
 
   const connections = acceptedConnections
     .map((conn) => {
-      const other = conn.userLowId === userId ? conn.userHigh : conn.userLow;
+      const other = conn.fromUserId === userId ? conn.toUser : conn.fromUser;
       return other;
     })
     .filter((u) => !conversationUserIds.has(u.id));

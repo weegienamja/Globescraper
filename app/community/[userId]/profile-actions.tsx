@@ -6,6 +6,8 @@ import {
   sendConnectionRequest,
   blockUser,
   unblockUser,
+  hideUser,
+  unhideUser,
   submitReport,
 } from "@/app/community/actions";
 import { REPORT_REASON_LABELS } from "@/lib/validations/community";
@@ -110,6 +112,44 @@ export function BlockButton({
       className={`btn btn--sm ${blocked ? "btn--outline" : "btn--danger"}`}
     >
       {pending ? "..." : blocked ? "Unblock" : "Block"}
+    </button>
+  );
+}
+
+// ── Hide Button ──────────────────────────────────────────────
+
+export function HideButton({
+  targetUserId,
+  isHidden,
+}: {
+  targetUserId: string;
+  isHidden: boolean;
+}) {
+  const [pending, startTransition] = useTransition();
+  const [hidden, setHidden] = useState(isHidden);
+  const router = useRouter();
+
+  function handleToggle() {
+    startTransition(async () => {
+      if (hidden) {
+        await unhideUser(targetUserId);
+        setHidden(false);
+      } else {
+        await hideUser(targetUserId);
+        setHidden(true);
+      }
+      router.refresh();
+    });
+  }
+
+  return (
+    <button
+      onClick={handleToggle}
+      disabled={pending}
+      className="btn btn--ghost btn--sm"
+      title={hidden ? "Show this user in community" : "Hide this user from your community view"}
+    >
+      {pending ? "..." : hidden ? "Unhide" : "Hide"}
     </button>
   );
 }

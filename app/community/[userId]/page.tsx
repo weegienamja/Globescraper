@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import Link from "next/link";
 import Image from "next/image";
-import { ConnectButton, BlockButton, ReportButton } from "./profile-actions";
+import { ConnectButton, BlockButton, ReportButton, HideButton } from "./profile-actions";
 import { INTENT_LABELS } from "@/lib/validations/community";
 import { GalleryGrid } from "@/components/Lightbox";
 
@@ -78,9 +78,10 @@ export default async function CommunityProfilePage({
   // Check connection status
   let connectionStatus: string | null = null;
   let isBlockedByMe = false;
+  let isHiddenByMe = false;
 
   if (currentUserId && !isOwner) {
-    const [connection, block] = await Promise.all([
+    const [connection, block, hidden] = await Promise.all([
       prisma.connectionRequest.findFirst({
         where: {
           OR: [
@@ -93,9 +94,13 @@ export default async function CommunityProfilePage({
       prisma.block.findFirst({
         where: { blockerUserId: currentUserId, blockedUserId: userId },
       }),
+      prisma.hiddenUser.findFirst({
+        where: { userId: currentUserId, hiddenUserId: userId },
+      }),
     ]);
     connectionStatus = connection?.status ?? null;
     isBlockedByMe = !!block;
+    isHiddenByMe = !!hidden;
   }
 
   const intents: string[] = [];
@@ -202,6 +207,7 @@ export default async function CommunityProfilePage({
               <ConnectButton toUserId={userId} />
             )}
             <BlockButton targetUserId={userId} isBlocked={isBlockedByMe} />
+            <HideButton targetUserId={userId} isHidden={isHiddenByMe} />
             <ReportButton targetType="USER" targetId={userId} />
           </div>
         )}

@@ -280,6 +280,43 @@ export async function unblockUser(
   return { ok: true };
 }
 
+// ── Hide user from community ─────────────────────────────────
+
+export async function hideUser(targetUserId: string): Promise<ActionResult> {
+  const userId = await getSessionUserId();
+  if (!userId) return { error: "Not authenticated" };
+
+  if (targetUserId === userId) return { error: "Cannot hide yourself" };
+
+  await prisma.hiddenUser.upsert({
+    where: {
+      userId_hiddenUserId: {
+        userId,
+        hiddenUserId: targetUserId,
+      },
+    },
+    create: { userId, hiddenUserId: targetUserId },
+    update: {},
+  });
+
+  return { ok: true };
+}
+
+// ── Unhide user ──────────────────────────────────────────────
+
+export async function unhideUser(
+  targetUserId: string,
+): Promise<ActionResult> {
+  const userId = await getSessionUserId();
+  if (!userId) return { error: "Not authenticated" };
+
+  await prisma.hiddenUser.deleteMany({
+    where: { userId, hiddenUserId: targetUserId },
+  });
+
+  return { ok: true };
+}
+
 // ── Submit report ────────────────────────────────────────────
 
 export async function submitReport(data: unknown): Promise<ActionResult> {
