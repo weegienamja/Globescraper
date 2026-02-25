@@ -2,6 +2,7 @@ import "./globals.css";
 import type { Metadata } from "next";
 import Script from "next/script";
 import { Inter } from "next/font/google";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import { SiteLayout } from "@/components/SiteLayout";
 import { AnalyticsProvider } from "@/components/AnalyticsProvider";
 import { Providers } from "@/components/Providers";
@@ -65,6 +66,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Providers>
           <SiteLayout>{children}</SiteLayout>
         </Providers>
+        <SpeedInsights />
       </body>
     </html>
   );
