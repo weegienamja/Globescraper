@@ -74,6 +74,7 @@ export async function GET(request: Request) {
             avatarUrl: true,
             currentCountry: true,
             currentCity: true,
+            hiddenFromCommunity: true,
           },
         },
       },

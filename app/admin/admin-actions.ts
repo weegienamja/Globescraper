@@ -114,6 +114,36 @@ export async function adminReactivateUser(userId: string): Promise<ActionResult>
   return { ok: true };
 }
 
+export async function adminToggleHideUser(userId: string, hide: boolean): Promise<ActionResult> {
+  const session = await requireAdmin();
+
+  const profile = await prisma.profile.findUnique({
+    where: { userId },
+    select: { hiddenFromCommunity: true },
+  });
+
+  if (!profile) return { error: "User has no community profile" };
+
+  await prisma.profile.update({
+    where: { userId },
+    data: { hiddenFromCommunity: hide },
+  });
+
+  await prisma.adminAuditLog.create({
+    data: {
+      adminUserId: session.user.id,
+      actionType: hide ? "HIDE_USER" : "UNHIDE_USER",
+      targetType: "USER",
+      targetId: userId,
+      targetUserId: userId,
+      beforeJson: JSON.stringify({ hiddenFromCommunity: profile.hiddenFromCommunity }),
+      afterJson: JSON.stringify({ hiddenFromCommunity: hide }),
+    },
+  });
+
+  return { ok: true };
+}
+
 export async function adminCancelMeetup(meetupId: string): Promise<ActionResult> {
   const session = await requireAdmin();
 

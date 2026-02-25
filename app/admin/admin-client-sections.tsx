@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { adminDisableUser, adminBanUser, adminReactivateUser } from "./admin-actions";
+import { adminDisableUser, adminBanUser, adminReactivateUser, adminToggleHideUser } from "./admin-actions";
 
 /* ── User Search & Management ─────────────────────────────── */
 
@@ -22,6 +22,7 @@ interface UserResult {
     avatarUrl: string | null;
     currentCountry: string | null;
     currentCity: string | null;
+    hiddenFromCommunity: boolean;
   } | null;
 }
 
@@ -165,6 +166,29 @@ export function AdminUserManagement() {
       await adminReactivateUser(selectedUser.id);
       searchUsers(page);
       router.refresh();
+    });
+  }
+
+  function handleToggleHide() {
+    if (!selectedUser) return;
+    const isHidden = selectedUser.profile?.hiddenFromCommunity ?? false;
+    const msg = isHidden
+      ? `Unhide ${selectedUser.email} in the community?`
+      : `Hide ${selectedUser.email} from the community? They won't appear in community listings.`;
+    if (!confirm(msg)) return;
+    startTransition(async () => {
+      const res = await adminToggleHideUser(selectedUser.id, !isHidden);
+      if ("ok" in res) {
+        // Update local state so the button reflects new state immediately
+        setSelectedUser({
+          ...selectedUser,
+          profile: selectedUser.profile
+            ? { ...selectedUser.profile, hiddenFromCommunity: !isHidden }
+            : null,
+        });
+        searchUsers(page);
+        router.refresh();
+      }
     });
   }
 
@@ -337,6 +361,7 @@ export function AdminUserManagement() {
                         <div><strong>Display name:</strong> {selectedUser.profile.displayName || "—"}</div>
                         <div><strong>Location:</strong> {[selectedUser.profile.currentCity, selectedUser.profile.currentCountry].filter(Boolean).join(", ") || "—"}</div>
                         <div><strong>Bio:</strong> {selectedUser.profile.bio || "—"}</div>
+                        <div><strong>Community visibility:</strong> {selectedUser.profile.hiddenFromCommunity ? <span className="admin__badge admin__badge--warn">Hidden</span> : <span className="admin__badge admin__badge--ok">Visible</span>}</div>
                       </>
                     )}
                   </div>
@@ -385,6 +410,15 @@ export function AdminUserManagement() {
                   {/* Actions */}
                   <div className="admin__modal-actions">
                     <button onClick={() => setEditMode(true)} className="btn btn--outline btn--sm">Edit</button>
+                    {selectedUser.profile && (
+                      <button
+                        onClick={handleToggleHide}
+                        disabled={pending}
+                        className={selectedUser.profile.hiddenFromCommunity ? "btn btn--primary btn--sm" : "btn btn--outline btn--sm"}
+                      >
+                        {selectedUser.profile.hiddenFromCommunity ? "Unhide from Community" : "Hide from Community"}
+                      </button>
+                    )}
                     {selectedUser.status === "ACTIVE" && (
                       <>
                         <button onClick={handleDisable} disabled={pending} className="btn btn--outline btn--sm">Suspend</button>
