@@ -18,7 +18,7 @@ function MeetupsInvite() {
         <span className="invite-hero__emoji">📅</span>
         <h1 className="invite-hero__title">Teacher Meetups</h1>
         <p className="invite-hero__sub">
-          Grab coffee, explore a new city, or swap teaching stories — join meetups
+          Grab coffee, explore a new city, or swap teaching stories. Join meetups
           organised by teachers across Southeast Asia.
         </p>
         <div className="invite-hero__cta">

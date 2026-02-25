@@ -391,16 +391,16 @@ export function CommunityProfileForm({
           defaultValue={initial?.visibility ?? "MEMBERS_ONLY"}
           className="form__input"
         >
-          <option value="PUBLIC">Public — anyone can view</option>
-          <option value="MEMBERS_ONLY">Members only — logged-in users</option>
-          <option value="PRIVATE">Private — only you and admins</option>
+          <option value="PUBLIC">Public (anyone can view)</option>
+          <option value="MEMBERS_ONLY">Members only (logged-in users)</option>
+          <option value="PRIVATE">Private (only you and admins)</option>
         </select>
       </label>
 
       {/* ── Gallery images ────────────────────────── */}
       <fieldset className="form__fieldset">
         <legend>Gallery Photos (up to 5)</legend>
-        <p className="form__hint">Share photos with the community — travel, teaching, etc.</p>
+        <p className="form__hint">Share photos with the community. Travel, teaching, etc.</p>
 
         <div className="form__gallery-grid">
           {gallery.map((img) => (

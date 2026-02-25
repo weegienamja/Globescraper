@@ -18,9 +18,9 @@ export const INTENT_LABELS: Record<string, string> = {
 };
 
 export const VISIBILITY_LABELS: Record<string, string> = {
-  PUBLIC: "Public — anyone can view",
-  MEMBERS_ONLY: "Members only — logged-in users",
-  PRIVATE: "Private — only you and admins",
+  PUBLIC: "Public (anyone can view)",
+  MEMBERS_ONLY: "Members only (logged-in users)",
+  PRIVATE: "Private (only you and admins)",
 };
 
 export const REPORT_REASON_LABELS: Record<string, string> = {
