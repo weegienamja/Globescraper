@@ -48,6 +48,7 @@ export default async function CommunityProfilePage({
       user: { select: { name: true, disabled: true } },
       images: { orderBy: { sortOrder: "asc" } },
     },
+    // hiddenFromCommunity is included by default in the full model
   });
 
   if (!profile || profile.user.disabled) notFound();
@@ -78,10 +79,10 @@ export default async function CommunityProfilePage({
   // Check connection status
   let connectionStatus: string | null = null;
   let isBlockedByMe = false;
-  let isHiddenByMe = false;
+  const isAdmin = session?.user?.role === "ADMIN";
 
   if (currentUserId && !isOwner) {
-    const [connection, block, hidden] = await Promise.all([
+    const [connection, block] = await Promise.all([
       prisma.connectionRequest.findFirst({
         where: {
           OR: [
@@ -94,13 +95,9 @@ export default async function CommunityProfilePage({
       prisma.block.findFirst({
         where: { blockerUserId: currentUserId, blockedUserId: userId },
       }),
-      prisma.hiddenUser.findFirst({
-        where: { userId: currentUserId, hiddenUserId: userId },
-      }),
     ]);
     connectionStatus = connection?.status ?? null;
     isBlockedByMe = !!block;
-    isHiddenByMe = !!hidden;
   }
 
   const intents: string[] = [];
@@ -207,7 +204,9 @@ export default async function CommunityProfilePage({
               <ConnectButton toUserId={userId} />
             )}
             <BlockButton targetUserId={userId} isBlocked={isBlockedByMe} />
-            <HideButton targetUserId={userId} isHidden={isHiddenByMe} />
+            {isAdmin && (
+              <HideButton targetUserId={userId} isHidden={!!profile.hiddenFromCommunity} />
+            )}
             <ReportButton targetType="USER" targetId={userId} />
           </div>
         )}

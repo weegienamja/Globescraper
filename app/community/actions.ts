@@ -280,38 +280,33 @@ export async function unblockUser(
   return { ok: true };
 }
 
-// ── Hide user from community ─────────────────────────────────
+// ── Hide user from community (admin only) ───────────────────
 
 export async function hideUser(targetUserId: string): Promise<ActionResult> {
-  const userId = await getSessionUserId();
-  if (!userId) return { error: "Not authenticated" };
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Not authenticated" };
+  if (session.user.role !== "ADMIN") return { error: "Admin only" };
 
-  if (targetUserId === userId) return { error: "Cannot hide yourself" };
-
-  await prisma.hiddenUser.upsert({
-    where: {
-      userId_hiddenUserId: {
-        userId,
-        hiddenUserId: targetUserId,
-      },
-    },
-    create: { userId, hiddenUserId: targetUserId },
-    update: {},
+  await prisma.profile.updateMany({
+    where: { userId: targetUserId },
+    data: { hiddenFromCommunity: true },
   });
 
   return { ok: true };
 }
 
-// ── Unhide user ──────────────────────────────────────────────
+// ── Unhide user from community (admin only) ──────────────────
 
 export async function unhideUser(
   targetUserId: string,
 ): Promise<ActionResult> {
-  const userId = await getSessionUserId();
-  if (!userId) return { error: "Not authenticated" };
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Not authenticated" };
+  if (session.user.role !== "ADMIN") return { error: "Admin only" };
 
-  await prisma.hiddenUser.deleteMany({
-    where: { userId, hiddenUserId: targetUserId },
+  await prisma.profile.updateMany({
+    where: { userId: targetUserId },
+    data: { hiddenFromCommunity: false },
   });
 
   return { ok: true };

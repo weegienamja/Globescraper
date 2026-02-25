@@ -147,7 +147,7 @@ export function HideButton({
       onClick={handleToggle}
       disabled={pending}
       className="btn btn--ghost btn--sm"
-      title={hidden ? "Show this user in community" : "Hide this user from your community view"}
+      title={hidden ? "Unhide this user in community (admin)" : "Hide this user from all community views (admin)"}
     >
       {pending ? "..." : hidden ? "Unhide" : "Hide"}
     </button>

@@ -98,35 +98,28 @@ export default async function CommunityPage({
   const cityFilter = typeof params.city === "string" ? params.city : "";
   const intentFilter = typeof params.intent === "string" ? params.intent : "";
 
-  // Get user's blocks and hidden users to exclude
-  const [blocks, hiddenUsers] = await Promise.all([
-    prisma.block.findMany({
-      where: {
-        OR: [
-          { blockerUserId: session.user.id },
-          { blockedUserId: session.user.id },
-        ],
-      },
-      select: { blockerUserId: true, blockedUserId: true },
-    }),
-    prisma.hiddenUser.findMany({
-      where: { userId: session.user.id },
-      select: { hiddenUserId: true },
-    }),
-  ]);
+  // Get user's blocks to exclude
+  const blocks = await prisma.block.findMany({
+    where: {
+      OR: [
+        { blockerUserId: session.user.id },
+        { blockedUserId: session.user.id },
+      ],
+    },
+    select: { blockerUserId: true, blockedUserId: true },
+  });
   const blockedIds = new Set(
     blocks.flatMap((b) => [b.blockerUserId, b.blockedUserId]),
   );
   blockedIds.delete(session.user.id);
-  const hiddenIds = hiddenUsers.map((h) => h.hiddenUserId);
-  const excludedIds = Array.from(new Set([...blockedIds, ...hiddenIds]));
 
   // Build Prisma where clause
   const where: Record<string, unknown> = {
     displayName: { not: null },
     visibility: { not: "PRIVATE" },
     user: { disabled: false },
-    userId: { notIn: excludedIds },
+    hiddenFromCommunity: false,
+    userId: { notIn: Array.from(blockedIds) },
   };
 
   if (countryFilter && COUNTRY_ENUM_MAP[countryFilter]) {

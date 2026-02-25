@@ -50,8 +50,6 @@ model User {
   meetupAttendances   MeetupAttendee[]
   blocksInitiated     Block[]  @relation("Blocker")
   blocksReceived      Block[]  @relation("Blocked")
-  hiddenByMe          HiddenUser[] @relation("Hider")
-  hiddenFromMe        HiddenUser[] @relation("Hidden")
   reports             Report[]
   securityEvents      UserSecurityEvent[]
 }
@@ -209,6 +207,7 @@ model Profile {
   meetupJobAdvice       Boolean             @default(false)
   meetupStudyGroup      Boolean             @default(false)
   meetupLanguageExchange Boolean            @default(false)
+  hiddenFromCommunity   Boolean             @default(false)
   createdAt             DateTime            @default(now())
   updatedAt             DateTime            @updatedAt
 
@@ -358,19 +357,6 @@ model Block {
 
   @@unique([blockerUserId, blockedUserId])
   @@index([blockedUserId])
-}
-
-model HiddenUser {
-  id           String   @id @default(uuid())
-  userId       String
-  hiddenUserId String
-  createdAt    DateTime @default(now())
-
-  user         User     @relation("Hider",  fields: [userId],       references: [id], onDelete: Cascade)
-  hiddenUser   User     @relation("Hidden", fields: [hiddenUserId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, hiddenUserId])
-  @@index([hiddenUserId])
 }
 
 model Report {
