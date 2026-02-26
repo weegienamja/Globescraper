@@ -10,6 +10,16 @@ import { getPublishedAiPost, getPublishedAiPosts } from "@/lib/published-posts";
 import { ArticleJsonLd, BreadcrumbJsonLd } from "@/components/JsonLd";
 
 /**
+ * Strip the first image that appears immediately after the H1 heading
+ * in AI-generated markdown. The page already renders a hero &lt;Image&gt;
+ * so this prevents the duplicate.
+ */
+function stripLeadingHeroImage(markdown: string): string {
+  // Match: # Title\n\n![alt](url)\n  — the hero injected by injectImagesIntoMarkdown
+  return markdown.replace(/^(# .+)\n\n!\[[^\]]*\]\([^)]+\)\n/m, "$1\n");
+}
+
+/**
  * AI-published posts come from the database, so allow dynamic params
  * beyond the statically generated set.
  */
@@ -145,7 +155,7 @@ export default async function PostPage({ params }: { params: { slug: string } })
             style={{ width: "100%", height: "auto", borderRadius: "var(--radius)", marginBottom: 24 }}
           />
           {isAi ? (
-            <MarkdownContent markdown={aiPost.markdown} />
+            <MarkdownContent markdown={stripLeadingHeroImage(aiPost.markdown)} />
           ) : (
             <HtmlContent html={getHtmlForPost(staticPost!.slug)} />
           )}

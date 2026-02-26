@@ -162,3 +162,57 @@ export function getSeoFixRatelimit(): Ratelimit | null {
 
   return _seoFixInstance;
 }
+
+/**
+ * News topic search rate limiter — 50 searches per 24-hour sliding window per admin.
+ */
+
+let _newsSearchInstance: Ratelimit | null | undefined;
+
+export function getNewsSearchRatelimit(): Ratelimit | null {
+  if (_newsSearchInstance !== undefined) return _newsSearchInstance;
+
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+
+  if (!url || !token) {
+    _newsSearchInstance = null;
+    return null;
+  }
+
+  _newsSearchInstance = new Ratelimit({
+    redis: new Redis({ url, token }),
+    limiter: Ratelimit.slidingWindow(50, "24 h"),
+    prefix: "ratelimit:news-search",
+    analytics: true,
+  });
+
+  return _newsSearchInstance;
+}
+
+/**
+ * News draft generation rate limiter — 10 generations per 24-hour sliding window per admin.
+ */
+
+let _newsGenInstance: Ratelimit | null | undefined;
+
+export function getNewsGenRatelimit(): Ratelimit | null {
+  if (_newsGenInstance !== undefined) return _newsGenInstance;
+
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+
+  if (!url || !token) {
+    _newsGenInstance = null;
+    return null;
+  }
+
+  _newsGenInstance = new Ratelimit({
+    redis: new Redis({ url, token }),
+    limiter: Ratelimit.slidingWindow(10, "24 h"),
+    prefix: "ratelimit:news-gen",
+    analytics: true,
+  });
+
+  return _newsGenInstance;
+}
