@@ -71,66 +71,81 @@ async function validateAndExpandSources(
   topicTitle: string,
   angle: string
 ): Promise<FetchedSource[]> {
-  const sources: FetchedSource[] = [];
   const seenUrls = new Set<string>();
 
   // Start with seed URLs
   const candidateUrls = [...seedUrls];
 
   // Add extra discovery based on topic keywords
-  const topicLower = topicTitle.toLowerCase();
   for (const reg of NEWS_SOURCE_REGISTRY) {
-    if (candidateUrls.length >= 15) break;
-    // Add local news sites to check for related articles
+    if (candidateUrls.length >= 10) break;
     if (reg.category === "LOCAL_NEWS" || reg.category === "OFFICIAL_GOV") {
       candidateUrls.push(`https://www.${reg.domain}`);
     }
   }
 
-  // Check if topic requires official sources
-  const needsOfficial = topicRequiresOfficialSource(topicTitle);
-  let hasOfficial = false;
-
+  // De-duplicate candidates
+  const uniqueUrls: string[] = [];
   for (const url of candidateUrls) {
-    if (sources.length >= 10) break;
     if (seenUrls.has(url)) continue;
     seenUrls.add(url);
-
-    // Skip blocked domains
     if (isBlockedDomain(url)) continue;
-
-    // Check robots.txt
-    const allowed = await isAllowedByRobots(url);
-    if (!allowed) {
-      console.log(`[News Gen] Skipping ${url}: blocked by robots.txt`);
-      continue;
-    }
-
-    // Fetch page
-    const html = await fetchPage(url);
-    if (!html) continue;
-
-    const text = extractMainText(html);
-    if (text.length < 100) continue;
-
-    const title = extractTitle(html);
-    const publisher = getPublisherName(url);
-    const isOfficial = isOfficialSource(url);
-
-    if (isOfficial) hasOfficial = true;
-
-    sources.push({
-      url,
-      title,
-      publisher,
-      text,
-      fetchedAt: new Date(),
-      isOfficial,
-    });
+    uniqueUrls.push(url);
   }
 
-  // If we need an official source but don't have one, note it
-  if (needsOfficial && !hasOfficial) {
+  // Check if topic requires official sources
+  const needsOfficial = topicRequiresOfficialSource(topicTitle);
+
+  // ── Parallel fetch with a global 45-second timeout ──
+  const SOURCE_PHASE_TIMEOUT_MS = 45_000;
+
+  const fetchOne = async (url: string): Promise<FetchedSource | null> => {
+    try {
+      const allowed = await isAllowedByRobots(url);
+      if (!allowed) {
+        console.log(`[News Gen] Skipping ${url}: blocked by robots.txt`);
+        return null;
+      }
+      const html = await fetchPage(url);
+      if (!html) return null;
+
+      const text = extractMainText(html);
+      if (text.length < 100) return null;
+
+      const title = extractTitle(html);
+      return {
+        url,
+        title,
+        publisher: getPublisherName(url),
+        text,
+        fetchedAt: new Date(),
+        isOfficial: isOfficialSource(url),
+      };
+    } catch {
+      return null;
+    }
+  };
+
+  // Race all fetches against the global timeout
+  const results = await Promise.race([
+    Promise.allSettled(uniqueUrls.map(fetchOne)),
+    new Promise<PromiseSettledResult<FetchedSource | null>[]>((resolve) =>
+      setTimeout(() => {
+        console.warn(`[News Gen] Source fetch phase hit ${SOURCE_PHASE_TIMEOUT_MS / 1000}s timeout`);
+        resolve([]);
+      }, SOURCE_PHASE_TIMEOUT_MS)
+    ),
+  ]);
+
+  const sources: FetchedSource[] = [];
+  for (const r of results) {
+    if (sources.length >= 8) break;
+    if (r.status === "fulfilled" && r.value) {
+      sources.push(r.value);
+    }
+  }
+
+  if (needsOfficial && !sources.some((s) => s.isOfficial)) {
     console.warn(`[News Gen] Topic "${topicTitle}" should have official sources but none were accessible.`);
   }
 

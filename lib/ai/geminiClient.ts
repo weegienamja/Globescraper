@@ -7,6 +7,7 @@ import { z, type ZodSchema } from "zod";
 
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta";
 const MODEL = "gemini-2.5-flash";
+const GEMINI_TIMEOUT_MS = 60_000; // 60 seconds per Gemini call
 
 export interface GeminiResponse {
   text: string;
@@ -67,11 +68,26 @@ export async function callGemini(prompt: string): Promise<GeminiResponse> {
     ],
   };
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } catch (fetchErr) {
+    clearTimeout(timeout);
+    if (fetchErr instanceof DOMException && fetchErr.name === "AbortError") {
+      throw new Error(`Gemini API call timed out after ${GEMINI_TIMEOUT_MS / 1000}s`);
+    }
+    throw fetchErr;
+  } finally {
+    clearTimeout(timeout);
+  }
 
   // Always read as text first to avoid JSON.parse crash on non-JSON responses
   const rawBody = await response.text();
@@ -158,11 +174,26 @@ export async function callGeminiText(prompt: string): Promise<GeminiResponse> {
     ],
   };
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  const controller2 = new AbortController();
+  const timeout2 = setTimeout(() => controller2.abort(), GEMINI_TIMEOUT_MS);
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: controller2.signal,
+    });
+  } catch (fetchErr) {
+    clearTimeout(timeout2);
+    if (fetchErr instanceof DOMException && fetchErr.name === "AbortError") {
+      throw new Error(`Gemini API call timed out after ${GEMINI_TIMEOUT_MS / 1000}s`);
+    }
+    throw fetchErr;
+  } finally {
+    clearTimeout(timeout2);
+  }
 
   // Always read as text first to avoid JSON.parse crash on non-JSON responses
   const rawBody = await response.text();
