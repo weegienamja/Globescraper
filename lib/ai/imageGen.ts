@@ -14,7 +14,7 @@ import { put } from "@vercel/blob";
 import { validateGeminiKey } from "@/lib/ai/geminiClient";
 
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta";
-const IMAGEN_MODEL = "imagen-3.0-generate-002";
+const IMAGEN_MODEL = "imagen-4.0-generate-001";
 
 export interface ImageSpec {
   kind: "HERO" | "OG" | "INLINE";
@@ -50,8 +50,8 @@ export function buildImageSpecs(
   // HERO image
   specs.push({
     kind: "HERO",
-    prompt: `${base} Wide landscape shot capturing the essence of ${topic.toLowerCase()} for expats and teachers. Show a real street scene or everyday life moment. ${style} ${emDashNote}`,
-    altText: `${city} street scene related to ${topic.toLowerCase()} for expat teachers`,
+    prompt: `${base} Wide landscape shot of a ${city} street scene or landmark relevant to daily life and ${topic.toLowerCase()}. Focus on architecture, streets, and atmosphere. ${style} ${emDashNote}`,
+    altText: `${city} scene related to ${topic.toLowerCase()}`,
     width: 1344,
     height: 768,
   });
@@ -97,9 +97,9 @@ function pickInlineSections(
       caption: `Everyday prices at a ${city} market`,
     },
     rent: {
-      prompt: `Modern apartment building exterior in ${city}, the kind popular with expats and teachers. Clean and welcoming.`,
-      altText: `Apartment building in ${city} popular with expat teachers`,
-      caption: `Typical expat apartment building in ${city}`,
+      prompt: `Modern apartment building exterior in ${city}, clean architecture, balconies, tropical plants. Welcoming and well-maintained.`,
+      altText: `Apartment building in ${city}`,
+      caption: `Typical apartment building in ${city}`,
     },
     food: {
       prompt: `A busy local restaurant or street food vendor in ${city}. Steaming dishes, casual dining atmosphere.`,
@@ -112,18 +112,18 @@ function pickInlineSections(
       caption: `Getting around ${city} by tuk tuk`,
     },
     safety: {
-      prompt: `A well-lit, busy ${city} street at dusk with locals and a few foreigners walking calmly. Safe and lively atmosphere.`,
-      altText: `Busy evening street scene in ${city}`,
-      caption: `Evening street life in ${city}`,
+      prompt: `A well-lit ${city} street at dusk. Warm streetlights, open shopfronts, motorbikes parked, safe and lively evening atmosphere.`,
+      altText: `Evening street scene in ${city}`,
+      caption: `Evening atmosphere in ${city}`,
     },
     visa: {
       prompt: `Exterior of a government building or immigration office area in ${city}. Professional, documentary style.`,
       altText: `Administrative area in ${city}`,
     },
     teach: {
-      prompt: `A bright classroom in ${city} with a teacher at a whiteboard and engaged students. Natural and candid.`,
+      prompt: `A bright, modern classroom interior in ${city}. Whiteboard with English vocabulary, desks, colorful walls, natural light from windows.`,
       altText: `English classroom in ${city}`,
-      caption: `Teaching English in a ${city} classroom`,
+      caption: `A classroom setup in ${city}`,
     },
     health: {
       prompt: `Modern clinic or hospital entrance in ${city}. Clean, professional, reassuring exterior.`,
@@ -135,9 +135,9 @@ function pickInlineSections(
       caption: `A quiet expat-friendly neighbourhood in ${city}`,
     },
     daily: {
-      prompt: `A cozy cafe in ${city} where an expat works on a laptop. Natural light, relaxed atmosphere.`,
-      altText: `Expat cafe life in ${city}`,
-      caption: `Daily routine in a ${city} cafe`,
+      prompt: `A cozy cafe interior in ${city}. Natural light, coffee cups, laptop on a wooden table, plants, relaxed atmosphere.`,
+      altText: `Cafe in ${city}`,
+      caption: `A typical cafe in ${city}`,
     },
   };
 
@@ -202,7 +202,7 @@ async function generateImageWithImagen(
     parameters: {
       sampleCount: 1,
       aspectRatio: "16:9",
-      personGeneration: "DONT_ALLOW",
+      personGeneration: "ALLOW_ADULT",
       safetyFilterLevel: "BLOCK_MEDIUM_AND_ABOVE",
     },
   };
@@ -224,7 +224,11 @@ async function generateImageWithImagen(
   const prediction = data.predictions?.[0];
 
   if (!prediction?.bytesBase64Encoded) {
-    throw new Error("Imagen returned no image data.");
+    const reason = prediction?.safetyAttributes?.blocked
+      ? `Safety filter blocked (categories: ${JSON.stringify(prediction.safetyAttributes)})`
+      : "No image data in response";
+    console.error(`[Imagen] Empty prediction: ${reason}`);
+    throw new Error(`Imagen returned no image data. ${reason}`);
   }
 
   return {
