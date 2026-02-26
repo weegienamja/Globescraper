@@ -278,37 +278,40 @@ export function SingleEmailForm({ users }: Props) {
 
       <div className="em-panel">
         <div className="em-panel__header">
-          <h3 className="em-panel__title">Send Email</h3>
-          <p className="em-panel__subtitle">Compose and send a direct email to specific users.</p>
+          <div>
+            <h3 className="em-panel__title">Send Single Email</h3>
+            <p className="em-panel__subtitle">Send a direct email to a specific user.</p>
+          </div>
         </div>
 
+        <div className="em-panel__body">
         {/* Recipients */}
         <div className="em-field">
           <label className="em-field__label">
-            Recipients
+            Recipient
             {recipients.length > 0 && (
               <span className="em-field__count">{recipients.length} selected</span>
             )}
           </label>
           <div className="em-recipients">
-            {recipients.map((r) => (
-              <span key={r.id} className="em-pill">
-                {r.name || r.email}
-                <button
-                  className="em-pill__remove"
-                  onClick={() => removeRecipient(r.id)}
-                  aria-label={`Remove ${r.email}`}
-                >
-                  ×
-                </button>
-              </span>
-            ))}
             <div className="em-recipients__input-wrap">
+              {recipients.map((r) => (
+                <span key={r.id} className="em-pill">
+                  {r.name || r.email}
+                  <button
+                    className="em-pill__remove"
+                    onClick={() => removeRecipient(r.id)}
+                    aria-label={`Remove ${r.email}`}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
               <input
                 ref={searchRef}
                 type="text"
                 className="em-recipients__input"
-                placeholder={recipients.length === 0 ? "Search by name or email, or paste comma-separated..." : "Add more..."}
+                placeholder={recipients.length === 0 ? "Search email or username..." : "Add more..."}
                 value={search}
                 onChange={(e) => {
                   setSearch(e.target.value);
@@ -318,36 +321,36 @@ export function SingleEmailForm({ users }: Props) {
                 onKeyDown={handleSearchKeyDown}
                 onPaste={handlePaste}
               />
-              {showDropdown && search.length > 0 && (
-                <div ref={dropdownRef} className="em-dropdown">
-                  {filteredUsers.slice(0, 8).map((u) => (
-                    <button
-                      key={u.id}
-                      className="em-dropdown__item"
-                      onClick={() => addRecipient(u)}
-                    >
-                      <span className="em-dropdown__name">{u.name || "No name"}</span>
-                      <span className="em-dropdown__email">{u.email}</span>
-                      {u.emailUnsubscribed && (
-                        <span className="admin__badge admin__badge--danger">Unsub</span>
-                      )}
-                    </button>
-                  ))}
-                  {filteredUsers.length === 0 && isValidEmail(search.trim()) && (
-                    <button
-                      className="em-dropdown__item"
-                      onClick={() => addManualEmail(search)}
-                    >
-                      <span className="em-dropdown__name">Send to:</span>
-                      <span className="em-dropdown__email">{search.trim()}</span>
-                    </button>
-                  )}
-                  {filteredUsers.length === 0 && !isValidEmail(search.trim()) && (
-                    <div className="em-dropdown__empty">No matching users found</div>
-                  )}
-                </div>
-              )}
             </div>
+            {showDropdown && search.length > 0 && (
+              <div ref={dropdownRef} className="em-dropdown">
+                {filteredUsers.slice(0, 8).map((u) => (
+                  <button
+                    key={u.id}
+                    className="em-dropdown__item"
+                    onClick={() => addRecipient(u)}
+                  >
+                    <span className="em-dropdown__name">{u.name || "No name"}</span>
+                    <span className="em-dropdown__email">{u.email}</span>
+                    {u.emailUnsubscribed && (
+                      <span className="admin__badge admin__badge--danger">Unsub</span>
+                    )}
+                  </button>
+                ))}
+                {filteredUsers.length === 0 && isValidEmail(search.trim()) && (
+                  <button
+                    className="em-dropdown__item"
+                    onClick={() => addManualEmail(search)}
+                  >
+                    <span className="em-dropdown__name">Send to:</span>
+                    <span className="em-dropdown__email">{search.trim()}</span>
+                  </button>
+                )}
+                {filteredUsers.length === 0 && !isValidEmail(search.trim()) && (
+                  <div className="em-dropdown__empty">No matching users found</div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -370,30 +373,22 @@ export function SingleEmailForm({ users }: Props) {
           <div className="em-editor">
             <div className="em-editor__toolbar">
               <button
-                className={`em-editor__mode ${!isHtmlMode ? "em-editor__mode--active" : ""}`}
-                onClick={() => {
-                  if (isHtmlMode && editorRef.current) {
-                    editorRef.current.innerHTML = htmlContent;
-                  }
-                  setIsHtmlMode(false);
-                }}
-              >
-                Visual
-              </button>
-              <button
                 className={`em-editor__mode ${isHtmlMode ? "em-editor__mode--active" : ""}`}
                 onClick={() => {
                   if (!isHtmlMode && editorRef.current) {
                     setHtmlContent(editorRef.current.innerHTML);
+                  } else if (isHtmlMode && editorRef.current) {
+                    editorRef.current.innerHTML = htmlContent;
                   }
-                  setIsHtmlMode(true);
+                  setIsHtmlMode(!isHtmlMode);
                 }}
+                title={isHtmlMode ? "Switch to visual editor" : "Switch to HTML source"}
               >
                 HTML
               </button>
-              <div className="em-editor__separator" />
               {!isHtmlMode && (
                 <>
+                  <div className="em-editor__separator" />
                   <button className="em-editor__btn" onClick={() => execCommand("bold")} title="Bold">
                     <strong>B</strong>
                   </button>
@@ -403,18 +398,25 @@ export function SingleEmailForm({ users }: Props) {
                   <button className="em-editor__btn" onClick={() => execCommand("underline")} title="Underline">
                     <u>U</u>
                   </button>
+                  <button className="em-editor__btn" onClick={() => execCommand("strikeThrough")} title="Strikethrough">
+                    <s>S</s>
+                  </button>
                   <div className="em-editor__separator" />
                   <button className="em-editor__btn" onClick={handleInsertLink} title="Insert Link">
                     🔗
                   </button>
                   <button className="em-editor__btn" onClick={() => execCommand("insertUnorderedList")} title="Bullet List">
-                    •≡
+                    ☰
                   </button>
                   <button className="em-editor__btn" onClick={() => execCommand("insertOrderedList")} title="Numbered List">
-                    1.
+                    ≡
                   </button>
+                  <button className="em-editor__btn" onClick={() => execCommand("formatBlock", "pre")} title="Code Block">
+                    {"</>"}
+                  </button>
+                  <div className="em-editor__separator" />
                   <button className="em-editor__btn" onClick={handleInsertImage} title="Insert Image">
-                    🖼️
+                    🖼
                   </button>
                 </>
               )}
@@ -425,7 +427,7 @@ export function SingleEmailForm({ users }: Props) {
                 value={htmlContent}
                 onChange={(e) => setHtmlContent(e.target.value)}
                 placeholder="<h1>Hello!</h1><p>Your message here...</p>"
-                rows={14}
+                rows={10}
               />
             ) : (
               <div
@@ -433,7 +435,7 @@ export function SingleEmailForm({ users }: Props) {
                 className="em-editor__content"
                 contentEditable
                 suppressContentEditableWarning
-                data-placeholder="Compose your email..."
+                data-placeholder="Your email..."
               />
             )}
           </div>
@@ -445,17 +447,10 @@ export function SingleEmailForm({ users }: Props) {
             className="btn btn--outline btn--sm"
             onClick={() => setShowPreview(!showPreview)}
           >
-            {showPreview ? "Hide Preview" : "👁 Preview"}
+            {showPreview ? "Hide Preview" : "🖹 Preview"}
           </button>
           <button
-            className="btn btn--outline btn--sm"
-            onClick={handleSendTest}
-            disabled={sendingTest}
-          >
-            {sendingTest ? "Sending..." : "📤 Send Test"}
-          </button>
-          <button
-            className="btn btn--primary"
+            className="btn btn--primary btn--send"
             onClick={handleSendClick}
             disabled={sending}
           >
@@ -464,6 +459,17 @@ export function SingleEmailForm({ users }: Props) {
             ) : (
               "Send Email"
             )}
+          </button>
+        </div>
+
+        {/* Send Test (secondary) */}
+        <div className="em-send-test">
+          <button
+            className="btn btn--ghost btn--sm"
+            onClick={handleSendTest}
+            disabled={sendingTest}
+          >
+            {sendingTest ? "Sending test..." : "Send test to my inbox"}
           </button>
         </div>
 
@@ -479,6 +485,7 @@ export function SingleEmailForm({ users }: Props) {
             />
           </div>
         )}
+        </div>
       </div>
 
       {/* Confirmation Modal */}

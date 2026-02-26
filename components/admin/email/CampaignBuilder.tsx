@@ -585,40 +585,36 @@ export function CampaignBuilder({ initialCampaigns, eligibleCount }: Props) {
                 <div className="em-editor">
                   <div className="em-editor__toolbar">
                     <button
-                      className={`em-editor__mode ${!isHtmlMode ? "em-editor__mode--active" : ""}`}
-                      onClick={() => {
-                        if (isHtmlMode && editorRef.current) editorRef.current.innerHTML = htmlContent;
-                        setIsHtmlMode(false);
-                      }}
-                    >
-                      Visual
-                    </button>
-                    <button
                       className={`em-editor__mode ${isHtmlMode ? "em-editor__mode--active" : ""}`}
                       onClick={() => {
                         if (!isHtmlMode && editorRef.current) setHtmlContent(editorRef.current.innerHTML);
-                        setIsHtmlMode(true);
+                        else if (isHtmlMode && editorRef.current) editorRef.current.innerHTML = htmlContent;
+                        setIsHtmlMode(!isHtmlMode);
                       }}
+                      title={isHtmlMode ? "Switch to visual editor" : "Switch to HTML source"}
                     >
                       HTML
                     </button>
-                    <div className="em-editor__separator" />
                     {!isHtmlMode && (
                       <>
+                        <div className="em-editor__separator" />
                         <button className="em-editor__btn" onClick={() => execCommand("bold")} title="Bold"><strong>B</strong></button>
                         <button className="em-editor__btn" onClick={() => execCommand("italic")} title="Italic"><em>I</em></button>
                         <button className="em-editor__btn" onClick={() => execCommand("underline")} title="Underline"><u>U</u></button>
+                        <button className="em-editor__btn" onClick={() => execCommand("strikeThrough")} title="Strikethrough"><s>S</s></button>
                         <div className="em-editor__separator" />
                         <button className="em-editor__btn" onClick={() => {
                           const url = prompt("Enter URL:");
                           if (url) execCommand("createLink", url);
                         }} title="Insert Link">🔗</button>
-                        <button className="em-editor__btn" onClick={() => execCommand("insertUnorderedList")} title="Bullet List">•≡</button>
-                        <button className="em-editor__btn" onClick={() => execCommand("insertOrderedList")} title="Numbered List">1.</button>
+                        <button className="em-editor__btn" onClick={() => execCommand("insertUnorderedList")} title="Bullet List">☰</button>
+                        <button className="em-editor__btn" onClick={() => execCommand("insertOrderedList")} title="Numbered List">≡</button>
+                        <button className="em-editor__btn" onClick={() => execCommand("formatBlock", "pre")} title="Code Block">{"</>"}</button>
+                        <div className="em-editor__separator" />
                         <button className="em-editor__btn" onClick={() => {
                           const url = prompt("Enter image URL:");
                           if (url) execCommand("insertImage", url);
-                        }} title="Insert Image">🖼️</button>
+                        }} title="Insert Image">🖼</button>
                       </>
                     )}
                   </div>

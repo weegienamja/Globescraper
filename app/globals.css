@@ -6288,6 +6288,10 @@ body.menu-open {
   margin: 0.25rem 0 0;
 }
 
+.em-panel__body {
+  padding: 1.25rem;
+}
+
 /* ── Field ──────────────────────────────────────────────── */
 
 .em-field {
@@ -6527,13 +6531,12 @@ body.menu-open {
 }
 
 .em-editor__mode {
-  margin-left: auto;
-  padding: 0.3rem 0.6rem;
-  font-size: 0.75rem;
-  font-weight: 600;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 700;
   background: transparent;
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: 6px;
   color: var(--text-muted);
   cursor: pointer;
   transition: all 0.15s;
@@ -6546,13 +6549,19 @@ body.menu-open {
 }
 
 .em-editor__content {
-  min-height: 200px;
+  min-height: 180px;
   padding: 1rem;
   font-size: 0.9rem;
   line-height: 1.6;
   color: var(--text-heading);
   background: var(--bg);
   outline: none;
+}
+
+.em-editor__content:empty::before {
+  content: attr(data-placeholder);
+  color: var(--text-muted);
+  opacity: 0.5;
 }
 
 .em-editor__content:focus {
@@ -6623,9 +6632,19 @@ body.menu-open {
 .em-actions {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: 0.75rem;
   flex-wrap: wrap;
   padding-top: 0.5rem;
+}
+
+.btn--send {
+  padding: 0.65rem 1.5rem;
+  font-size: 0.9rem;
+}
+
+.em-send-test {
+  padding-top: 0.25rem;
+  font-size: 0.8rem;
 }
 
 /* ── Toast notification ─────────────────────────────────── */
