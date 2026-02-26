@@ -388,70 +388,242 @@ function buildNewsImageSpecs(
   const style = "Natural lighting, candid feel, no text overlays, no watermarks, no logos.";
   const noText = "Do not include any text in the image.";
   const headings = extractHeadings(markdown);
+  const topicLower = topicTitle.toLowerCase();
 
   const specs: ImageSpec[] = [];
 
-  // HERO image
+  // ── Derive topic-specific visual cues ──
+  const topicCue = deriveVisualCue(topicLower);
+
+  // HERO image — unique per topic
   specs.push({
     kind: "HERO",
-    prompt: `Photorealistic travel documentary photograph of Cambodia. Wide landscape shot relevant to: ${topicTitle}. Showing real places and daily life. ${style} ${noText}`,
+    prompt: `Photorealistic travel documentary photograph of Cambodia. Wide landscape shot of ${topicCue.heroScene}. Relevant to: ${topicTitle}. Showing real places and daily life. ${style} ${noText}`,
     altText: stripEmDashes(`Cambodia scene related to ${topicTitle.toLowerCase()}`),
     width: 1344,
     height: 768,
   });
 
-  // OG image
+  // OG image — unique per topic
   specs.push({
     kind: "OG",
-    prompt: `Photorealistic cinematic wide shot of Cambodia for social media preview about: ${topicTitle}. Vibrant but realistic. ${style} ${noText}`,
+    prompt: `Photorealistic cinematic wide shot of Cambodia. ${topicCue.ogScene}. Relevant to: ${topicTitle}. Vibrant but realistic. ${style} ${noText}`,
     altText: stripEmDashes(`${topicTitle} preview image`),
     width: 1200,
     height: 630,
   });
 
-  // 3 INLINE images after specific sections
-  const targetSections = [
-    "What This Means for Travellers",
-    "What This Means for Teachers",
-    "What to Do Now",
-  ];
+  // ── INLINE images: derive prompts from actual article headings ──
+  const usedPromptKeys = new Set<string>();
+  const inlineSpecs = headings
+    .slice(0, 10) // only consider first 10 headings
+    .map((heading) => {
+      const match = matchHeadingToScene(heading, topicLower, usedPromptKeys);
+      if (!match) return null;
+      usedPromptKeys.add(match.key);
+      return {
+        heading,
+        prompt: match.prompt,
+        alt: match.alt,
+        caption: match.caption,
+      };
+    })
+    .filter(Boolean)
+    .slice(0, 3) as Array<{ heading: string; prompt: string; alt: string; caption: string }>;
 
-  const inlinePrompts = [
-    `Travellers at a Cambodia airport or border checkpoint. Documentary style. ${style} ${noText}`,
-    `English teacher in a bright Cambodia classroom. Whiteboard visible, natural setting. ${style} ${noText}`,
-    `Person using a phone or laptop in a Cambodia cafe, planning and organizing. Natural Setting. ${style} ${noText}`,
-  ];
+  // Fallback: if we couldn't match enough headings, use topic-derived scenes
+  while (inlineSpecs.length < 3) {
+    const fb = topicCue.fallbackInlines[inlineSpecs.length] || {
+      prompt: `A busy Cambodia street scene with locals going about daily life. ${style} ${noText}`,
+      alt: "Daily life in Cambodia",
+      caption: "Everyday Cambodia",
+    };
+    inlineSpecs.push({
+      heading: headings[Math.min(inlineSpecs.length + 1, headings.length - 1)] || "More Details",
+      prompt: fb.prompt,
+      alt: fb.alt,
+      caption: fb.caption,
+    });
+  }
 
-  const inlineAlts = [
-    "Travellers at a Cambodia checkpoint",
-    "English classroom in Cambodia",
-    "Planning in a Cambodia cafe",
-  ];
-
-  const inlineCaptions = [
-    "Arrival and border processes in Cambodia",
-    "A classroom setup in Cambodia",
-    "Getting organized in Cambodia",
-  ];
-
-  for (let i = 0; i < 3; i++) {
-    // Find the target heading in the actual article headings
-    const matchedHeading = headings.find(
-      (h) => h.toLowerCase().includes(targetSections[i].toLowerCase().slice(0, 20))
-    );
-
+  for (const inline of inlineSpecs) {
     specs.push({
       kind: "INLINE",
-      prompt: `Photorealistic travel documentary photograph of Cambodia. ${inlinePrompts[i]}`,
-      altText: stripEmDashes(inlineAlts[i]),
-      caption: stripEmDashes(inlineCaptions[i]),
+      prompt: `Photorealistic travel documentary photograph of Cambodia. ${inline.prompt} ${style} ${noText}`,
+      altText: stripEmDashes(inline.alt),
+      caption: stripEmDashes(inline.caption),
       width: 1024,
       height: 576,
-      sectionHeading: matchedHeading || targetSections[i],
+      sectionHeading: inline.heading,
     });
   }
 
   return specs;
+}
+
+/** Map of visual keywords to scene descriptions for inline images. */
+const SCENE_MAP: Record<string, { prompt: string; alt: string; caption: string }> = {
+  visa: { prompt: "Exterior of a Cambodian immigration office or border checkpoint, documentary style.", alt: "Cambodia immigration office", caption: "Visa and immigration in Cambodia" },
+  border: { prompt: "Travellers queuing at a Cambodia-Thailand or Cambodia-Vietnam land border crossing.", alt: "Border crossing in Cambodia", caption: "A border checkpoint in Cambodia" },
+  airport: { prompt: "Phnom Penh or Siem Reap airport terminal, passengers with luggage, bright and modern interior.", alt: "Cambodia airport terminal", caption: "Arriving at a Cambodia airport" },
+  transport: { prompt: "A tuk tuk driving through Phnom Penh traffic on a sunny day, passengers visible.", alt: "Tuk tuk ride in Cambodia", caption: "Getting around by tuk tuk" },
+  bus: { prompt: "A long-distance bus at a Cambodia bus station with passengers boarding.", alt: "Bus station in Cambodia", caption: "Inter-city travel in Cambodia" },
+  flight: { prompt: "Aerial or terminal view of a Cambodian airport with planes on the tarmac.", alt: "Airport in Cambodia", caption: "Flying in and out of Cambodia" },
+  cost: { prompt: "Fresh produce stall at a Cambodian wet market with handwritten price signs.", alt: "Market prices in Cambodia", caption: "Everyday prices at a local market" },
+  price: { prompt: "A Cambodian supermarket aisle showing consumer products on shelves.", alt: "Supermarket shopping in Cambodia", caption: "Shopping in Cambodia" },
+  rent: { prompt: "A modern apartment building exterior in Phnom Penh with balconies and tropical plants.", alt: "Apartments in Phnom Penh", caption: "Typical apartment building" },
+  hotel: { prompt: "A boutique guesthouse exterior in Siem Reap with lush tropical garden.", alt: "Guesthouse in Cambodia", caption: "Accommodation in Cambodia" },
+  food: { prompt: "A busy Cambodian street food vendor cooking noodles over a flame, steam rising.", alt: "Street food in Cambodia", caption: "Cambodian street food" },
+  restaurant: { prompt: "Interior of a riverside restaurant in Phnom Penh, tables set near water.", alt: "Riverside dining in Cambodia", caption: "Dining by the river" },
+  safety: { prompt: "A well-lit Phnom Penh street at dusk with open shopfronts and evening foot traffic.", alt: "Evening in Phnom Penh", caption: "Evening atmosphere in Cambodia" },
+  scam: { prompt: "A crowded tourist area near a Cambodia temple with vendors and tour guides.", alt: "Tourist area in Cambodia", caption: "Navigating tourist areas" },
+  teach: { prompt: "Inside a bright Cambodian classroom, English vocabulary on whiteboard, students at desks.", alt: "English classroom in Cambodia", caption: "Teaching English in Cambodia" },
+  school: { prompt: "Exterior of a Cambodian school building with students arriving, gates open.", alt: "School in Cambodia", caption: "A school in Cambodia" },
+  health: { prompt: "A modern private clinic entrance in Phnom Penh, professional and clean exterior.", alt: "Medical clinic in Cambodia", caption: "Healthcare in Cambodia" },
+  hospital: { prompt: "Royal Phnom Penh Hospital or a modern medical facility exterior, ambulance visible.", alt: "Hospital in Cambodia", caption: "Medical facilities in Cambodia" },
+  temple: { prompt: "Golden spires of a Cambodian pagoda against blue sky, ornate traditional architecture.", alt: "Buddhist temple in Cambodia", caption: "A Cambodian pagoda" },
+  culture: { prompt: "Traditional Apsara dancers performing in front of ancient Angkor stonework.", alt: "Apsara dance performance", caption: "Traditional Cambodian dance" },
+  sim: { prompt: "A mobile phone shop in Cambodia with SIM card advertisements and a custome being served.", alt: "Mobile shop in Cambodia", caption: "Getting connected in Cambodia" },
+  bank: { prompt: "ATMs and a bank branch on a Phnom Penh street, clean modern facade.", alt: "Banking in Cambodia", caption: "Financial services in Cambodia" },
+  money: { prompt: "Cambodian riel and US dollar banknotes on a market counter with goods.", alt: "Currency in Cambodia", caption: "Using cash in Cambodia" },
+  weather: { prompt: "Dramatic monsoon clouds over Tonle Sap lake with fishing boats in foreground.", alt: "Rainy season in Cambodia", caption: "Cambodia's wet season" },
+  flood: { prompt: "Phnom Penh street during heavy monsoon rain, puddles reflecting lights.", alt: "Monsoon rain in Cambodia", caption: "Rainy season conditions" },
+  expat: { prompt: "A cozy cafe in BKK1 Phnom Penh, expats and locals mixed, laptops and coffee.", alt: "Expat cafe in Phnom Penh", caption: "Expat social life" },
+  digital: { prompt: "A co-working space interior in Phnom Penh, desks with monitors, bright and modern.", alt: "Co-working in Phnom Penh", caption: "Digital nomad workspace" },
+  nightlife: { prompt: "Neon-lit street in Phnom Penh with bars and restaurants, evening buzz.", alt: "Nightlife street in Phnom Penh", caption: "Evening entertainment" },
+  market: { prompt: "Central Market Phnom Penh art-deco dome exterior with vendors outside.", alt: "Central Market, Phnom Penh", caption: "The famous Central Market" },
+  angkor: { prompt: "Sunrise over Angkor Wat, silhouette of towers reflected in moat.", alt: "Angkor Wat at sunrise", caption: "Sunrise at Angkor Wat" },
+  siem: { prompt: "Pub Street Siem Reap at dusk, colourful signage, tourists strolling.", alt: "Pub Street, Siem Reap", caption: "Siem Reap's famous Pub Street" },
+  phnom: { prompt: "Phnom Penh riverfront promenade at golden hour, Royal Palace in background.", alt: "Phnom Penh riverfront", caption: "The Phnom Penh riverfront" },
+};
+
+/**
+ * Derive a visual cue set from the topic title for hero/OG/fallback images.
+ */
+function deriveVisualCue(topicLower: string): {
+  heroScene: string;
+  ogScene: string;
+  fallbackInlines: Array<{ prompt: string; alt: string; caption: string }>;
+} {
+  // Try to pick scene-appropriate visuals based on topic keywords
+  if (/visa|entry|border|passport|arrival/.test(topicLower)) {
+    return {
+      heroScene: "a Cambodia border checkpoint or immigration hall with travellers",
+      ogScene: "Travellers at a Cambodian airport or border, documentary feel",
+      fallbackInlines: [
+        SCENE_MAP.airport, SCENE_MAP.border, SCENE_MAP.transport,
+      ],
+    };
+  }
+  if (/cost|price|expens|cheap|budget|salary/.test(topicLower)) {
+    return {
+      heroScene: "a vibrant Cambodian market with colourful produce and price tags",
+      ogScene: "A busy Cambodian market scene, showing everyday items and prices",
+      fallbackInlines: [
+        SCENE_MAP.cost, SCENE_MAP.food, SCENE_MAP.rent,
+      ],
+    };
+  }
+  if (/teach|school|class|english|education/.test(topicLower)) {
+    return {
+      heroScene: "a bright modern classroom in Cambodia with a whiteboard and student desks",
+      ogScene: "An English classroom in Cambodia, warm natural light",
+      fallbackInlines: [
+        SCENE_MAP.teach, SCENE_MAP.school, SCENE_MAP.expat,
+      ],
+    };
+  }
+  if (/health|hospital|clinic|medical|dengue|covid/.test(topicLower)) {
+    return {
+      heroScene: "a modern Cambodian hospital or clinic entrance, professional and reassuring",
+      ogScene: "Healthcare facility in Cambodia, clean and modern",
+      fallbackInlines: [
+        SCENE_MAP.health, SCENE_MAP.hospital, SCENE_MAP.phnom,
+      ],
+    };
+  }
+  if (/safety|crime|scam|danger|police/.test(topicLower)) {
+    return {
+      heroScene: "a well-lit Phnom Penh street at night with open shopfronts and locals",
+      ogScene: "Safe, busy Cambodia evening street scene",
+      fallbackInlines: [
+        SCENE_MAP.safety, SCENE_MAP.scam, SCENE_MAP.nightlife,
+      ],
+    };
+  }
+  if (/rent|apartment|accommodation|housing|stay/.test(topicLower)) {
+    return {
+      heroScene: "a modern apartment building in Phnom Penh BKK1 area, tropical plants on balconies",
+      ogScene: "Residential buildings in a popular Phnom Penh neighbourhood",
+      fallbackInlines: [
+        SCENE_MAP.rent, SCENE_MAP.expat, SCENE_MAP.market,
+      ],
+    };
+  }
+  if (/transport|tuk|bus|drive|moto|grab/.test(topicLower)) {
+    return {
+      heroScene: "a tuk tuk navigating busy Phnom Penh traffic, bustling city atmosphere",
+      ogScene: "Transport scene in Cambodia, tuk tuks and motorbikes",
+      fallbackInlines: [
+        SCENE_MAP.transport, SCENE_MAP.bus, SCENE_MAP.phnom,
+      ],
+    };
+  }
+  if (/sim|phone|internet|wifi|bank|money|atm/.test(topicLower)) {
+    return {
+      heroScene: "a Phnom Penh street with SIM card shops, bank branches, and ATMs",
+      ogScene: "Getting connected and managing money in Cambodia",
+      fallbackInlines: [
+        SCENE_MAP.sim, SCENE_MAP.bank, SCENE_MAP.money,
+      ],
+    };
+  }
+  if (/angkor|siem reap|temple/.test(topicLower)) {
+    return {
+      heroScene: "Angkor Wat towers at golden hour, ancient stone and lush jungle",
+      ogScene: "Angkor temples at golden hour, dramatic sky",
+      fallbackInlines: [
+        SCENE_MAP.angkor, SCENE_MAP.siem, SCENE_MAP.temple,
+      ],
+    };
+  }
+  if (/weather|rain|monsoon|flood|season/.test(topicLower)) {
+    return {
+      heroScene: "dramatic monsoon clouds over the Mekong River near Phnom Penh",
+      ogScene: "Cambodia weather scene, dramatic skies over water",
+      fallbackInlines: [
+        SCENE_MAP.weather, SCENE_MAP.flood, SCENE_MAP.phnom,
+      ],
+    };
+  }
+  // Default: generic Cambodia
+  return {
+    heroScene: "a wide panoramic view of the Phnom Penh skyline from the riverfront at golden hour",
+    ogScene: "Cambodia panorama, skyline or landscape, warm golden light",
+    fallbackInlines: [
+      SCENE_MAP.phnom, SCENE_MAP.food, SCENE_MAP.market,
+    ],
+  };
+}
+
+/**
+ * Match an article heading to the best unused scene from SCENE_MAP.
+ */
+function matchHeadingToScene(
+  heading: string,
+  topicLower: string,
+  usedKeys: Set<string>
+): { key: string; prompt: string; alt: string; caption: string } | null {
+  const hLower = heading.toLowerCase();
+  const combined = `${hLower} ${topicLower}`;
+
+  for (const [key, scene] of Object.entries(SCENE_MAP)) {
+    if (usedKeys.has(key)) continue;
+    if (combined.includes(key)) {
+      return { key, ...scene };
+    }
+  }
+  return null;
 }
 
 /* ------------------------------------------------------------------ */
