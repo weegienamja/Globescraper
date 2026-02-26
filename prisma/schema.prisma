@@ -517,16 +517,46 @@ model GeneratedArticleDraft {
   imagesJson         Json?
   status             ArticleStatus      @default(DRAFT)
   confidence         ArticleConfidence  @default(HIGH)
+  publishedAt        DateTime?
+  updatedByUserId    String?            @db.VarChar(191)
+  revisionNumber     Int                @default(1)
+  lastSeoScore       Int?
+  lastSeoCheckedAt   DateTime?
+  seoIssuesJson      Json?
+  canonicalUrl       String?            @db.VarChar(2000)
+  schemaJson         Json?
+  contentHash        String?            @db.VarChar(64)
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
   sources            GeneratedArticleSource[]
   runs               GeneratedArticleRun[]
   images             GeneratedArticleImage[]
+  revisions          BlogRevision[]
 
   @@index([status])
   @@index([city])
   @@index([createdAt])
+  @@index([publishedAt])
+}
+
+model BlogRevision {
+  id                String   @id @default(uuid())
+  postId            String
+  revisionNumber    Int
+  title             String   @db.VarChar(300)
+  metaTitle         String   @db.VarChar(200)
+  metaDescription   String   @db.VarChar(500)
+  slug              String   @db.VarChar(300)
+  markdown          String   @db.LongText
+  html              String?  @db.LongText
+  createdAt         DateTime @default(now())
+  createdByUserId   String?  @db.VarChar(191)
+
+  post              GeneratedArticleDraft @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+  @@index([revisionNumber])
 }
 
 model GeneratedArticleImage {
