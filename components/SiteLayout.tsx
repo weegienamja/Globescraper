@@ -278,8 +278,8 @@ function Header() {
               <Image
                 src={session.user.avatarUrl}
                 alt="Profile photo"
-                width={40}
-                height={40}
+                width={48}
+                height={48}
                 className="avatar-dropdown__img"
               />
             ) : (
@@ -299,28 +299,43 @@ function Header() {
         {/* Mobile: auth actions */}
         <div className="header__auth-mobile">
           {session?.user ? (
-            <div className="mobile-nav__actions">
-              <Link href="/dashboard" className="mobile-nav__action-link" onClick={() => setOpen(false)}>Dashboard</Link>
-              <Link href="/community/edit-profile" className="mobile-nav__action-link" onClick={() => setOpen(false)}>Edit Profile</Link>
-              <Link href="/dashboard/requests" className="mobile-nav__action-link" onClick={() => setOpen(false)}>
-                Connections
-                {pendingCount > 0 && (
-                  <span className="menu-badge">{pendingCount > 9 ? "9+" : pendingCount}</span>
+            <>
+              <div className="mobile-nav__section-label">Account</div>
+              <div className="mobile-nav__actions">
+                <Link href="/dashboard" className="mobile-nav__action-link" onClick={() => setOpen(false)}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+                  Dashboard
+                </Link>
+                <Link href="/community/edit-profile" className="mobile-nav__action-link" onClick={() => setOpen(false)}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                  Edit Profile
+                </Link>
+                <Link href="/dashboard/requests" className="mobile-nav__action-link" onClick={() => setOpen(false)}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                  Connections
+                  {pendingCount > 0 && (
+                    <span className="menu-badge">{pendingCount > 9 ? "9+" : pendingCount}</span>
+                  )}
+                </Link>
+                <Link href="/dashboard/messages" className="mobile-nav__action-link" onClick={() => setOpen(false)}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                  Messages
+                </Link>
+                {session.user.role === "ADMIN" && (
+                  <Link href="/admin" className="mobile-nav__action-link" onClick={() => setOpen(false)}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 15v2m-6 4h12a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2zm10-10V7a4 4 0 0 0-8 0v4"/></svg>
+                    Admin Panel
+                  </Link>
                 )}
-              </Link>
-              <Link href="/dashboard/messages" className="mobile-nav__action-link" onClick={() => setOpen(false)}>
-                Messages
-              </Link>
-              {session.user.role === "ADMIN" && (
-                <Link href="/admin" className="mobile-nav__action-link" onClick={() => setOpen(false)}>Admin Panel</Link>
-              )}
-              <button
-                className="mobile-nav__action-link mobile-nav__action-link--danger"
-                onClick={() => { setOpen(false); signOut({ callbackUrl: "/" }); }}
-              >
-                Sign Out
-              </button>
-            </div>
+                <button
+                  className="mobile-nav__action-link mobile-nav__action-link--danger"
+                  onClick={() => { setOpen(false); signOut({ callbackUrl: "/" }); }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                  Sign Out
+                </button>
+              </div>
+            </>
           ) : (
             <div className="mobile-nav__auth-buttons">
               <Link href="/login" className="header__auth-link" onClick={() => setOpen(false)}>Sign in</Link>

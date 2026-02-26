@@ -8,6 +8,7 @@ import {
   reportSchema,
 } from "@/lib/validations/community";
 import { getConnectionRatelimit } from "@/lib/rate-limit";
+import { canonicalPair } from "@/lib/connections";
 
 type ActionResult = { ok: true } | { error: string };
 
@@ -187,6 +188,21 @@ export async function sendConnectionRequest(
     },
   });
 
+  // Also create a canonical Connection record (keeps both tables in sync)
+  const [low, high] = canonicalPair(userId, toUserId);
+  try {
+    await prisma.connection.upsert({
+      where: { userLowId_userHighId: { userLowId: low, userHighId: high } },
+      create: {
+        userLowId: low,
+        userHighId: high,
+        requestedByUserId: userId,
+        status: "PENDING",
+      },
+      update: { status: "PENDING", requestedByUserId: userId },
+    });
+  } catch { /* non-critical */ }
+
   return { ok: true };
 }
 
@@ -213,6 +229,37 @@ export async function respondToConnection(
     where: { id: requestId },
     data: { status: action },
   });
+
+  // Sync canonical Connection table
+  const [low, high] = canonicalPair(userId, request.fromUserId);
+  if (action === "ACCEPTED") {
+    try {
+      await prisma.connection.upsert({
+        where: { userLowId_userHighId: { userLowId: low, userHighId: high } },
+        create: {
+          userLowId: low,
+          userHighId: high,
+          requestedByUserId: request.fromUserId,
+          status: "ACCEPTED",
+          acceptedAt: new Date(),
+        },
+        update: { status: "ACCEPTED", acceptedAt: new Date() },
+      });
+    } catch { /* non-critical */ }
+  } else if (action === "DECLINED") {
+    try {
+      await prisma.connection.upsert({
+        where: { userLowId_userHighId: { userLowId: low, userHighId: high } },
+        create: {
+          userLowId: low,
+          userHighId: high,
+          requestedByUserId: request.fromUserId,
+          status: "REJECTED",
+        },
+        update: { status: "REJECTED" },
+      });
+    } catch { /* non-critical */ }
+  }
 
   // If blocked, also create a Block record
   if (action === "BLOCKED") {

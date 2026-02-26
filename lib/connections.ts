@@ -13,6 +13,8 @@ export function canonicalPair(a: string, b: string): [string, string] {
 
 /**
  * Check if two users are connected (accepted status).
+ * Checks the canonical Connection table first, then falls back to
+ * the legacy ConnectionRequest table for older connections.
  */
 export async function areConnected(userA: string, userB: string): Promise<boolean> {
   const [low, high] = canonicalPair(userA, userB);
@@ -20,7 +22,38 @@ export async function areConnected(userA: string, userB: string): Promise<boolea
     where: { userLowId_userHighId: { userLowId: low, userHighId: high } },
     select: { status: true },
   });
-  return conn?.status === "ACCEPTED";
+  if (conn?.status === "ACCEPTED") return true;
+
+  // Fallback: check legacy ConnectionRequest table
+  const legacy = await prisma.connectionRequest.findFirst({
+    where: {
+      status: "ACCEPTED",
+      OR: [
+        { fromUserId: userA, toUserId: userB },
+        { fromUserId: userB, toUserId: userA },
+      ],
+    },
+    select: { id: true },
+  });
+  if (legacy) {
+    // Backfill the canonical Connection table so future checks are fast
+    try {
+      await prisma.connection.upsert({
+        where: { userLowId_userHighId: { userLowId: low, userHighId: high } },
+        create: {
+          userLowId: low,
+          userHighId: high,
+          requestedByUserId: userA,
+          status: "ACCEPTED",
+          acceptedAt: new Date(),
+        },
+        update: { status: "ACCEPTED", acceptedAt: new Date() },
+      });
+    } catch { /* non-critical */ }
+    return true;
+  }
+
+  return false;
 }
 
 /**
