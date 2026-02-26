@@ -35,6 +35,8 @@ interface GenerationResult {
   slug: string;
   confidence: "HIGH" | "LOW";
   sourceCount: number;
+  imageCount?: number;
+  competitorCount?: number;
 }
 
 export default function ContentGeneratorClient() {
@@ -44,6 +46,7 @@ export default function ContentGeneratorClient() {
   const [targetKeyword, setTargetKeyword] = useState("");
   const [secondaryKeywords, setSecondaryKeywords] = useState("");
   const [wordCount, setWordCount] = useState<number>(1200);
+  const [competitorUrls, setCompetitorUrls] = useState("");
   const [state, setState] = useState<GenerationState>("idle");
   const [progress, setProgress] = useState(0);
   const [progressLabel, setProgressLabel] = useState("");
@@ -61,12 +64,16 @@ export default function ContentGeneratorClient() {
 
     // Simulate progress stages
     const stages = [
-      { pct: 10, label: "Preparing search queries..." },
-      { pct: 25, label: "Discovering sources..." },
-      { pct: 40, label: "Fetching and extracting content..." },
-      { pct: 55, label: "Building facts pack..." },
-      { pct: 70, label: "Generating article with Gemini..." },
-      { pct: 85, label: "Validating and saving draft..." },
+      { pct: 8, label: "Preparing search queries..." },
+      { pct: 18, label: "Discovering sources..." },
+      { pct: 28, label: "Fetching and extracting content..." },
+      { pct: 38, label: "Analyzing competitors..." },
+      { pct: 48, label: "Building facts pack..." },
+      { pct: 58, label: "Generating article with Gemini..." },
+      { pct: 68, label: "Running humanization pass..." },
+      { pct: 78, label: "Generating images with Imagen 3..." },
+      { pct: 88, label: "Uploading images to storage..." },
+      { pct: 95, label: "Saving draft..." },
     ];
 
     let stageIndex = 0;
@@ -76,9 +83,16 @@ export default function ContentGeneratorClient() {
         setProgressLabel(stages[stageIndex].label);
         stageIndex++;
       }
-    }, 2000);
+    }, 3000);
 
     try {
+      // Parse competitor URLs (one per line, up to 3)
+      const parsedCompetitorUrls = competitorUrls
+        .split("\n")
+        .map((u) => u.trim())
+        .filter((u) => u.length > 0)
+        .slice(0, 3);
+
       const res = await fetch("/api/admin/content-generator/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -89,6 +103,7 @@ export default function ContentGeneratorClient() {
           targetKeyword: targetKeyword || undefined,
           secondaryKeywords: secondaryKeywords || undefined,
           wordCount,
+          competitorUrls: parsedCompetitorUrls.length > 0 ? parsedCompetitorUrls : undefined,
         }),
       });
 
@@ -268,6 +283,25 @@ export default function ContentGeneratorClient() {
               disabled={state === "generating"}
             />
           </div>
+
+          {/* Competitor URLs */}
+          <div className="cgen__field cgen__field--full">
+            <label className="cgen__label" htmlFor="cgen-competitors">
+              Competitor URLs (optional, up to 3, one per line)
+            </label>
+            <textarea
+              id="cgen-competitors"
+              className="cgen__input cgen__textarea"
+              value={competitorUrls}
+              onChange={(e) => setCompetitorUrls(e.target.value)}
+              placeholder={"https://example.com/cost-of-living-cambodia\nhttps://example.com/phnom-penh-guide"}
+              disabled={state === "generating"}
+              rows={3}
+            />
+            <span className="cgen__hint">
+              Paste competitor article URLs for gap analysis. We will extract their outline and find topics they cover that your article should too.
+            </span>
+          </div>
         </div>
 
         {/* Buttons */}
@@ -324,6 +358,8 @@ export default function ContentGeneratorClient() {
           <h2 className="cgen__result-title">{result.title}</h2>
           <div className="cgen__result-meta">
             <span>Sources used: {result.sourceCount}</span>
+            {(result.imageCount ?? 0) > 0 && <span>Images: {result.imageCount}</span>}
+            {(result.competitorCount ?? 0) > 0 && <span>Competitors analyzed: {result.competitorCount}</span>}
             <span>Slug: /{result.slug}</span>
           </div>
           <div className="cgen__result-actions">

@@ -51,7 +51,7 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   // Check AI-published posts
   const aiPost = await getPublishedAiPost(params.slug);
   if (aiPost) {
-    const heroImage = getHeroImage(aiPost.slug);
+    const ogImage = aiPost.ogImageUrl || aiPost.heroImageUrl || getHeroImage(aiPost.slug);
     return {
       title: aiPost.title,
       description: aiPost.description,
@@ -64,13 +64,13 @@ export async function generateMetadata({ params }: { params: { slug: string } })
         publishedTime: aiPost.date,
         modifiedTime: aiPost.modifiedDate,
         authors: [aiPost.author],
-        images: [{ url: heroImage }],
+        images: [{ url: ogImage }],
       },
       twitter: {
         card: "summary_large_image",
         title: aiPost.title,
         description: aiPost.description,
-        images: [heroImage],
+        images: [ogImage],
       },
     };
   }
@@ -93,7 +93,7 @@ export default async function PostPage({ params }: { params: { slug: string } })
   const date = isAi ? aiPost.date : staticPost!.date;
   const modifiedDate = isAi ? aiPost.modifiedDate : staticPost!.modifiedDate;
   const author = isAi ? aiPost.author : staticPost!.author;
-  const heroSrc = getHeroImage(slug);
+  const heroSrc = isAi ? (aiPost.heroImageUrl || getHeroImage(slug)) : getHeroImage(slug);
 
   // Build recommended posts list (all posts except current, max 6)
   const staticPosts = getPostsMeta();

@@ -2,14 +2,21 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getContentGenRatelimit } from "@/lib/rate-limit";
-import { validateGeminiKey, callGemini, parseGeminiJson, validateArticleData } from "@/lib/ai/geminiClient";
-import { buildGenerationPrompt, buildIdeaOnlyPrompt } from "@/lib/ai/prompts";
+import { validateGeminiKey, callGemini, callGeminiText, parseGeminiJson, validateArticleData } from "@/lib/ai/geminiClient";
+import { buildGenerationPrompt, buildIdeaOnlyPrompt, buildHumanizationPrompt } from "@/lib/ai/prompts";
 import { buildSearchQueries, isAllowedSource, SOURCE_ALLOWLIST } from "@/lib/sourceAllowlist";
 import { fetchPage, checkRobotsTxt } from "@/lib/scrape/fetchPage";
 import { extractMainText, extractTitle } from "@/lib/scrape/extractMainText";
 import { buildFactsPack, type SourceData } from "@/lib/scrape/buildFactsPack";
+import { runCompetitorAnalysis } from "@/lib/scrape/competitorAnalysis";
+import {
+  buildImageSpecs,
+  generateAndUploadImages,
+  injectImagesIntoMarkdown,
+  extractHeadings,
+} from "@/lib/ai/imageGen";
 
-export const maxDuration = 60; // Allow up to 60 seconds for generation
+export const maxDuration = 120; // Allow up to 120 seconds for generation + images
 
 export async function POST(req: NextRequest) {
   try {
@@ -47,6 +54,7 @@ export async function POST(req: NextRequest) {
       targetKeyword,
       secondaryKeywords,
       wordCount = 1200,
+      competitorUrls = [],
     } = body;
 
     if (!city || !topic || !audience) {
@@ -56,33 +64,39 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Validate competitor URLs
+    const validCompetitorUrls = (Array.isArray(competitorUrls) ? competitorUrls : [])
+      .filter((u: unknown) => typeof u === "string" && u.trim().length > 0)
+      .slice(0, 3) as string[];
+
     // 5. Create run record
     const run = await prisma.generatedArticleRun.create({
       data: {
         status: "RUNNING",
-        settingsJson: JSON.stringify({ city, topic, audience, targetKeyword, secondaryKeywords, wordCount }),
+        settingsJson: JSON.stringify({
+          city, topic, audience, targetKeyword, secondaryKeywords, wordCount,
+          competitorUrls: validCompetitorUrls,
+        }),
       },
     });
 
     try {
-      // 6. Source discovery
+      // =========================================
+      // A. Source discovery and fetching
+      // =========================================
       const searchQueries = buildSearchQueries(city, topic, audience, targetKeyword);
       const discoveredUrls = new Set<string>();
 
-      // Build candidate URLs from allowlist domains
       for (const query of searchQueries) {
         const searchTerms = query.toLowerCase().split(/\s+/);
         for (const source of SOURCE_ALLOWLIST) {
-          // Build plausible URLs based on the domain
           const baseUrl = `https://www.${source.domain}`;
           discoveredUrls.add(baseUrl);
-          // Add a search-style URL too
           const searchPath = searchTerms.slice(0, 3).join("-");
           discoveredUrls.add(`https://${source.domain}/${searchPath}`);
         }
       }
 
-      // Also build direct search URLs for common patterns
       const citySlug = city.toLowerCase().replace(/\s+/g, "-");
       const topicSlug = topic.toLowerCase().replace(/\s+/g, "-");
       const directUrls = [
@@ -96,74 +110,138 @@ export async function POST(req: NextRequest) {
         discoveredUrls.add(u);
       }
 
-      // 7. Fetch and extract (max 10 sources)
       const sourceData: SourceData[] = [];
       const urlArray = Array.from(discoveredUrls);
 
       for (const url of urlArray) {
         if (sourceData.length >= 10) break;
-
         const allowed = isAllowedSource(url);
         if (!allowed) continue;
-
-        // Check robots.txt
         const robotsOk = await checkRobotsTxt(url);
         if (!robotsOk) continue;
-
-        // Fetch page
         const html = await fetchPage(url);
         if (!html) continue;
-
-        // Extract content
         const text = extractMainText(html);
         if (text.length < 100) continue;
-
         const title = extractTitle(html);
-
         sourceData.push({
-          url,
-          title,
-          publisher: allowed.publisher,
-          text,
-          fetchedAt: new Date(),
+          url, title, publisher: allowed.publisher, text, fetchedAt: new Date(),
         });
       }
 
-      // 8. Generate article
+      // =========================================
+      // B. Competitor analysis (parallel with source discovery already done)
+      // =========================================
+      let competitorPromptSummary = "";
+      if (validCompetitorUrls.length > 0) {
+        const sourceBullets = sourceData.map((s) => s.text.slice(0, 500)).join("\n");
+        const gapResult = await runCompetitorAnalysis(
+          validCompetitorUrls,
+          sourceBullets,
+          topic
+        );
+        competitorPromptSummary = gapResult.promptSummary;
+      }
+
+      // =========================================
+      // C. Quality guardrail: assess source confidence
+      // =========================================
+      const accessibleSourceCount = sourceData.length;
+      let confidence: "HIGH" | "LOW" = accessibleSourceCount >= 3 ? "HIGH" : "LOW";
+
+      // =========================================
+      // D. Generate article via Gemini
+      // =========================================
       let geminiResponse;
-      let confidence: "HIGH" | "LOW" = "HIGH";
+      let totalTokens = 0;
 
       if (sourceData.length > 0) {
-        // Research-backed generation
         const factsPack = buildFactsPack(
-          city,
-          topic,
-          audience,
-          sourceData,
-          targetKeyword,
-          secondaryKeywords
+          city, topic, audience, sourceData, targetKeyword, secondaryKeywords
         );
-        const prompt = buildGenerationPrompt(factsPack, wordCount);
+        const prompt = buildGenerationPrompt(factsPack, wordCount, competitorPromptSummary || undefined);
         geminiResponse = await callGemini(prompt);
       } else {
-        // Idea-only fallback
         confidence = "LOW";
         const prompt = buildIdeaOnlyPrompt(
-          city,
-          topic,
-          audience,
-          wordCount,
-          targetKeyword,
-          secondaryKeywords
+          city, topic, audience, wordCount, targetKeyword, secondaryKeywords
         );
         geminiResponse = await callGemini(prompt);
       }
+      totalTokens += geminiResponse.tokenCount ?? 0;
 
-      // 9. Parse and validate response
+      // =========================================
+      // E. Parse and validate response
+      // =========================================
       const parsed = parseGeminiJson(geminiResponse.text);
       const articleData = validateArticleData(parsed);
 
-      // 10. Ensure unique slug
+      // Use the AI's confidence assessment if it flagged LOW
+      if (articleData.confidenceLevel === "LOW") {
+        confidence = "LOW";
+      }
+
+      // =========================================
+      // F. Humanization pass
+      // =========================================
+      let finalMarkdown = articleData.markdown;
+      try {
+        const humanizedResponse = await callGeminiText(
+          buildHumanizationPrompt(articleData.markdown)
+        );
+        totalTokens += humanizedResponse.tokenCount ?? 0;
+        // Only use it if the response is reasonable length
+        if (humanizedResponse.text.length > articleData.markdown.length * 0.5) {
+          finalMarkdown = humanizedResponse.text;
+        }
+      } catch (humanError) {
+        console.error("[Content Generator] Humanization pass failed, using original:", humanError);
+        // Continue with original markdown
+      }
+
+      // =========================================
+      // G. Generate and upload images
+      // =========================================
+      let heroImageUrl: string | null = null;
+      let ogImageUrl: string | null = null;
+      let imagesJson: Array<Record<string, unknown>> = [];
+
+      try {
+        const sectionHeadings = extractHeadings(finalMarkdown);
+        const imageSpecs = buildImageSpecs(city, topic, articleData.title, sectionHeadings);
+        const slugBase = articleData.slug.slice(0, 40);
+        const generatedImages = await generateAndUploadImages(imageSpecs, slugBase);
+
+        if (generatedImages.length > 0) {
+          const hero = generatedImages.find((img) => img.kind === "HERO");
+          const og = generatedImages.find((img) => img.kind === "OG");
+
+          if (hero) heroImageUrl = hero.storageUrl;
+          if (og) ogImageUrl = og.storageUrl;
+
+          // Inject images into markdown
+          finalMarkdown = injectImagesIntoMarkdown(finalMarkdown, generatedImages);
+
+          // Build images JSON for storage
+          imagesJson = generatedImages.map((img) => ({
+            kind: img.kind,
+            storageUrl: img.storageUrl,
+            altText: img.altText,
+            caption: img.caption || null,
+            width: img.width,
+            height: img.height,
+            mimeType: img.mimeType,
+            sectionHeading: img.sectionHeading || null,
+          }));
+        }
+      } catch (imgError) {
+        console.error("[Content Generator] Image generation failed, continuing without images:", imgError);
+        // Not fatal: article works fine without images
+      }
+
+      // =========================================
+      // H. Save draft with images
+      // =========================================
       let slug = articleData.slug;
       const existingSlug = await prisma.generatedArticleDraft.findUnique({
         where: { slug },
@@ -172,7 +250,6 @@ export async function POST(req: NextRequest) {
         slug = `${slug}-${Date.now()}`;
       }
 
-      // 11. Save draft
       const draft = await prisma.generatedArticleDraft.create({
         data: {
           city,
@@ -184,13 +261,39 @@ export async function POST(req: NextRequest) {
           slug,
           metaTitle: articleData.metaTitle,
           metaDescription: articleData.metaDescription,
-          markdown: articleData.markdown,
+          markdown: finalMarkdown,
           status: "DRAFT",
           confidence,
+          heroImageUrl,
+          ogImageUrl,
+          imagesJson: imagesJson.length > 0 ? (imagesJson as unknown as import("@prisma/client").Prisma.InputJsonValue) : undefined,
         },
       });
 
-      // 12. Save source records
+      // Save image records
+      if (imagesJson.length > 0) {
+        for (const img of imagesJson as Array<{
+          kind: string; storageUrl: string; altText: string;
+          caption: string | null; width: number; height: number;
+          mimeType: string; sectionHeading: string | null;
+        }>) {
+          await prisma.generatedArticleImage.create({
+            data: {
+              draftId: draft.id,
+              kind: img.kind as "HERO" | "OG" | "INLINE",
+              prompt: "", // We don't store the prompt in the images table for now
+              altText: img.altText,
+              caption: img.caption,
+              width: img.width,
+              height: img.height,
+              mimeType: img.mimeType,
+              storageUrl: img.storageUrl,
+            },
+          });
+        }
+      }
+
+      // Save source records
       if (articleData.sources.length > 0) {
         await prisma.generatedArticleSource.createMany({
           data: articleData.sources.map((source) => ({
@@ -202,7 +305,6 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      // Also save fetched source data
       for (const source of sourceData) {
         const alreadySaved = articleData.sources.some((s) => s.url === source.url);
         if (!alreadySaved) {
@@ -219,7 +321,9 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // 13. Update run record
+      // =========================================
+      // I. Update run record
+      // =========================================
       await prisma.generatedArticleRun.update({
         where: { id: run.id },
         data: {
@@ -227,7 +331,7 @@ export async function POST(req: NextRequest) {
           status: "SUCCESS",
           finishedAt: new Date(),
           modelUsed: geminiResponse.modelUsed,
-          tokenUsage: geminiResponse.tokenCount,
+          tokenUsage: totalTokens || geminiResponse.tokenCount,
         },
       });
 
@@ -237,10 +341,11 @@ export async function POST(req: NextRequest) {
         title: draft.title,
         slug: draft.slug,
         confidence,
-        sourceCount: sourceData.length,
+        sourceCount: accessibleSourceCount,
+        imageCount: imagesJson.length,
+        competitorCount: validCompetitorUrls.length,
       });
     } catch (genError) {
-      // Update run record on failure
       await prisma.generatedArticleRun.update({
         where: { id: run.id },
         data: {
@@ -253,10 +358,8 @@ export async function POST(req: NextRequest) {
     }
   } catch (error) {
     console.error("[Content Generator] Error:", error);
-
     const message =
       error instanceof Error ? error.message : "An unexpected error occurred.";
-
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

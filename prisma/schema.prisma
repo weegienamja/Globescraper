@@ -493,6 +493,12 @@ enum ArticleRunStatus {
   FAILED
 }
 
+enum ArticleImageKind {
+  HERO
+  OG
+  INLINE
+}
+
 model GeneratedArticleDraft {
   id                 String             @id @default(uuid())
   city               String             @db.VarChar(100)
@@ -506,6 +512,9 @@ model GeneratedArticleDraft {
   metaDescription    String             @db.VarChar(500)
   markdown           String             @db.LongText
   html               String?            @db.LongText
+  heroImageUrl       String?            @db.VarChar(2000)
+  ogImageUrl         String?            @db.VarChar(2000)
+  imagesJson         Json?
   status             ArticleStatus      @default(DRAFT)
   confidence         ArticleConfidence  @default(HIGH)
   createdAt          DateTime           @default(now())
@@ -513,10 +522,30 @@ model GeneratedArticleDraft {
 
   sources            GeneratedArticleSource[]
   runs               GeneratedArticleRun[]
+  images             GeneratedArticleImage[]
 
   @@index([status])
   @@index([city])
   @@index([createdAt])
+}
+
+model GeneratedArticleImage {
+  id          String           @id @default(uuid())
+  draftId     String
+  kind        ArticleImageKind
+  prompt      String           @db.Text
+  altText     String           @db.VarChar(500)
+  caption     String?          @db.VarChar(500)
+  width       Int
+  height      Int
+  mimeType    String           @db.VarChar(50)
+  storageUrl  String           @db.VarChar(2000)
+  createdAt   DateTime         @default(now())
+
+  draft       GeneratedArticleDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
+
+  @@index([draftId])
+  @@index([kind])
 }
 
 model GeneratedArticleSource {

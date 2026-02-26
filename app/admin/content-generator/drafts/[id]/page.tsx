@@ -18,6 +18,9 @@ export default async function DraftDetailPage({ params }: Props) {
       sources: {
         orderBy: { fetchedAt: "desc" },
       },
+      images: {
+        orderBy: { createdAt: "asc" },
+      },
       runs: {
         orderBy: { startedAt: "desc" },
         take: 1,
@@ -45,6 +48,8 @@ export default async function DraftDetailPage({ params }: Props) {
         markdown: draft.markdown,
         status: draft.status,
         confidence: draft.confidence,
+        heroImageUrl: draft.heroImageUrl,
+        ogImageUrl: draft.ogImageUrl,
         createdAt: draft.createdAt.toISOString(),
         updatedAt: draft.updatedAt.toISOString(),
         sources: draft.sources.map((s) => ({
@@ -53,6 +58,12 @@ export default async function DraftDetailPage({ params }: Props) {
           title: s.title,
           publisher: s.publisher,
           fetchedAt: s.fetchedAt.toISOString(),
+        })),
+        images: draft.images.map((img) => ({
+          id: img.id,
+          kind: img.kind,
+          altText: img.altText,
+          storageUrl: img.storageUrl,
         })),
         run: draft.runs[0]
           ? {
