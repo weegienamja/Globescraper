@@ -135,6 +135,13 @@ export default async function AdminPage() {
             <small>SEO checker, editor, republish &amp; manage published posts</small>
           </span>
         </Link>
+        <Link href="/admin/email" className="admin__cgen-btn" style={{ flex: 1, minWidth: "260px" }}>
+          <span className="admin__cgen-btn-icon">📧</span>
+          <span className="admin__cgen-btn-text">
+            <strong>Email System</strong>
+            <small>Send emails, campaigns, AI generation &amp; subscriber management</small>
+          </span>
+        </Link>
       </div>
 
       {/* ── Metrics Cards ────────────────────────────────── */}

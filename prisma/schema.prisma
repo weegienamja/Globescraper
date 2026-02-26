@@ -35,6 +35,14 @@ model User {
   lastLoginAt   DateTime?
   lastActiveAt  DateTime?
   deletedAt     DateTime?
+
+  // Email marketing
+  emailMarketingOptIn  Boolean   @default(false)
+  marketingOptInAt     DateTime?
+  emailUnsubscribed    Boolean   @default(false)
+  unsubscribeToken     String?   @unique @db.VarChar(64)
+  lastEmailEngagementAt DateTime?
+
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
   accounts      Account[]
@@ -53,6 +61,7 @@ model User {
   blocksReceived      Block[]  @relation("Blocked")
   reports             Report[]
   securityEvents      UserSecurityEvent[]
+  emailLogs           EmailLog[]
 }
 
 model Account {
@@ -610,4 +619,72 @@ model GeneratedArticleRun {
   @@index([draftId])
   @@index([status])
   @@index([startedAt])
+}
+
+// ─── Email System ───────────────────────────────────────────
+
+enum CampaignStatus {
+  DRAFT
+  SCHEDULED
+  SENDING
+  SENT
+}
+
+enum EmailLogType {
+  TRANSACTIONAL
+  MARKETING
+}
+
+enum EmailLogStatus {
+  PENDING
+  SENT
+  FAILED
+  BOUNCED
+}
+
+model EmailCampaign {
+  id              String         @id @default(uuid())
+  subject         String         @db.VarChar(500)
+  previewText     String?        @db.VarChar(500)
+  htmlContent     String         @db.LongText
+  textContent     String?        @db.LongText
+  segmentJson     Json?
+  status          CampaignStatus @default(DRAFT)
+  scheduledAt     DateTime?
+  sentAt          DateTime?
+  sentCount       Int            @default(0)
+  deliveredCount  Int            @default(0)
+  openCount       Int            @default(0)
+  bounceCount     Int            @default(0)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  logs            EmailLog[]
+
+  @@index([status])
+  @@index([scheduledAt])
+  @@index([createdAt])
+}
+
+model EmailLog {
+  id                 String         @id @default(uuid())
+  campaignId         String?
+  userId             String
+  type               EmailLogType
+  subject            String         @db.VarChar(500)
+  status             EmailLogStatus @default(PENDING)
+  providerMessageId  String?        @db.VarChar(255)
+  error              String?        @db.Text
+  createdAt          DateTime       @default(now())
+  openedAt           DateTime?
+  clickedAt          DateTime?
+
+  campaign           EmailCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  user               User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
+  @@index([userId])
+  @@index([providerMessageId])
+  @@index([status])
+  @@index([createdAt])
 }
