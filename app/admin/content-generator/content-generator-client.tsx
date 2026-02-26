@@ -64,15 +64,16 @@ export default function ContentGeneratorClient() {
 
     // Simulate progress stages
     const stages = [
-      { pct: 8, label: "Preparing search queries..." },
-      { pct: 18, label: "Discovering sources..." },
-      { pct: 28, label: "Fetching and extracting content..." },
-      { pct: 38, label: "Analyzing competitors..." },
-      { pct: 48, label: "Building facts pack..." },
-      { pct: 58, label: "Generating article with Gemini..." },
-      { pct: 68, label: "Running humanization pass..." },
-      { pct: 78, label: "Generating images with Imagen 3..." },
-      { pct: 88, label: "Uploading images to storage..." },
+      { pct: 7, label: "Preparing search queries..." },
+      { pct: 15, label: "Discovering sources..." },
+      { pct: 23, label: "Fetching and extracting content..." },
+      { pct: 31, label: "Auto-discovering competitors..." },
+      { pct: 39, label: "Checking existing content for uniqueness..." },
+      { pct: 47, label: "Building facts pack..." },
+      { pct: 57, label: "Generating article with Gemini..." },
+      { pct: 67, label: "Running humanization pass..." },
+      { pct: 77, label: "Generating images with Imagen 3..." },
+      { pct: 87, label: "Uploading images to storage..." },
       { pct: 95, label: "Saving draft..." },
     ];
 
@@ -287,7 +288,7 @@ export default function ContentGeneratorClient() {
           {/* Competitor URLs */}
           <div className="cgen__field cgen__field--full">
             <label className="cgen__label" htmlFor="cgen-competitors">
-              Competitor URLs (optional, up to 3, one per line)
+              Extra Competitor URLs (optional, one per line)
             </label>
             <textarea
               id="cgen-competitors"
@@ -299,7 +300,7 @@ export default function ContentGeneratorClient() {
               rows={3}
             />
             <span className="cgen__hint">
-              Paste competitor article URLs for gap analysis. We will extract their outline and find topics they cover that your article should too.
+              Competitors are auto-discovered from Google and known expat sites. Add extra URLs here if you want specific articles included in the gap analysis. Existing GlobeScraper articles are automatically checked to avoid duplication.
             </span>
           </div>
         </div>
