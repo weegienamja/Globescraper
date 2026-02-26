@@ -135,7 +135,8 @@ Sources section:
 export function buildGenerationPrompt(
   factsPack: FactsPack,
   wordCount: number,
-  competitorAnalysis?: string
+  competitorAnalysis?: string,
+  existingContentDigest?: string
 ): string {
   const now = new Date();
   const monthYear = now.toLocaleString("en-US", { month: "long", year: "numeric" });
@@ -162,6 +163,8 @@ USE THE GAP ANALYSIS: If the gap analysis identifies subtopics competitors cover
 `
     : "";
 
+  const existingContentSection = existingContentDigest || "";
+
   return `
 You are a professional travel and expat content writer for GlobeScraper, a website that helps English teachers and expats move to Cambodia.
 
@@ -177,6 +180,7 @@ ${DEPTH_INSTRUCTIONS}
 
 ${researchSection}
 ${competitorSection}
+${existingContentSection}
 
 Replace {SOURCE_COUNT} with ${factsPack.sourceCount} and {MONTH_YEAR} with ${monthYear} in the article.
 
@@ -233,7 +237,8 @@ export function buildIdeaOnlyPrompt(
   audience: string,
   wordCount: number,
   targetKeyword?: string,
-  secondaryKeywords?: string
+  secondaryKeywords?: string,
+  existingContentDigest?: string
 ): string {
   const now = new Date();
   const monthYear = now.toLocaleString("en-US", { month: "long", year: "numeric" });
@@ -252,6 +257,8 @@ NOTE: No external research data is available for this article. Write based on yo
 ${STYLE_RULES}
 
 ${DEPTH_INSTRUCTIONS}
+
+${existingContentDigest || ""}
 
 Replace {SOURCE_COUNT} with 0 and {MONTH_YEAR} with ${monthYear} in the article.
 

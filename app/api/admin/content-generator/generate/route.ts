@@ -9,6 +9,7 @@ import { fetchPage, checkRobotsTxt } from "@/lib/scrape/fetchPage";
 import { extractMainText, extractTitle } from "@/lib/scrape/extractMainText";
 import { buildFactsPack, type SourceData } from "@/lib/scrape/buildFactsPack";
 import { runCompetitorAnalysis } from "@/lib/scrape/competitorAnalysis";
+import { discoverCompetitors, buildExistingContentDigest } from "@/lib/scrape/contentDiscovery";
 import {
   buildImageSpecs,
   generateAndUploadImages,
@@ -130,18 +131,28 @@ export async function POST(req: NextRequest) {
       }
 
       // =========================================
-      // B. Competitor analysis (parallel with source discovery already done)
+      // B. Auto-discover competitors + manual URLs
       // =========================================
+      const discovered = await discoverCompetitors(
+        city, topic, targetKeyword, validCompetitorUrls
+      );
+      const allCompetitorUrls = discovered.map((d) => d.url);
+
       let competitorPromptSummary = "";
-      if (validCompetitorUrls.length > 0) {
+      if (allCompetitorUrls.length > 0) {
         const sourceBullets = sourceData.map((s) => s.text.slice(0, 500)).join("\n");
         const gapResult = await runCompetitorAnalysis(
-          validCompetitorUrls,
+          allCompetitorUrls,
           sourceBullets,
           topic
         );
         competitorPromptSummary = gapResult.promptSummary;
       }
+
+      // =========================================
+      // B2. Check existing content for dedup
+      // =========================================
+      const { promptSection: existingContentPrompt } = await buildExistingContentDigest();
 
       // =========================================
       // C. Quality guardrail: assess source confidence
@@ -159,12 +170,17 @@ export async function POST(req: NextRequest) {
         const factsPack = buildFactsPack(
           city, topic, audience, sourceData, targetKeyword, secondaryKeywords
         );
-        const prompt = buildGenerationPrompt(factsPack, wordCount, competitorPromptSummary || undefined);
+        const prompt = buildGenerationPrompt(
+          factsPack, wordCount,
+          competitorPromptSummary || undefined,
+          existingContentPrompt || undefined
+        );
         geminiResponse = await callGemini(prompt);
       } else {
         confidence = "LOW";
         const prompt = buildIdeaOnlyPrompt(
-          city, topic, audience, wordCount, targetKeyword, secondaryKeywords
+          city, topic, audience, wordCount, targetKeyword, secondaryKeywords,
+          existingContentPrompt || undefined
         );
         geminiResponse = await callGemini(prompt);
       }
@@ -343,7 +359,7 @@ export async function POST(req: NextRequest) {
         confidence,
         sourceCount: accessibleSourceCount,
         imageCount: imagesJson.length,
-        competitorCount: validCompetitorUrls.length,
+        competitorCount: allCompetitorUrls.length,
       });
     } catch (genError) {
       await prisma.generatedArticleRun.update({
