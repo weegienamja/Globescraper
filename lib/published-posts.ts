@@ -9,6 +9,8 @@ export interface PublishedAiPost {
   author: string;
   markdown: string;
   city: string;
+  heroImageUrl: string | null;
+  ogImageUrl: string | null;
   isAiGenerated: true;
 }
 
@@ -26,6 +28,8 @@ export async function getPublishedAiPosts(): Promise<PublishedAiPost[]> {
       metaDescription: true,
       markdown: true,
       city: true,
+      heroImageUrl: true,
+      ogImageUrl: true,
       createdAt: true,
       updatedAt: true,
     },
@@ -40,6 +44,8 @@ export async function getPublishedAiPosts(): Promise<PublishedAiPost[]> {
     author: "GlobeScraper",
     markdown: d.markdown,
     city: d.city,
+    heroImageUrl: d.heroImageUrl,
+    ogImageUrl: d.ogImageUrl,
     isAiGenerated: true as const,
   }));
 }
@@ -57,6 +63,8 @@ export async function getPublishedAiPost(slug: string): Promise<PublishedAiPost 
       metaDescription: true,
       markdown: true,
       city: true,
+      heroImageUrl: true,
+      ogImageUrl: true,
       createdAt: true,
       updatedAt: true,
     },
@@ -73,6 +81,8 @@ export async function getPublishedAiPost(slug: string): Promise<PublishedAiPost 
     author: "GlobeScraper",
     markdown: draft.markdown,
     city: draft.city,
+    heroImageUrl: draft.heroImageUrl,
+    ogImageUrl: draft.ogImageUrl,
     isAiGenerated: true as const,
   };
 }

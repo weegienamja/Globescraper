@@ -97,6 +97,71 @@ export async function callGemini(prompt: string): Promise<GeminiResponse> {
 }
 
 /**
+ * Call Gemini expecting a plain-text response (no JSON mode).
+ * Used for the humanization pass and other text-only calls.
+ */
+export async function callGeminiText(prompt: string): Promise<GeminiResponse> {
+  const apiKey = validateGeminiKey();
+
+  const url = `${GEMINI_API_BASE}/models/${MODEL}:generateContent?key=${apiKey}`;
+
+  const body = {
+    contents: [
+      {
+        parts: [{ text: prompt }],
+      },
+    ],
+    generationConfig: {
+      temperature: 0.7,
+      topP: 0.9,
+      topK: 40,
+      maxOutputTokens: 8192,
+    },
+    safetySettings: [
+      {
+        category: "HARM_CATEGORY_HARASSMENT",
+        threshold: "BLOCK_ONLY_HIGH",
+      },
+      {
+        category: "HARM_CATEGORY_HATE_SPEECH",
+        threshold: "BLOCK_ONLY_HIGH",
+      },
+      {
+        category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+        threshold: "BLOCK_ONLY_HIGH",
+      },
+      {
+        category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+        threshold: "BLOCK_ONLY_HIGH",
+      },
+    ],
+  };
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Gemini API error (${response.status}): ${errorText}`);
+  }
+
+  const data = await response.json();
+  const candidate = data.candidates?.[0];
+  if (!candidate?.content?.parts?.[0]?.text) {
+    throw new Error("Gemini returned an empty or blocked response.");
+  }
+
+  return {
+    text: candidate.content.parts[0].text,
+    tokenCount: data.usageMetadata?.totalTokenCount ?? null,
+    modelUsed: MODEL,
+  };
+}
+
+/**
  * Parse the JSON response from Gemini, handling potential issues.
  */
 export function parseGeminiJson(text: string): Record<string, unknown> {
@@ -131,6 +196,7 @@ export function validateArticleData(data: Record<string, unknown>): {
   faq: Array<{ question: string; answer: string }>;
   internalLinks: Array<{ text: string; url: string }>;
   sources: Array<{ url: string; title: string; publisher: string }>;
+  confidenceLevel: "HIGH" | "LOW";
 } {
   const required = [
     "title",
@@ -196,5 +262,6 @@ export function validateArticleData(data: Record<string, unknown>): {
       title: string;
       publisher: string;
     }>,
+    confidenceLevel: data.confidenceLevel === "LOW" ? "LOW" : "HIGH",
   };
 }

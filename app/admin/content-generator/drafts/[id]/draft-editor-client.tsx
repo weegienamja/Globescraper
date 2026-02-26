@@ -19,6 +19,8 @@ interface DraftData {
   markdown: string;
   status: string;
   confidence: string;
+  heroImageUrl: string | null;
+  ogImageUrl: string | null;
   createdAt: string;
   updatedAt: string;
   sources: Array<{
@@ -27,6 +29,12 @@ interface DraftData {
     title: string | null;
     publisher: string | null;
     fetchedAt: string;
+  }>;
+  images: Array<{
+    id: string;
+    kind: string;
+    altText: string;
+    storageUrl: string;
   }>;
   run: {
     modelUsed: string | null;
@@ -129,6 +137,11 @@ export default function DraftEditorClient({ draft }: Props) {
           <span className="cgen__status-meta">
             Model: {draft.run.modelUsed || "unknown"}
             {draft.run.tokenUsage ? ` | Tokens: ${draft.run.tokenUsage}` : ""}
+          </span>
+        )}
+        {draft.images.length > 0 && (
+          <span className="cgen__status-meta">
+            Images: {draft.images.length}
           </span>
         )}
       </div>
