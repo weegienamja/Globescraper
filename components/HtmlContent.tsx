@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useEffect, useRef } from "react";
 import DOMPurify from "dompurify";
+import { labelTableCells } from "@/lib/tableMobile";
 
 /**
  * Renders sanitized HTML content.
@@ -9,6 +10,7 @@ import DOMPurify from "dompurify";
  * Uses browser-native DOMPurify (no jsdom dependency).
  */
 export function HtmlContent({ html }: { html: string }) {
+  const ref = useRef<HTMLElement>(null);
   const clean = useMemo(
     () =>
       typeof window !== "undefined"
@@ -19,5 +21,10 @@ export function HtmlContent({ html }: { html: string }) {
         : html,
     [html],
   );
-  return <article className="prose" dangerouslySetInnerHTML={{ __html: clean }} />;
+
+  useEffect(() => {
+    if (ref.current) labelTableCells(ref.current);
+  }, [clean]);
+
+  return <article className="prose" ref={ref} dangerouslySetInnerHTML={{ __html: clean }} />;
 }

@@ -260,7 +260,8 @@ STRICT STYLE RULES:
 4. Use short paragraphs. Maximum 3 sentences per paragraph.
 5. Use frequent line breaks between paragraphs.
 6. Use bullet points and numbered lists often.
-7. Write in a direct, conversational tone. No corporate speak.
+7. If including a table, keep it to 2-3 columns max with short headers for mobile readability. Prefer lists over tables when possible.
+8. Write in a direct, conversational tone. No corporate speak.
 8. Never use these banned words: ${BANNED_WORDS.join(", ")}.
 9. Only paraphrase and summarize from sources. Never copy text verbatim.
 10. Be honest about downsides. Do not oversell.

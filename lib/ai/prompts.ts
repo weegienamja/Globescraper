@@ -87,7 +87,7 @@ MARKDOWN STRUCTURE (in order):
 4. "## Quick Take" section with 5-7 bullet points summarizing the key facts
 5. A "## What I Wish I Knew" section with 3-5 first-person insights
 6. 5-8 H2 sections covering the topic thoroughly
-7. Include a "## Costs" section with a Markdown table (if cost info is available)
+7. Include a "## Costs" section with a Markdown table (if cost info is available). Keep tables to 2-3 columns max for mobile readability. Use short column headers (e.g. "Item", "Cost" not "Monthly Cost in USD"). Keep cell content concise.
 8. Include a "## Safety and Scams" section
 9. Include a "## Common Mistakes" section with specific scenarios and dollar amounts
 10. "## FAQ" section with 5 questions and answers

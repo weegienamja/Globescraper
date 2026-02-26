@@ -806,15 +806,32 @@ img {
 /* ==========================================================
    Tables inside blog / page content
    ========================================================== */
+
+/* Wrapper: makes table horizontally scrollable when needed */
+.prose-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: 1.5em 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
 .prose table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  margin: 0; /* margin handled by wrapper */
+}
+
+/* When no JS wrapper exists, table itself scrolls */
+.prose > table {
   display: block;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   margin: 1.5em 0;
   border: 1px solid var(--border);
   border-radius: 8px;
-  font-size: 0.95rem;
-  line-height: 1.5;
 }
 
 .prose table th,
@@ -837,6 +854,63 @@ img {
 
 .prose table tbody tr:nth-child(even) {
   background: var(--bg-surface);
+}
+
+@media (max-width: 600px) {
+  .prose table {
+    font-size: 0.82rem;
+    line-height: 1.4;
+  }
+  .prose table th,
+  .prose table td {
+    padding: 8px 10px;
+  }
+  .prose table th {
+    white-space: normal;
+    font-size: 0.78rem;
+  }
+
+  /* Card-style layout for simple 2-3 column tables */
+  .prose table:not(.no-stack) thead {
+    display: none;
+  }
+  .prose table:not(.no-stack) tbody,
+  .prose table:not(.no-stack) tbody tr,
+  .prose table:not(.no-stack) tbody td {
+    display: block;
+    width: 100%;
+  }
+  .prose table:not(.no-stack) tbody tr {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .prose table:not(.no-stack) tbody tr:last-child {
+    border-bottom: none;
+  }
+  .prose table:not(.no-stack) tbody td {
+    padding: 2px 0;
+    border-bottom: none;
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .prose table:not(.no-stack) tbody td::before {
+    content: attr(data-label);
+    font-weight: 700;
+    color: var(--text-heading);
+    flex-shrink: 0;
+  }
+  /* If no data-label attr, first td is the row "title" */
+  .prose table:not(.no-stack) tbody td:first-child {
+    font-weight: 700;
+    color: var(--text-heading);
+    font-size: 0.88rem;
+    padding-bottom: 4px;
+    display: block;
+  }
+  .prose table:not(.no-stack) tbody td:first-child::before {
+    display: none;
+  }
 }
 
 /* ==========================================================
