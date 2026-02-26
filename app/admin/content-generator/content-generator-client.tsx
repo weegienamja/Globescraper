@@ -147,8 +147,8 @@ export default function ContentGeneratorClient() {
       const data = await safeJson(res);
       if (!res.ok) throw new Error((data.error as string) || "Title generation failed.");
 
-      setGeneratedTitle(data.title || "");
-      setTitleKeywords(data.keywords || []);
+      setGeneratedTitle((data.title as string) || "");
+      setTitleKeywords((data.keywords as string[]) || []);
       setTitleGenStatus("Based on your existing posts and current Cambodia interest.");
       setTitleGenState("done");
     } catch (err) {
@@ -181,11 +181,11 @@ export default function ContentGeneratorClient() {
       const data = await safeJson(res);
       if (!res.ok) throw new Error((data.error as string) || "Search failed.");
 
-      setNewsTopics(data.topics || []);
+      setNewsTopics((data.topics as NewsTopic[]) || []);
       setNewsSearchState("done");
 
-      if ((data.topics || []).length === 0) {
-        setNewsSearchError(data.message || "No topics found. Try adjusting filters or try again later.");
+      if (((data.topics as unknown[]) || []).length === 0) {
+        setNewsSearchError((data.message as string) || "No topics found. Try adjusting filters or try again later.");
       }
     } catch (err) {
       setNewsSearchState("error");
