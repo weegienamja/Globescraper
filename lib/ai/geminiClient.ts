@@ -4,7 +4,7 @@
  */
 
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta";
-const MODEL = "gemini-2.0-flash";
+const MODEL = "gemini-2.5-flash-preview-05-20";
 
 export interface GeminiResponse {
   text: string;
