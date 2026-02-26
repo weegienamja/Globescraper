@@ -236,15 +236,40 @@ export async function callGeminiText(prompt: string): Promise<GeminiResponse> {
 
 /**
  * Parse the JSON response from Gemini, handling potential issues.
- * Strips markdown fences and attempts JSON.parse.
+ * Strips markdown fences, attempts JSON.parse, and tries common fixups.
  */
 export function parseGeminiJson(text: string): Record<string, unknown> {
   const cleaned = stripJsonFences(text);
+
+  // Attempt 1: direct parse
   try {
     return JSON.parse(cleaned);
   } catch {
-    throw new Error("Gemini returned invalid JSON. Please try regenerating.");
+    // continue to fixups
   }
+
+  // Attempt 2: try to extract a JSON object from the text
+  const objMatch = cleaned.match(/\{[\s\S]*\}/);
+  if (objMatch) {
+    try {
+      return JSON.parse(objMatch[0]);
+    } catch {
+      // continue
+    }
+  }
+
+  // Attempt 3: fix trailing commas and common issues
+  try {
+    const fixed = cleaned
+      .replace(/,\s*([\]}])/g, "$1")          // trailing commas
+      .replace(/:\s*'([^']*)'/g, ': "$1"')     // single → double quotes
+      .replace(/[\x00-\x1f]/g, " ");           // control chars
+    return JSON.parse(fixed);
+  } catch {
+    // continue
+  }
+
+  throw new Error("INVALID_JSON");
 }
 
 /**

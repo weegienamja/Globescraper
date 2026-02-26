@@ -649,8 +649,33 @@ export async function POST(req: NextRequest) {
       const geminiResponse = await callGemini(generationPrompt);
       let totalTokens = geminiResponse.tokenCount ?? 0;
 
-      // Parse and validate
-      const parsed = parseGeminiJson(geminiResponse.text);
+      // Parse and validate — with one auto-repair attempt on bad JSON
+      let parsed: Record<string, unknown>;
+      try {
+        parsed = parseGeminiJson(geminiResponse.text);
+      } catch (parseErr) {
+        if (parseErr instanceof Error && parseErr.message === "INVALID_JSON") {
+          console.warn("[News Gen] First Gemini response was not valid JSON. Attempting repair...");
+          const repairPrompt = `The following text was supposed to be a valid JSON object with keys: title, slug, metaTitle, metaDescription, markdown, faq, sources, internalLinks, confidenceLevel. But it is not valid JSON.
+
+Raw text (first 4000 chars):
+${geminiResponse.text.slice(0, 4000)}
+
+Fix it and return ONLY valid JSON. No prose, no explanation, no markdown fences. Just the corrected JSON object.`;
+
+          const repairResponse = await callGemini(repairPrompt);
+          totalTokens += repairResponse.tokenCount ?? 0;
+
+          try {
+            parsed = parseGeminiJson(repairResponse.text);
+          } catch {
+            throw new Error("Gemini returned invalid JSON even after repair attempt. Please try regenerating.");
+          }
+        } else {
+          throw parseErr;
+        }
+      }
+
       const articleData = validateNewsArticle(parsed);
 
       // If Gemini returned no sources, inject fallback sources from fetched or seed URLs
