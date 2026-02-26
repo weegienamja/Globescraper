@@ -4,6 +4,10 @@ import type { Metadata } from "next";
 import { getPostsMeta, getPagesMeta } from "@/lib/content";
 import { getHeroImage } from "@/lib/contentImages";
 import { BlogCardTracker } from "@/components/BlogCardTracker";
+import { getPublishedAiPosts } from "@/lib/published-posts";
+
+/** AI-published posts live in the database, so this page must be dynamic. */
+export const dynamic = "force-dynamic";
 
 export function generateMetadata(): Metadata {
   const meta = getPagesMeta().blog;
@@ -26,14 +30,41 @@ export function generateMetadata(): Metadata {
   };
 }
 
-export default function BlogIndex() {
-  const posts = getPostsMeta();
+export default async function BlogIndex() {
+  const staticPosts = getPostsMeta();
+  const aiPosts = await getPublishedAiPosts();
+
+  // Merge and deduplicate by slug, newest first
+  const slugSet = new Set<string>();
+  const allPosts: Array<{
+    slug: string;
+    title: string;
+    description: string;
+    date: string;
+    isAiGenerated?: boolean;
+  }> = [];
+
+  // AI posts first (they're newer)
+  for (const p of aiPosts) {
+    if (!slugSet.has(p.slug)) {
+      slugSet.add(p.slug);
+      allPosts.push({ ...p, isAiGenerated: true });
+    }
+  }
+  // Then static posts
+  for (const p of staticPosts) {
+    if (!slugSet.has(p.slug)) {
+      slugSet.add(p.slug);
+      allPosts.push(p);
+    }
+  }
+
   return (
     <section>
       <h1>Blog</h1>
       <p className="small">Teaching in Southeast Asia, without the fluff.</p>
       <div className="blog-list">
-        {posts.map((p) => (
+        {allPosts.map((p) => (
           <BlogCardTracker key={p.slug} slug={p.slug}>
             <Link href={`/${p.slug}`} className="card card--link">
               <div className="card__image-wrapper">
