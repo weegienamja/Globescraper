@@ -56,15 +56,24 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
   callbacks: {
     // Block disabled / banned users signing in via OAuth
-    async signIn({ user }) {
+    // Also ensure Google users get emailVerified set (Google emails are inherently verified)
+    async signIn({ user, account }) {
       if (user.id) {
         const dbUser = await prisma.user.findUnique({
           where: { id: user.id },
-          select: { disabled: true, status: true, deletedAt: true },
+          select: { disabled: true, status: true, deletedAt: true, emailVerified: true },
         });
         if (dbUser?.disabled) return false;
         if (dbUser?.status === "BANNED" || dbUser?.status === "DELETED" || dbUser?.status === "SUSPENDED") return false;
         if (dbUser?.deletedAt) return false;
+
+        // Google emails are verified by Google — backfill emailVerified if missing
+        if (account?.provider === "google" && !dbUser?.emailVerified) {
+          await prisma.user.update({
+            where: { id: user.id },
+            data: { emailVerified: new Date() },
+          }).catch(() => {});
+        }
       }
       return true;
     },
