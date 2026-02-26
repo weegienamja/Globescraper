@@ -9,3 +9,6 @@ prisma/migrations_init.sql
 *.tsbuildinfo
 dist/
 coverage/
+
+.vercel
+.env*.local
