@@ -33,6 +33,7 @@ model User {
   disabled      Boolean    @default(false)
   image         String?
   lastLoginAt   DateTime?
+  lastActiveAt  DateTime?
   deletedAt     DateTime?
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt

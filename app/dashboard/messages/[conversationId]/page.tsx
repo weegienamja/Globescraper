@@ -39,6 +39,7 @@ export default async function ConversationPage({
             select: {
               id: true,
               name: true,
+              lastActiveAt: true,
               profile: { select: { displayName: true, avatarUrl: true } },
             },
           },
@@ -80,6 +81,24 @@ export default async function ConversationPage({
   const otherName = otherUser?.profile?.displayName ?? otherUser?.name ?? "Unknown";
   const otherAvatar = otherUser?.profile?.avatarUrl ?? null;
   const otherInitial = (otherName[0] ?? "?").toUpperCase();
+
+  // Online status: active within last 5 minutes
+  const ONLINE_THRESHOLD = 5 * 60 * 1000;
+  const otherLastActive = otherUser?.lastActiveAt ? new Date(otherUser.lastActiveAt).getTime() : 0;
+  const isOnline = Date.now() - otherLastActive < ONLINE_THRESHOLD;
+
+  function lastSeenText(lastActive: Date | null | undefined): string {
+    if (!lastActive) return "Offline";
+    const diff = Date.now() - new Date(lastActive).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return "Active just now";
+    if (mins < 60) return `Active ${mins}m ago`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `Active ${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    if (days === 1) return "Active yesterday";
+    return `Active ${days}d ago`;
+  }
 
   function fmtTime(d: Date) {
     return new Date(d).toLocaleTimeString("en-GB", {
@@ -139,8 +158,8 @@ export default async function ConversationPage({
                 {otherName}
               </Link>
               <span className="chat-header__status">
-                <span className="chat-header__status-dot" />
-                Connected
+                <span className={`chat-header__status-dot ${isOnline ? "chat-header__status-dot--online" : "chat-header__status-dot--offline"}`} />
+                {isOnline ? "Online" : lastSeenText(otherUser?.lastActiveAt)}
               </span>
             </div>
           </div>

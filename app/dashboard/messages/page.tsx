@@ -105,6 +105,7 @@ export default async function MessagesPage({
                   select: {
                     id: true,
                     name: true,
+                    lastActiveAt: true,
                     profile: { select: { displayName: true, avatarUrl: true } },
                   },
                 },
@@ -131,6 +132,7 @@ export default async function MessagesPage({
           select: {
             id: true,
             name: true,
+            lastActiveAt: true,
             profile: { select: { displayName: true, avatarUrl: true } },
           },
         },
@@ -138,6 +140,7 @@ export default async function MessagesPage({
           select: {
             id: true,
             name: true,
+            lastActiveAt: true,
             profile: { select: { displayName: true, avatarUrl: true } },
           },
         },
@@ -178,6 +181,13 @@ export default async function MessagesPage({
       return other;
     })
     .filter((u) => !conversationUserIds.has(u.id));
+
+  // Online status: active within last 5 minutes
+  const ONLINE_THRESHOLD = 5 * 60 * 1000;
+  function isUserOnline(lastActiveAt: Date | null | undefined): boolean {
+    if (!lastActiveAt) return false;
+    return Date.now() - new Date(lastActiveAt).getTime() < ONLINE_THRESHOLD;
+  }
 
   function timeAgo(date: Date): string {
     const diff = Date.now() - new Date(date).getTime();
@@ -230,6 +240,7 @@ export default async function MessagesPage({
                             {(displayName[0] ?? "?").toUpperCase()}
                           </div>
                         )}
+                        <span className={`chat-sidebar__status-dot ${isUserOnline(other.lastActiveAt) ? "chat-sidebar__status-dot--online" : "chat-sidebar__status-dot--offline"}`} />
                         {conv.hasUnread && <span className="chat-sidebar__unread-dot" />}
                       </div>
                       <div className="chat-sidebar__item-body">
@@ -269,6 +280,7 @@ export default async function MessagesPage({
                                 {(displayName[0] ?? "?").toUpperCase()}
                               </div>
                             )}
+                            <span className={`chat-sidebar__status-dot ${isUserOnline(user.lastActiveAt) ? "chat-sidebar__status-dot--online" : "chat-sidebar__status-dot--offline"}`} />
                           </div>
                           <div className="chat-sidebar__item-body">
                             <span className="chat-sidebar__item-name">{displayName}</span>

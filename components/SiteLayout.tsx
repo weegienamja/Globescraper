@@ -8,6 +8,7 @@ import { siteConfig } from "@/lib/site";
 import { trackNavClick, trackCTAClick } from "@/lib/analytics";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { RevealOnScroll } from "@/components/RevealOnScroll";
+import { ActivityTracker } from "@/components/ActivityTracker";
 
 const { navItems, name, logoPath, tagline, socials } = siteConfig;
 
@@ -352,6 +353,7 @@ export function SiteLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="site-wrapper">
       <a href="#main-content" className="skip-nav">Skip to content</a>
+      <ActivityTracker />
       <Header />
       <main id="main-content" className="container">{children}</main>
       <footer className="footer" onClick={(e) => {

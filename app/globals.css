@@ -3765,13 +3765,31 @@ body.menu-open {
 
 .chat-sidebar__unread-dot {
   position: absolute;
+  top: -1px;
+  right: -1px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ef4444;
+  border: 2px solid var(--bg-surface);
+}
+
+.chat-sidebar__status-dot {
+  position: absolute;
   bottom: 1px;
   right: 1px;
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: #22c55e;
   border: 2px solid var(--bg-surface);
+}
+
+.chat-sidebar__status-dot--online {
+  background: #22c55e;
+}
+
+.chat-sidebar__status-dot--offline {
+  background: #64748b;
 }
 
 .chat-sidebar__item-body {
@@ -3912,7 +3930,14 @@ body.menu-open {
   width: 8px;
   height: 8px;
   border-radius: 50%;
+}
+
+.chat-header__status-dot--online {
   background: #22c55e;
+}
+
+.chat-header__status-dot--offline {
+  background: #64748b;
 }
 
 .chat-header__right {
