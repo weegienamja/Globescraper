@@ -9,7 +9,8 @@
  * Never scrapes Google HTML directly.
  */
 
-import { callGemini, validateGeminiKey, parseGeminiJson } from "@/lib/ai/geminiClient";
+import { callGemini, validateGeminiKey, parseGeminiJson, callGeminiWithSchema } from "@/lib/ai/geminiClient";
+import { z } from "zod";
 import {
   getSourcesWithRss,
   findTrustedSource,
@@ -448,4 +449,283 @@ export async function discoverNewsTopics(
 
   // 5. Score and rank
   return scoreAndRankTopics(topics).slice(0, 10);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Seeded discovery (from a generated title)                           */
+/* ------------------------------------------------------------------ */
+
+const RefinedTitleSchema = z.object({
+  refinedTitle: z.string(),
+  clarifyingAngle: z.string(),
+  mustAnswerQuestions: z.array(z.string()),
+  queryTerms: z.array(z.string()),
+});
+
+/**
+ * Discover topics seeded from a specific title.
+ *
+ * 1. Extract keywords from the title
+ * 2. If too generic, refine via Gemini
+ * 3. Search RSS feeds filtered by keywords
+ * 4. Search via Google CSE if available
+ * 5. Curate into topic cards via Gemini
+ */
+export async function discoverNewsTopicsFromTitle(
+  seedTitle: string,
+  cityFocus: CityFocus = "Cambodia wide",
+  audienceFocus: AudienceFocus = "both"
+): Promise<NewsTopic[]> {
+  const { extractKeywords } = await import("@/lib/news/coverageAnalysis");
+  const extracted = extractKeywords(seedTitle);
+
+  let queryTerms = extracted.keywords;
+  let title = seedTitle;
+  let angle = "";
+
+  // If generic, refine via Gemini
+  if (extracted.isGeneric) {
+    validateGeminiKey();
+    try {
+      const result = await callGeminiWithSchema(
+        `You are a news editor for GlobeScraper, a website about Cambodia travel and teaching.
+
+The admin wants to write about: "${seedTitle}"
+City focus: ${cityFocus}
+Audience: ${audienceFocus === "both" ? "travellers and teachers" : audienceFocus}
+
+This title is too generic. Refine it into a specific, clear topic.
+
+Return JSON only:
+{
+  "refinedTitle": "A specific, clear blog post title (no em dashes)",
+  "clarifyingAngle": "The specific angle to cover",
+  "mustAnswerQuestions": ["Question 1?", "Question 2?", "Question 3?"],
+  "queryTerms": ["keyword1", "keyword2", "keyword3"]
+}`,
+        RefinedTitleSchema,
+        "RefinedTitle with refinedTitle, clarifyingAngle, mustAnswerQuestions, queryTerms"
+      );
+      title = result.data.refinedTitle;
+      angle = result.data.clarifyingAngle;
+      queryTerms = result.data.queryTerms;
+    } catch (err) {
+      console.warn("[News Discovery] Title refinement failed, using original:", err);
+    }
+  }
+
+  // Build search queries from the title keywords
+  const city = cityFocus === "Cambodia wide" ? "Cambodia" : cityFocus;
+  const searchQueries = [
+    `${title} ${city}`,
+    ...queryTerms.slice(0, 3).map((kw) => `Cambodia ${kw}`),
+    `${city} ${queryTerms.slice(0, 2).join(" ")}`,
+  ];
+
+  // Fetch from multiple sources in parallel
+  const [rssItems, searchItems] = await Promise.all([
+    fetchRssFeedsFiltered(queryTerms),
+    searchViaGoogleCSE(searchQueries),
+  ]);
+
+  // Merge and deduplicate
+  const seenUrls = new Set<string>();
+  const allItems: RawDiscoveryItem[] = [];
+
+  for (const item of searchItems) {
+    if (seenUrls.has(item.url) || !isCambodiaRelevant(item)) continue;
+    seenUrls.add(item.url);
+    allItems.push(item);
+  }
+
+  for (const item of rssItems) {
+    if (seenUrls.has(item.url)) continue;
+    const trusted = findTrustedSource(item.url);
+    const isCambodiaOutlet = trusted?.category === "LOCAL_NEWS" || isCambodiaRelevant(item);
+    if (!isCambodiaOutlet) continue;
+    seenUrls.add(item.url);
+    allItems.push(item);
+  }
+
+  const capped = allItems.slice(0, MAX_TOTAL_RAW_ITEMS);
+
+  if (capped.length === 0) {
+    // Fallback: create a single topic from the seed title itself
+    const fallbackItems: RawDiscoveryItem[] = searchQueries.map((q) => ({
+      title: q,
+      url: "https://globescraper.com",
+      publisher: "Search query",
+      source: "direct" as const,
+    }));
+    const topics = await curateTopicsWithGeminiSeeded(
+      fallbackItems, title, angle, cityFocus, audienceFocus
+    );
+    return scoreAndRankTopics(topics).slice(0, 10);
+  }
+
+  // Use Gemini to curate — but bias towards the seed title
+  const topics = await curateTopicsWithGeminiSeeded(
+    capped, title, angle, cityFocus, audienceFocus
+  );
+
+  return scoreAndRankTopics(topics).slice(0, 10);
+}
+
+/**
+ * Fetch RSS feeds and filter items by query terms.
+ */
+async function fetchRssFeedsFiltered(queryTerms: string[]): Promise<RawDiscoveryItem[]> {
+  const rssSourcesTmp = getSourcesWithRss();
+  const results: RawDiscoveryItem[] = [];
+  const lowerTerms = queryTerms.map((t) => t.toLowerCase());
+
+  const fetches = rssSourcesTmp.map(async (source) => {
+    if (!source.rssUrl) return [];
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), DISCOVERY_TIMEOUT_MS);
+
+      const response = await fetch(source.rssUrl, {
+        headers: { "User-Agent": USER_AGENT, Accept: "application/rss+xml, application/xml, text/xml" },
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeout);
+
+      if (!response.ok) return [];
+      const xml = await response.text();
+      const items = parseRssItems(xml, source.publisher, source.rssUrl);
+
+      // Filter by query terms
+      return items.filter((item) => {
+        const combined = `${item.title} ${item.snippet || ""}`.toLowerCase();
+        return lowerTerms.some((term) => combined.includes(term));
+      });
+    } catch {
+      return [];
+    }
+  });
+
+  const allResults = await Promise.allSettled(fetches);
+  for (const r of allResults) {
+    if (r.status === "fulfilled") {
+      results.push(...r.value);
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Curate topics biased towards a seed title.
+ */
+async function curateTopicsWithGeminiSeeded(
+  rawItems: RawDiscoveryItem[],
+  seedTitle: string,
+  seedAngle: string,
+  cityFocus: CityFocus,
+  audienceFocus: AudienceFocus
+): Promise<NewsTopic[]> {
+  validateGeminiKey();
+
+  const itemsSummary = rawItems
+    .slice(0, 40)
+    .map(
+      (item, i) =>
+        `${i + 1}. [${item.publisher}] "${item.title}" - ${item.snippet || "No snippet"} (URL: ${item.url}${item.publishedAt ? `, Published: ${item.publishedAt}` : ""})`
+    )
+    .join("\n");
+
+  const audienceDesc =
+    audienceFocus === "both"
+      ? "both travellers to Cambodia and people interested in teaching English there"
+      : audienceFocus === "travellers"
+        ? "travellers to Cambodia"
+        : "people interested in teaching English in Cambodia";
+
+  const prompt = `You are a news editor for GlobeScraper, a website about moving to and visiting Cambodia.
+
+The admin wants to write about this topic: "${seedTitle}"
+${seedAngle ? `Suggested angle: ${seedAngle}` : ""}
+
+Analyze these recent news items and produce 4 to 8 blog topic variations based on the seed topic.
+At least the FIRST topic should closely match the seed title. Other topics can be related variations.
+Focus area: ${cityFocus}.
+Audience: ${audienceDesc}.
+
+NEWS ITEMS:
+${itemsSummary}
+
+QUALITY RULES:
+- The first topic must match the seed title closely, adapted with sources from the items above.
+- Other topics should be related angles, sub-topics, or complementary pieces.
+- Each topic must have source URLs from the items above (at least 1, preferably 2+).
+- Each topic must explain clearly why it matters to the audience.
+- Do not include sensational topics with weak sourcing.
+- NEVER use em dashes in any output. Use commas, colons, or semicolons instead.
+
+Return a JSON object:
+{
+  "topics": [
+    {
+      "id": "unique-short-id",
+      "title": "Blog post title idea (no em dashes)",
+      "angle": "Specific angle to cover this from",
+      "whyItMatters": "One sentence explaining why the audience should care",
+      "audienceFit": ["TRAVELLERS", "TEACHERS"],
+      "suggestedKeywords": {
+        "target": "primary keyword phrase",
+        "secondary": ["keyword2", "keyword3"]
+      },
+      "sourceUrls": ["url1", "url2"],
+      "sourceCount": 2,
+      "freshnessScore": 8,
+      "riskLevel": "LOW",
+      "fromSeedTitle": true
+    }
+  ]
+}
+
+Set "fromSeedTitle": true for the topic that most closely matches the admin's seed title.
+freshnessScore: 1-10 (10 = breaking news today, 5 = last week, 1 = month old)
+riskLevel: LOW (well sourced), MEDIUM (needs more verification), HIGH (single weak source)
+
+Return ONLY the JSON. No markdown fences. No commentary.`;
+
+  const response = await callGemini(prompt);
+  const parsed = parseGeminiJson(response.text);
+
+  if (!parsed.topics || !Array.isArray(parsed.topics)) {
+    throw new Error("Gemini did not return a valid topics array.");
+  }
+
+  const topics: NewsTopic[] = [];
+  for (const raw of parsed.topics) {
+    if (!raw.id || !raw.title || !raw.angle || !raw.whyItMatters) continue;
+
+    const cleanStr = (s: string) => s.replace(/\u2014/g, ", ").replace(/\u2013/g, ", ");
+
+    topics.push({
+      id: String(raw.id),
+      title: cleanStr(String(raw.title)),
+      angle: cleanStr(String(raw.angle)),
+      whyItMatters: cleanStr(String(raw.whyItMatters)),
+      audienceFit: Array.isArray(raw.audienceFit)
+        ? raw.audienceFit.filter((a: string) => a === "TRAVELLERS" || a === "TEACHERS")
+        : ["TRAVELLERS", "TEACHERS"],
+      suggestedKeywords: {
+        target: String(raw.suggestedKeywords?.target || raw.title),
+        secondary: Array.isArray(raw.suggestedKeywords?.secondary)
+          ? raw.suggestedKeywords.secondary.map(String)
+          : [],
+      },
+      sourceUrls: Array.isArray(raw.sourceUrls) ? raw.sourceUrls.map(String) : [],
+      sourceCount: Number(raw.sourceCount) || 0,
+      freshnessScore: Math.min(10, Math.max(1, Number(raw.freshnessScore) || 5)),
+      riskLevel: ["LOW", "MEDIUM", "HIGH"].includes(raw.riskLevel) ? raw.riskLevel : "MEDIUM",
+      fromSeedTitle: Boolean(raw.fromSeedTitle),
+    });
+  }
+
+  return topics;
 }

@@ -3,6 +3,8 @@
  * Uses the Gemini REST API directly (no SDK dependency needed).
  */
 
+import { z, type ZodSchema } from "zod";
+
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta";
 const MODEL = "gemini-2.5-flash";
 
@@ -71,23 +73,42 @@ export async function callGemini(prompt: string): Promise<GeminiResponse> {
     body: JSON.stringify(body),
   });
 
+  // Always read as text first to avoid JSON.parse crash on non-JSON responses
+  const rawBody = await response.text();
+
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Gemini API error (${response.status}): ${errorText}`);
+    throw new Error(`Gemini API error (${response.status}): ${rawBody.slice(0, 500)}`);
   }
 
-  const data = await response.json();
+  let data: Record<string, unknown>;
+  try {
+    data = JSON.parse(rawBody);
+  } catch {
+    throw new Error(
+      `Gemini returned non-JSON response: ${rawBody.slice(0, 200)}`
+    );
+  }
 
   // Extract text from the response
-  const candidate = data.candidates?.[0];
-  if (!candidate?.content?.parts?.[0]?.text) {
+  const candidate = (data.candidates as Array<Record<string, unknown>>)?.[0];
+  if (!candidate?.content || !(candidate.content as Record<string, unknown>).parts) {
+    // Check for prompt feedback / safety blocks
+    const feedback = data.promptFeedback as Record<string, unknown> | undefined;
+    const blockReason = feedback?.blockReason as string | undefined;
+    if (blockReason) {
+      throw new Error(`Gemini blocked the request (${blockReason}). Try rephrasing the topic.`);
+    }
     throw new Error("Gemini returned an empty or blocked response.");
   }
 
-  const text = candidate.content.parts[0].text;
+  const parts = (candidate.content as Record<string, unknown>).parts as Array<Record<string, unknown>>;
+  const text = parts[0]?.text as string | undefined;
+  if (!text) {
+    throw new Error("Gemini returned an empty or blocked response.");
+  }
 
   // Try to get token usage
-  const tokenCount = data.usageMetadata?.totalTokenCount ?? null;
+  const tokenCount = (data.usageMetadata as Record<string, unknown>)?.totalTokenCount as number ?? null;
 
   return {
     text,
@@ -143,29 +164,62 @@ export async function callGeminiText(prompt: string): Promise<GeminiResponse> {
     body: JSON.stringify(body),
   });
 
+  // Always read as text first to avoid JSON.parse crash on non-JSON responses
+  const rawBody = await response.text();
+
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Gemini API error (${response.status}): ${errorText}`);
+    throw new Error(`Gemini API error (${response.status}): ${rawBody.slice(0, 500)}`);
   }
 
-  const data = await response.json();
-  const candidate = data.candidates?.[0];
-  if (!candidate?.content?.parts?.[0]?.text) {
+  let data: Record<string, unknown>;
+  try {
+    data = JSON.parse(rawBody);
+  } catch {
+    throw new Error(
+      `Gemini returned non-JSON response: ${rawBody.slice(0, 200)}`
+    );
+  }
+
+  const candidate = (data.candidates as Array<Record<string, unknown>>)?.[0];
+  if (!candidate?.content || !(candidate.content as Record<string, unknown>).parts) {
+    const feedback = data.promptFeedback as Record<string, unknown> | undefined;
+    const blockReason = feedback?.blockReason as string | undefined;
+    if (blockReason) {
+      throw new Error(`Gemini blocked the request (${blockReason}). Try rephrasing the topic.`);
+    }
+    throw new Error("Gemini returned an empty or blocked response.");
+  }
+
+  const parts = (candidate.content as Record<string, unknown>).parts as Array<Record<string, unknown>>;
+  const text = parts[0]?.text as string | undefined;
+  if (!text) {
     throw new Error("Gemini returned an empty or blocked response.");
   }
 
   return {
-    text: candidate.content.parts[0].text,
-    tokenCount: data.usageMetadata?.totalTokenCount ?? null,
+    text,
+    tokenCount: (data.usageMetadata as Record<string, unknown>)?.totalTokenCount as number ?? null,
     modelUsed: MODEL,
   };
 }
 
 /**
  * Parse the JSON response from Gemini, handling potential issues.
+ * Strips markdown fences and attempts JSON.parse.
  */
 export function parseGeminiJson(text: string): Record<string, unknown> {
-  // Remove markdown code fences if present
+  const cleaned = stripJsonFences(text);
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    throw new Error("Gemini returned invalid JSON. Please try regenerating.");
+  }
+}
+
+/**
+ * Strip markdown code fences from a string.
+ */
+function stripJsonFences(text: string): string {
   let cleaned = text.trim();
   if (cleaned.startsWith("```json")) {
     cleaned = cleaned.slice(7);
@@ -175,12 +229,97 @@ export function parseGeminiJson(text: string): Record<string, unknown> {
   if (cleaned.endsWith("```")) {
     cleaned = cleaned.slice(0, -3);
   }
-  cleaned = cleaned.trim();
+  return cleaned.trim();
+}
+
+/**
+ * Call Gemini expecting JSON, validate with a Zod schema, and auto-repair once on failure.
+ *
+ * 1. Calls Gemini with responseMimeType=application/json
+ * 2. Strips markdown fences and parses JSON
+ * 3. Validates against the provided Zod schema
+ * 4. If parse or validation fails, sends a repair prompt (max 1 retry)
+ * 5. Returns the validated data or throws a clear error
+ */
+export async function callGeminiWithSchema<T>(
+  prompt: string,
+  schema: ZodSchema<T>,
+  schemaDescription?: string
+): Promise<{ data: T; tokenCount: number | null; modelUsed: string }> {
+  const fullPrompt = `${prompt}\n\nIMPORTANT: Return JSON only. No prose, no commentary, no markdown fences. Output must be a single valid JSON object.`;
+
+  const response = await callGemini(fullPrompt);
+  let totalTokens = response.tokenCount ?? 0;
+
+  // Attempt 1: parse and validate
+  const firstResult = tryParseAndValidate(response.text, schema);
+  if (firstResult.success) {
+    return { data: firstResult.data, tokenCount: totalTokens, modelUsed: response.modelUsed };
+  }
+
+  console.warn(`[Gemini] First JSON parse/validation failed: ${firstResult.error}. Attempting repair...`);
+
+  // Attempt 2: repair loop — send the raw text back to Gemini to fix
+  const repairPrompt = `The following text was supposed to be valid JSON${schemaDescription ? ` matching this schema: ${schemaDescription}` : ""}, but it failed to parse or validate.
+
+Raw text:
+${response.text.slice(0, 4000)}
+
+Error: ${firstResult.error}
+
+Fix it and return ONLY valid JSON. No prose, no explanation, no markdown fences. Just the corrected JSON object.`;
 
   try {
-    return JSON.parse(cleaned);
+    const repairResponse = await callGemini(repairPrompt);
+    totalTokens += repairResponse.tokenCount ?? 0;
+
+    const secondResult = tryParseAndValidate(repairResponse.text, schema);
+    if (secondResult.success) {
+      return { data: secondResult.data, tokenCount: totalTokens, modelUsed: response.modelUsed };
+    }
+
+    throw new Error(`Gemini repair failed validation: ${secondResult.error}`);
+  } catch (repairError) {
+    // If original parse succeeded but validation failed, try returning the raw parsed data
+    // to allow callers to handle partial data
+    const rawParsed = tryRawParse(response.text);
+    if (rawParsed) {
+      const lenient = schema.safeParse(rawParsed);
+      if (lenient.success) {
+        return { data: lenient.data, tokenCount: totalTokens, modelUsed: response.modelUsed };
+      }
+    }
+
+    throw new Error(
+      `Gemini returned invalid data after repair attempt. ${repairError instanceof Error ? repairError.message : "Please try regenerating."}`
+    );
+  }
+}
+
+function tryParseAndValidate<T>(
+  text: string,
+  schema: ZodSchema<T>
+): { success: true; data: T } | { success: false; error: string } {
+  const cleaned = stripJsonFences(text);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(cleaned);
   } catch {
-    throw new Error("Gemini returned invalid JSON. Please try regenerating.");
+    return { success: false, error: `Invalid JSON: ${cleaned.slice(0, 100)}...` };
+  }
+  const result = schema.safeParse(parsed);
+  if (result.success) {
+    return { success: true, data: result.data };
+  }
+  const issues = result.error.issues.slice(0, 3).map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
+  return { success: false, error: `Validation failed: ${issues}` };
+}
+
+function tryRawParse(text: string): unknown | null {
+  try {
+    return JSON.parse(stripJsonFences(text));
+  } catch {
+    return null;
   }
 }
 

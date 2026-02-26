@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { validateGeminiKey } from "@/lib/ai/geminiClient";
 import { getNewsSearchRatelimit } from "@/lib/rate-limit";
-import { discoverNewsTopics } from "@/lib/newsTopicDiscovery";
+import { discoverNewsTopics, discoverNewsTopicsFromTitle } from "@/lib/newsTopicDiscovery";
 import type { CityFocus, AudienceFocus } from "@/lib/newsTopicTypes";
 
 export const maxDuration = 60;
@@ -45,9 +45,15 @@ export async function POST(req: NextRequest) {
     const audienceFocus: AudienceFocus = VALID_AUDIENCE_FOCUS.includes(body.audienceFocus)
       ? body.audienceFocus
       : "both";
+    const seedTitle: string | undefined =
+      typeof body.seedTitle === "string" && body.seedTitle.trim().length > 0
+        ? body.seedTitle.trim()
+        : undefined;
 
-    // 5. Discover topics
-    const topics = await discoverNewsTopics(cityFocus, audienceFocus);
+    // 5. Discover topics (seeded or broad)
+    const topics = seedTitle
+      ? await discoverNewsTopicsFromTitle(seedTitle, cityFocus, audienceFocus)
+      : await discoverNewsTopics(cityFocus, audienceFocus);
 
     if (topics.length === 0) {
       return NextResponse.json(
@@ -63,4 +69,5 @@ export async function POST(req: NextRequest) {
       error instanceof Error ? error.message : "An unexpected error occurred.";
     return NextResponse.json({ error: message }, { status: 500 });
   }
+}
 }

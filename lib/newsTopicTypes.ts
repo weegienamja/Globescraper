@@ -21,6 +21,8 @@ export interface NewsTopic {
   sourceCount: number;
   freshnessScore: number;
   riskLevel: RiskLevel;
+  /** True if this topic was generated from a seed title */
+  fromSeedTitle?: boolean;
 }
 
 export interface NewsSearchRequest {

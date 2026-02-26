@@ -134,6 +134,10 @@ async function validateAndExpandSources(
     console.warn(`[News Gen] Topic "${topicTitle}" should have official sources but none were accessible.`);
   }
 
+  if (sources.length === 0) {
+    console.warn(`[News Gen] All ${seedUrls.length} seed URLs failed to fetch. Article will use seed URLs as references.`);
+  }
+
   return sources;
 }
 
@@ -235,8 +239,13 @@ function buildNewsGenerationPrompt(
   bulletText: string,
   officialSourceCount: number,
   sourceCount: number,
-  existingContentPrompt: string
+  existingContentPrompt: string,
+  seedUrls: string[] = []
 ): string {
+  // Build a fallback section from seed URLs when no bullet text is available
+  const seedUrlsSection = seedUrls.length > 0
+    ? `No page content could be fetched, but these source URLs were identified during topic discovery. Reference them in your sources array and write about the topic using your training knowledge:\n${seedUrls.map((u) => `- ${u}`).join("\n")}`
+    : "";
   const monthYear = new Date().toLocaleString("en-US", { month: "long", year: "numeric" });
   const audienceDesc = audienceFit.includes("TRAVELLERS") && audienceFit.includes("TEACHERS")
     ? "both travellers to Cambodia and English teachers living or planning to live there"
@@ -273,7 +282,7 @@ STRICT STYLE RULES:
 14. No text in alt text or captions should contain em dashes.
 
 RESEARCH DATA (paraphrase only, never copy):
-${bulletText || "No research data. Write based on knowledge but mark confidence LOW."}
+${bulletText || seedUrlsSection || "No research data available. Write based on your training knowledge but mark confidence LOW."}
 
 ${existingContentPrompt}
 
@@ -450,10 +459,10 @@ function validateNewsArticle(data: Record<string, unknown>): NewsArticleData {
     }
   }
 
-  // Validate sources exist
+  // Validate sources exist (warn but don't fail; fallback sources will be injected by caller)
   const sources = Array.isArray(data.sources) ? data.sources : [];
   if (sources.length === 0) {
-    throw new Error("Generated article has no sources. Sources are required for news content.");
+    console.warn("[News Gen] Gemini returned no sources in JSON. Caller will inject fallback sources.");
   }
   for (const source of sources) {
     if (!source.url) {
@@ -618,7 +627,8 @@ export async function POST(req: NextRequest) {
         bulletText,
         officialCount,
         fetchedSources.length,
-        existingContentPrompt
+        existingContentPrompt,
+        validSeedUrls
       );
 
       const geminiResponse = await callGemini(generationPrompt);
@@ -627,6 +637,27 @@ export async function POST(req: NextRequest) {
       // Parse and validate
       const parsed = parseGeminiJson(geminiResponse.text);
       const articleData = validateNewsArticle(parsed);
+
+      // If Gemini returned no sources, inject fallback sources from fetched or seed URLs
+      if (articleData.sources.length === 0) {
+        if (fetchedSources.length > 0) {
+          articleData.sources = fetchedSources.map((s) => ({
+            title: s.title || "Source article",
+            url: s.url,
+            publisher: s.publisher,
+          }));
+        } else if (validSeedUrls.length > 0) {
+          articleData.sources = validSeedUrls.map((url) => ({
+            title: "Source article",
+            url,
+            publisher: getPublisherName(url),
+          }));
+        }
+        // Force LOW confidence when sources had to be injected
+        confidence = "LOW";
+        articleData.confidenceLevel = "LOW";
+        console.warn(`[News Gen] Injected ${articleData.sources.length} fallback sources.`);
+      }
 
       if (articleData.confidenceLevel === "LOW") {
         confidence = "LOW";

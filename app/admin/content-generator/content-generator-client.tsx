@@ -55,6 +55,7 @@ interface NewsTopic {
   sourceCount: number;
   freshnessScore: number;
   riskLevel: "LOW" | "MEDIUM" | "HIGH";
+  fromSeedTitle?: boolean;
 }
 
 interface NewsGenResult {
@@ -110,6 +111,41 @@ export default function ContentGeneratorClient() {
   const [newsResult, setNewsResult] = useState<NewsGenResult | null>(null);
   const [newsSearchError, setNewsSearchError] = useState("");
 
+  /* ── Generated Title state ── */
+  const [generatedTitle, setGeneratedTitle] = useState("");
+  const [titleGenState, setTitleGenState] = useState<"idle" | "generating" | "done" | "error">("idle");
+  const [titleGenStatus, setTitleGenStatus] = useState("");
+  const [titleKeywords, setTitleKeywords] = useState<string[]>([]);
+
+  /* ── News: generate title ── */
+  async function handleGenerateTitle() {
+    setTitleGenState("generating");
+    setTitleGenStatus("");
+    setTitleKeywords([]);
+
+    try {
+      const res = await fetch("/api/admin/content-generator/news/generate-title", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cityFocus: newsCityFocus,
+          audienceFocus: newsAudienceFocus,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Title generation failed.");
+
+      setGeneratedTitle(data.title || "");
+      setTitleKeywords(data.keywords || []);
+      setTitleGenStatus("Based on your existing posts and current Cambodia interest.");
+      setTitleGenState("done");
+    } catch (err) {
+      setTitleGenState("error");
+      setTitleGenStatus(err instanceof Error ? err.message : "An unexpected error occurred.");
+    }
+  }
+
   /* ── News: search topics ── */
   async function handleNewsSearch() {
     setNewsSearchState("searching");
@@ -127,6 +163,7 @@ export default function ContentGeneratorClient() {
         body: JSON.stringify({
           cityFocus: newsCityFocus,
           audienceFocus: newsAudienceFocus,
+          ...(generatedTitle.trim() ? { seedTitle: generatedTitle.trim() } : {}),
         }),
       });
 
@@ -215,6 +252,10 @@ export default function ContentGeneratorClient() {
     setNewsError("");
     setNewsSearchError("");
     setNewsResult(null);
+    setGeneratedTitle("");
+    setTitleGenState("idle");
+    setTitleGenStatus("");
+    setTitleKeywords([]);
   }
 
   async function handleGenerate() {
@@ -593,6 +634,45 @@ export default function ContentGeneratorClient() {
             </div>
           </div>
 
+          {/* Generated Title field group */}
+          <div className="cgen__news-title-group">
+            <div className="cgen__field cgen__field--full">
+              <label className="cgen__label" htmlFor="news-generated-title">
+                Generated Title
+              </label>
+              <div className="cgen__news-title-row">
+                <input
+                  id="news-generated-title"
+                  type="text"
+                  className="cgen__input"
+                  value={generatedTitle}
+                  onChange={(e) => setGeneratedTitle(e.target.value)}
+                  placeholder="Click Generate Title to get an SEO opportunity topic…"
+                  disabled={newsSearchState === "searching" || newsGenState === "generating" || titleGenState === "generating"}
+                />
+                <button
+                  className="btn btn--secondary"
+                  onClick={handleGenerateTitle}
+                  disabled={titleGenState === "generating" || newsSearchState === "searching" || newsGenState === "generating"}
+                >
+                  {titleGenState === "generating" ? "Generating..." : "Generate Title"}
+                </button>
+              </div>
+              {titleGenStatus && (
+                <span className={`cgen__hint ${titleGenState === "error" ? "cgen__hint--error" : ""}`}>
+                  {titleGenStatus}
+                </span>
+              )}
+              {titleKeywords.length > 0 && (
+                <div className="cgen__news-keyword-chips">
+                  {titleKeywords.map((kw) => (
+                    <span key={kw} className="cgen__chip cgen__chip--keyword">{kw}</span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
           <div className="cgen__actions">
             <button
               className="btn btn--primary"
@@ -655,11 +735,17 @@ export default function ContentGeneratorClient() {
                   <div className="cgen__news-topic-top">
                     <span className="cgen__news-topic-title">{t.title}</span>
                     <div className="cgen__news-topic-badges">
+                      {t.fromSeedTitle && (
+                        <span className="cgen__chip cgen__chip--seed">From generated title</span>
+                      )}
                       <span className={`cgen__badge cgen__badge--risk-${t.riskLevel.toLowerCase()}`}>
                         {t.riskLevel}
                       </span>
                       <span className="cgen__news-freshness" title="Freshness score">
                         {t.freshnessScore}/10
+                      </span>
+                      <span className={`cgen__badge ${t.sourceCount >= 3 ? "cgen__badge--confidence-high" : t.sourceCount >= 2 ? "cgen__badge--confidence-med" : "cgen__badge--confidence-low"}`} title="Confidence based on source count">
+                        {t.sourceCount >= 3 ? "HIGH" : t.sourceCount >= 2 ? "MED" : "LOW"}
                       </span>
                     </div>
                   </div>
@@ -670,6 +756,13 @@ export default function ContentGeneratorClient() {
                     <span>{t.audienceFit.join(", ")}</span>
                     <span className="cgen__news-topic-keyword">{t.suggestedKeywords.target}</span>
                   </div>
+                  {t.suggestedKeywords.secondary.length > 0 && (
+                    <div className="cgen__news-keyword-chips">
+                      {t.suggestedKeywords.secondary.slice(0, 5).map((kw) => (
+                        <span key={kw} className="cgen__chip cgen__chip--keyword">{kw}</span>
+                      ))}
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>
