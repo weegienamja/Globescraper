@@ -122,7 +122,16 @@ export function CampaignBuilder({ initialCampaigns, eligibleCount }: Props) {
 
   function getEditorContent(): string {
     if (isHtmlMode) return htmlContent;
-    return editorRef.current?.innerHTML || "";
+    // If the editor ref is available (step 2 rendered), read live content.
+    // Otherwise fall back to htmlContent state (step 3/4 where editor is unmounted).
+    return editorRef.current?.innerHTML || htmlContent;
+  }
+
+  /** Persist the visual editor's live content into state before leaving step 2 */
+  function syncEditorToState() {
+    if (!isHtmlMode && editorRef.current) {
+      setHtmlContent(editorRef.current.innerHTML);
+    }
   }
 
   function resetBuilder() {
@@ -431,7 +440,7 @@ export function CampaignBuilder({ initialCampaigns, eligibleCount }: Props) {
               <button
                 key={s.n}
                 className={`em-steps__item ${step === s.n ? "em-steps__item--active" : ""} ${step > s.n ? "em-steps__item--done" : ""}`}
-                onClick={() => setStep(s.n)}
+                onClick={() => { if (step === 2) syncEditorToState(); setStep(s.n); }}
               >
                 <span className="em-steps__num">{step > s.n ? "✓" : s.n}</span>
                 {s.label}
@@ -650,8 +659,8 @@ export function CampaignBuilder({ initialCampaigns, eligibleCount }: Props) {
               </div>
 
               <div className="em-step-nav">
-                <button className="btn btn--outline btn--sm" onClick={() => setStep(1)}>← Audience</button>
-                <button className="btn btn--primary btn--sm" onClick={() => setStep(3)}>Next: Options →</button>
+                <button className="btn btn--outline btn--sm" onClick={() => { syncEditorToState(); setStep(1); }}>← Audience</button>
+                <button className="btn btn--primary btn--sm" onClick={() => { syncEditorToState(); setStep(3); }}>Next: Options →</button>
               </div>
             </div>
           )}
