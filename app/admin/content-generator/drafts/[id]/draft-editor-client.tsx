@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 interface DraftData {
   id: string;
@@ -87,49 +89,6 @@ export default function DraftEditorClient({ draft }: Props) {
     } finally {
       setPublishing(false);
     }
-  }
-
-  /**
-   * Simple markdown to HTML for preview.
-   * Converts headings, bold, italic, links, bullets, tables, and line breaks.
-   */
-  function renderMarkdown(md: string): string {
-    let html = md
-      // Headings
-      .replace(/^######\s+(.+)$/gm, "<h6>$1</h6>")
-      .replace(/^#####\s+(.+)$/gm, "<h5>$1</h5>")
-      .replace(/^####\s+(.+)$/gm, "<h4>$1</h4>")
-      .replace(/^###\s+(.+)$/gm, "<h3>$1</h3>")
-      .replace(/^##\s+(.+)$/gm, "<h2>$1</h2>")
-      .replace(/^#\s+(.+)$/gm, "<h1>$1</h1>")
-      // Bold
-      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-      // Italic
-      .replace(/\*(.+?)\*/g, "<em>$1</em>")
-      // Links
-      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
-      // Bullet points
-      .replace(/^[-*]\s+(.+)$/gm, "<li>$1</li>")
-      // Table handling (basic)
-      .replace(/\|(.+)\|/g, (match) => {
-        if (match.includes("---")) return "";
-        const cells = match
-          .split("|")
-          .filter((c) => c.trim())
-          .map((c) => `<td>${c.trim()}</td>`)
-          .join("");
-        return `<tr>${cells}</tr>`;
-      })
-      // Line breaks
-      .replace(/\n\n/g, "</p><p>")
-      .replace(/\n/g, "<br/>");
-
-    // Wrap list items
-    html = html.replace(/(<li>.*?<\/li>)/gs, "<ul>$1</ul>");
-    // Remove duplicate ul wraps
-    html = html.replace(/<\/ul>\s*<ul>/g, "");
-
-    return `<div class="blog-content"><p>${html}</p></div>`;
   }
 
   const fmtDate = (d: string) =>
@@ -252,10 +211,11 @@ export default function DraftEditorClient({ draft }: Props) {
 
       {showPreview ? (
         <div className="cgen__preview-card">
-          <div
-            className="blog-content"
-            dangerouslySetInnerHTML={{ __html: renderMarkdown(markdown) }}
-          />
+          <div className="blog-content">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {markdown}
+            </ReactMarkdown>
+          </div>
         </div>
       ) : (
         <div className="cgen__editor-card">
