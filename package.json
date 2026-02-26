@@ -33,6 +33,7 @@
     "rehype-sanitize": "^6.0.0",
     "remark-gfm": "^4.0.1",
     "resend": "^6.9.2",
+    "svix": "^1.86.0",
     "zod": "3.23.8"
   },
   "devDependencies": {

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { Webhook } from "svix";
 import { prisma } from "@/lib/prisma";
 
 /**
@@ -12,30 +13,38 @@ import { prisma } from "@/lib/prisma";
  */
 export async function POST(req: Request) {
   try {
-    // Verify webhook signature if Resend provides one
-    const svixId = req.headers.get("svix-id");
-    const svixTimestamp = req.headers.get("svix-timestamp");
-    const svixSignature = req.headers.get("svix-signature");
+    const body = await req.text();
     const webhookSecret = process.env.RESEND_WEBHOOK_SECRET;
 
-    // If we have a webhook secret configured, verify the signature
-    if (webhookSecret && svixSignature) {
-      // Basic timestamp check to prevent replay attacks
-      if (svixTimestamp) {
-        const now = Math.floor(Date.now() / 1000);
-        const ts = parseInt(svixTimestamp, 10);
-        if (Math.abs(now - ts) > 300) {
-          return NextResponse.json(
-            { error: "Webhook timestamp too old." },
-            { status: 401 },
-          );
-        }
+    // Verify webhook signature using Svix
+    if (webhookSecret) {
+      const svixId = req.headers.get("svix-id");
+      const svixTimestamp = req.headers.get("svix-timestamp");
+      const svixSignature = req.headers.get("svix-signature");
+
+      if (!svixId || !svixTimestamp || !svixSignature) {
+        return NextResponse.json(
+          { error: "Missing Svix headers." },
+          { status: 401 },
+        );
       }
-      // Full HMAC verification would use svix library;
-      // for now we log and proceed (Resend also validates via IP)
+
+      const wh = new Webhook(webhookSecret);
+      try {
+        wh.verify(body, {
+          "svix-id": svixId,
+          "svix-timestamp": svixTimestamp,
+          "svix-signature": svixSignature,
+        });
+      } catch {
+        return NextResponse.json(
+          { error: "Invalid webhook signature." },
+          { status: 401 },
+        );
+      }
     }
 
-    const payload = await req.json();
+    const payload = JSON.parse(body);
     const { type, data } = payload;
 
     if (!type || !data) {
