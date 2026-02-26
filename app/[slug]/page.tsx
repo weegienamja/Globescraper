@@ -109,12 +109,12 @@ export default async function PostPage({ params }: { params: { slug: string } })
   const staticPosts = getPostsMeta();
   const aiPosts = await getPublishedAiPosts();
   const slugSet = new Set<string>();
-  const recommended: Array<{ slug: string; title: string; description: string; isAiGenerated?: boolean }> = [];
+  const recommended: Array<{ slug: string; title: string; description: string; isAiGenerated?: boolean; heroImageUrl?: string | null }> = [];
 
   for (const p of aiPosts) {
     if (p.slug !== slug && !slugSet.has(p.slug)) {
       slugSet.add(p.slug);
-      recommended.push({ slug: p.slug, title: p.title, description: p.description, isAiGenerated: true });
+      recommended.push({ slug: p.slug, title: p.title, description: p.description, isAiGenerated: true, heroImageUrl: p.heroImageUrl });
     }
   }
   for (const p of staticPosts) {

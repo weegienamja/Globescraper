@@ -7,6 +7,7 @@ export interface RecommendedPost {
   title: string;
   description: string;
   isAiGenerated?: boolean;
+  heroImageUrl?: string | null;
 }
 
 interface Props {
@@ -35,11 +36,12 @@ export function RecommendedPosts({ posts }: Props) {
           >
             <div className="recommended__img-wrap">
               <Image
-                src={getHeroImage(p.slug)}
+                src={p.heroImageUrl || getHeroImage(p.slug)}
                 alt={cleanTitle(p.title)}
                 width={120}
                 height={68}
                 className="recommended__img"
+                unoptimized={!!p.heroImageUrl}
               />
             </div>
             <div className="recommended__body">

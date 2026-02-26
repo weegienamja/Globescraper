@@ -42,13 +42,14 @@ export default async function BlogIndex() {
     description: string;
     date: string;
     isAiGenerated?: boolean;
+    heroImageUrl?: string | null;
   }> = [];
 
   // AI posts first (they're newer)
   for (const p of aiPosts) {
     if (!slugSet.has(p.slug)) {
       slugSet.add(p.slug);
-      allPosts.push({ ...p, isAiGenerated: true });
+      allPosts.push({ ...p, isAiGenerated: true, heroImageUrl: p.heroImageUrl });
     }
   }
   // Then static posts
@@ -69,11 +70,12 @@ export default async function BlogIndex() {
             <Link href={`/${p.slug}`} className="card card--link">
               <div className="card__image-wrapper">
                 <Image
-                  src={getHeroImage(p.slug)}
+                  src={p.heroImageUrl || getHeroImage(p.slug)}
                   alt={p.title.replace(" | GlobeScraper", "")}
                   width={160}
                   height={90}
                   className="card__image"
+                  unoptimized={!!p.heroImageUrl}
                 />
               </div>
               <div className="card__body">
