@@ -152,7 +152,8 @@ export default async function PostPage({ params }: { params: { slug: string } })
             width={980}
             height={520}
             priority
-            style={{ width: "100%", height: "auto", borderRadius: "var(--radius)", marginBottom: 24 }}
+            className="post-hero"
+            style={{ width: "100%", maxWidth: "100%", height: "auto", borderRadius: "var(--radius)", marginBottom: 24 }}
           />
           {isAi ? (
             <MarkdownContent markdown={stripLeadingHeroImage(aiPost.markdown)} />
