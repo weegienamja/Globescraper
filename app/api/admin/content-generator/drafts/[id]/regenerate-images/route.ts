@@ -9,7 +9,7 @@ import {
   type GeneratedImage,
 } from "@/lib/ai/imageGen";
 
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 /**
  * POST /api/admin/content-generator/drafts/[id]/regenerate-images

@@ -207,11 +207,20 @@ async function generateImageWithImagen(
     },
   };
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 45_000);
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
 
   if (!response.ok) {
     const errorText = await response.text();
@@ -267,25 +276,26 @@ export async function generateAndUploadImages(
   specs: ImageSpec[],
   slugPrefix: string
 ): Promise<GeneratedImage[]> {
-  const results: GeneratedImage[] = [];
-
-  for (const spec of specs) {
-    try {
+  // Generate all images in parallel for speed
+  const settled = await Promise.allSettled(
+    specs.map(async (spec) => {
       const { base64, mimeType } = await generateImageWithImagen(spec.prompt);
-      const filename = `${slugPrefix}-${spec.kind.toLowerCase()}-${Date.now()}`;
+      const filename = `${slugPrefix}-${spec.kind.toLowerCase()}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
       const storageUrl = await uploadToBlob(base64, mimeType, filename);
+      return { ...spec, storageUrl, mimeType } as GeneratedImage;
+    })
+  );
 
-      results.push({
-        ...spec,
-        storageUrl,
-        mimeType,
-      });
-    } catch (error) {
+  const results: GeneratedImage[] = [];
+  for (let i = 0; i < settled.length; i++) {
+    const outcome = settled[i];
+    if (outcome.status === "fulfilled") {
+      results.push(outcome.value);
+    } else {
       console.error(
-        `[ImageGen] Failed to generate ${spec.kind} image:`,
-        error instanceof Error ? error.message : error
+        `[ImageGen] Failed to generate ${specs[i].kind} image:`,
+        outcome.reason instanceof Error ? outcome.reason.message : outcome.reason
       );
-      // Continue with other images, don't break the pipeline
     }
   }
 
