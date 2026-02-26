@@ -45,17 +45,18 @@ export default async function MessagesPage({
 
     if (!connected) {
       return (
-        <div className="messages-page">
-          <h1>Messages</h1>
-          <div className="empty-state">
-            <div className="empty-state__icon">🔒</div>
-            <p className="empty-state__title">Not connected</p>
-            <p className="empty-state__text">
-              You must be connected with this user to send messages.
-            </p>
-            <Link href="/dashboard/requests" className="btn btn--outline btn--sm">
-              View connections
-            </Link>
+        <div className="chat-container">
+          <div className="chat-card" style={{ padding: "48px 24px" }}>
+            <div className="chat-empty">
+              <div className="chat-empty__icon">🔒</div>
+              <p className="chat-empty__title">Not connected</p>
+              <p className="chat-empty__text">
+                You must be connected with this user to send messages.
+              </p>
+              <Link href="/dashboard/requests" className="btn btn--outline btn--sm" style={{ marginTop: 12 }}>
+                View connections
+              </Link>
+            </div>
           </div>
         </div>
       );
@@ -192,114 +193,111 @@ export default async function MessagesPage({
   }
 
   return (
-    <div className="messages-layout">
-      {/* ── Left sidebar: connections ── */}
-      <aside className="messages-sidebar">
-        <h2 className="messages-sidebar__title">Connections</h2>
-        {connections.length === 0 && conversations.length === 0 ? (
-          <p className="messages-sidebar__empty">
-            No connections yet.{" "}
-            <Link href="/community">Browse community</Link>
-          </p>
-        ) : connections.length === 0 ? (
-          <p className="messages-sidebar__empty">All connections have conversations.</p>
-        ) : (
-          <div className="messages-sidebar__list">
-            {connections.map((user) => (
-              <Link
-                key={user.id}
-                href={`/dashboard/messages?to=${user.id}`}
-                className="messages-sidebar__item"
-              >
-                {user.profile?.avatarUrl ? (
-                  <Image
-                    src={user.profile.avatarUrl}
-                    alt={user.profile.displayName ?? user.name ?? ""}
-                    width={36}
-                    height={36}
-                    className="messages-sidebar__avatar-img"
-                  />
-                ) : (
-                  <div className="messages-sidebar__avatar-placeholder">
-                    {(user.profile?.displayName?.[0] ?? user.name?.[0] ?? "?").toUpperCase()}
-                  </div>
-                )}
-                <span className="messages-sidebar__name">
-                  {user.profile?.displayName ?? user.name ?? "Unknown"}
-                </span>
-              </Link>
-            ))}
+    <div className="chat-container">
+      <div className="chat-inbox">
+        {/* ── Sidebar: conversations + connections ── */}
+        <aside className="chat-sidebar">
+          <div className="chat-sidebar__header">
+            <div className="chat-sidebar__title-row">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              <h1 className="chat-sidebar__title">Messages</h1>
+            </div>
           </div>
-        )}
-      </aside>
 
-      {/* ── Main: conversations ── */}
-      <main className="messages-main">
-        <h1>Messages</h1>
+          <div className="chat-sidebar__list">
+            {conversations.length === 0 && connections.length === 0 ? (
+              <div className="chat-sidebar__empty">
+                <p>No conversations yet.</p>
+                <Link href="/community" className="btn btn--primary btn--sm">Browse community</Link>
+              </div>
+            ) : (
+              <>
+                {conversations.map((conv) => {
+                  const other = conv.others[0];
+                  if (!other) return null;
+                  const displayName = other.profile?.displayName ?? other.name ?? "Unknown";
+                  return (
+                    <Link
+                      key={conv.id}
+                      href={`/dashboard/messages/${conv.id}`}
+                      className={`chat-sidebar__item ${conv.hasUnread ? "chat-sidebar__item--unread" : ""}`}
+                    >
+                      <div className="chat-sidebar__item-avatar">
+                        {other.profile?.avatarUrl ? (
+                          <Image src={other.profile.avatarUrl} alt={displayName} width={44} height={44} className="chat-sidebar__avatar-img" />
+                        ) : (
+                          <div className="chat-sidebar__avatar-ph">
+                            {(displayName[0] ?? "?").toUpperCase()}
+                          </div>
+                        )}
+                        {conv.hasUnread && <span className="chat-sidebar__unread-dot" />}
+                      </div>
+                      <div className="chat-sidebar__item-body">
+                        <div className="chat-sidebar__item-top">
+                          <span className="chat-sidebar__item-name">{displayName}</span>
+                          {conv.lastMsg && (
+                            <span className="chat-sidebar__item-time">{timeAgo(conv.lastMsg.createdAt)}</span>
+                          )}
+                        </div>
+                        {conv.lastMsg && (
+                          <p className="chat-sidebar__item-preview">
+                            {conv.lastMsg.senderId === userId ? "You: " : ""}
+                            {conv.lastMsg.body.length > 60 ? conv.lastMsg.body.slice(0, 60) + "…" : conv.lastMsg.body}
+                          </p>
+                        )}
+                      </div>
+                    </Link>
+                  );
+                })}
 
-        {conversations.length === 0 ? (
-          <div className="empty-state">
-            <div className="empty-state__icon">💬</div>
-            <p className="empty-state__title">No messages yet</p>
-            <p className="empty-state__text">
-              {connections.length > 0
-                ? "Select a connection from the sidebar to start a conversation."
-                : <>Connect with other teachers in the <Link href="/community">community</Link>, then come back to message them.</>}
+                {connections.length > 0 && (
+                  <>
+                    <div className="chat-sidebar__section-label">Start a conversation</div>
+                    {connections.map((user) => {
+                      const displayName = user.profile?.displayName ?? user.name ?? "Unknown";
+                      return (
+                        <Link
+                          key={user.id}
+                          href={`/dashboard/messages?to=${user.id}`}
+                          className="chat-sidebar__item"
+                        >
+                          <div className="chat-sidebar__item-avatar">
+                            {user.profile?.avatarUrl ? (
+                              <Image src={user.profile.avatarUrl} alt={displayName} width={44} height={44} className="chat-sidebar__avatar-img" />
+                            ) : (
+                              <div className="chat-sidebar__avatar-ph">
+                                {(displayName[0] ?? "?").toUpperCase()}
+                              </div>
+                            )}
+                          </div>
+                          <div className="chat-sidebar__item-body">
+                            <span className="chat-sidebar__item-name">{displayName}</span>
+                          </div>
+                        </Link>
+                      );
+                    })}
+                  </>
+                )}
+              </>
+            )}
+          </div>
+        </aside>
+
+        {/* ── Main area: placeholder ── */}
+        <main className="chat-inbox__main">
+          <div className="chat-empty">
+            <div className="chat-empty__icon">💬</div>
+            <p className="chat-empty__title">Your messages</p>
+            <p className="chat-empty__text">
+              {conversations.length > 0
+                ? "Select a conversation to start chatting."
+                : connections.length > 0
+                  ? "Pick a connection to start a conversation."
+                  : <>Connect with teachers in the <Link href="/community">community</Link> first.</>}
             </p>
           </div>
-        ) : (
-          <div className="conversations-list">
-            {conversations.map((conv) => {
-              const other = conv.others[0];
-              if (!other) return null;
-              return (
-                <Link
-                  key={conv.id}
-                  href={`/dashboard/messages/${conv.id}`}
-                  className={`conversation-card ${conv.hasUnread ? "conversation-card--unread" : ""}`}
-                >
-                  <div className="conversation-card__avatar">
-                    {other.profile?.avatarUrl ? (
-                      <Image
-                        src={other.profile.avatarUrl}
-                        alt={other.profile?.displayName ?? other.name ?? ""}
-                        width={44}
-                        height={44}
-                        className="conversation-card__avatar-img"
-                      />
-                    ) : (
-                      <div className="conversation-card__avatar-placeholder">
-                        {(other.profile?.displayName?.[0] ?? other.name?.[0] ?? "?").toUpperCase()}
-                      </div>
-                    )}
-                    {conv.hasUnread && <span className="conversation-card__unread-dot" />}
-                  </div>
-                  <div className="conversation-card__content">
-                    <div className="conversation-card__header">
-                      <span className="conversation-card__name">
-                        {other.profile?.displayName ?? other.name ?? "Unknown"}
-                      </span>
-                      {conv.lastMsg && (
-                        <span className="conversation-card__time">
-                          {timeAgo(conv.lastMsg.createdAt)}
-                        </span>
-                      )}
-                    </div>
-                    {conv.lastMsg && (
-                      <p className="conversation-card__preview">
-                        {conv.lastMsg.senderId === userId ? "You: " : ""}
-                        {conv.lastMsg.body.length > 80
-                          ? conv.lastMsg.body.slice(0, 80) + "…"
-                          : conv.lastMsg.body}
-                      </p>
-                    )}
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-        )}
-      </main>
+        </main>
+      </div>
     </div>
   );
 }
