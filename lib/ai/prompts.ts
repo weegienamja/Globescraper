@@ -96,6 +96,7 @@ MARKDOWN STRUCTURE (in order):
 DO NOT include an "About the Author" section.
 DO NOT include a "Sources" section in the markdown. Sources are tracked separately.
 DO NOT include any HTML tags like <details>, <summary>, or any other raw HTML. Use only standard Markdown.
+DO NOT include any image markdown (![...](...)) in the output. Images are generated and injected separately. Never invent or hallucinate image URLs.
 
 FAQ rules:
 - 5 questions
@@ -195,9 +196,10 @@ REWRITE RULES:
 6. Keep all Markdown formatting (headings, lists, tables, links) exactly the same.
 7. Remove any HTML blocks (like <details>, <summary>) entirely. Replace them with plain Markdown.
 8. Remove any "About the Author" section if present.
-9. Do not add or remove any sections.
-10. Never use these words: ${BANNED_WORDS.join(", ")}.
-11. Keep total word count within 5% of the original.
+9. Remove any image markdown lines (![...](...)) entirely. Images are handled separately.
+10. Do not add or remove any sections (other than those specified above for removal).
+11. Never use these words: ${BANNED_WORDS.join(", ")}.
+12. Keep total word count within 5% of the original.
 
 Return ONLY the rewritten Markdown. No JSON wrapping. No code fences.
 `.trim();
