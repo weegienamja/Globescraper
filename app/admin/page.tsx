@@ -119,13 +119,20 @@ export default async function AdminPage() {
         <SignOutButton />
       </div>
 
-      {/* ── AI Blog Generator ────────────────────────────── */}
-      <div className="admin__section">
-        <Link href="/admin/content-generator" className="admin__cgen-btn">
+      {/* ── AI Blog Tools ─────────────────────────────── */}
+      <div className="admin__section" style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
+        <Link href="/admin/content-generator" className="admin__cgen-btn" style={{ flex: 1, minWidth: "260px" }}>
           <span className="admin__cgen-btn-icon">✍️</span>
           <span className="admin__cgen-btn-text">
             <strong>AI Blog Generator</strong>
             <small>Create SEO articles for Phnom Penh and Siem Reap</small>
+          </span>
+        </Link>
+        <Link href="/admin/blog" className="admin__cgen-btn" style={{ flex: 1, minWidth: "260px" }}>
+          <span className="admin__cgen-btn-icon">🛠️</span>
+          <span className="admin__cgen-btn-text">
+            <strong>Blog Toolkit</strong>
+            <small>SEO checker, editor, republish &amp; manage published posts</small>
           </span>
         </Link>
       </div>
