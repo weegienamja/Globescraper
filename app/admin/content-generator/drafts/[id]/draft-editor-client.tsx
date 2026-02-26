@@ -1,0 +1,329 @@
+"use client";
+
+import { useState } from "react";
+import Link from "next/link";
+
+interface DraftData {
+  id: string;
+  title: string;
+  slug: string;
+  city: string;
+  topic: string;
+  audience: string;
+  targetKeyword: string | null;
+  secondaryKeywords: string | null;
+  metaTitle: string;
+  metaDescription: string;
+  markdown: string;
+  status: string;
+  confidence: string;
+  createdAt: string;
+  updatedAt: string;
+  sources: Array<{
+    id: string;
+    url: string;
+    title: string | null;
+    publisher: string | null;
+    fetchedAt: string;
+  }>;
+  run: {
+    modelUsed: string | null;
+    tokenUsage: number | null;
+    status: string;
+  } | null;
+}
+
+interface Props {
+  draft: DraftData;
+}
+
+export default function DraftEditorClient({ draft }: Props) {
+  const [markdown, setMarkdown] = useState(draft.markdown);
+  const [metaTitle, setMetaTitle] = useState(draft.metaTitle);
+  const [metaDescription, setMetaDescription] = useState(draft.metaDescription);
+  const [title, setTitle] = useState(draft.title);
+  const [saving, setSaving] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [saveMsg, setSaveMsg] = useState("");
+  const [published, setPublished] = useState(draft.status === "PUBLISHED");
+  const [showPreview, setShowPreview] = useState(true);
+
+  async function handleSave() {
+    setSaving(true);
+    setSaveMsg("");
+    try {
+      const res = await fetch(`/api/admin/content-generator/drafts/${draft.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, metaTitle, metaDescription, markdown }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Save failed.");
+      }
+      setSaveMsg("Saved successfully.");
+    } catch (err) {
+      setSaveMsg(err instanceof Error ? err.message : "Save failed.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handlePublish() {
+    setPublishing(true);
+    setSaveMsg("");
+    try {
+      const res = await fetch(`/api/admin/content-generator/drafts/${draft.id}/publish`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Publish failed.");
+      }
+      setPublished(true);
+      setSaveMsg("Published successfully.");
+    } catch (err) {
+      setSaveMsg(err instanceof Error ? err.message : "Publish failed.");
+    } finally {
+      setPublishing(false);
+    }
+  }
+
+  /**
+   * Simple markdown to HTML for preview.
+   * Converts headings, bold, italic, links, bullets, tables, and line breaks.
+   */
+  function renderMarkdown(md: string): string {
+    let html = md
+      // Headings
+      .replace(/^######\s+(.+)$/gm, "<h6>$1</h6>")
+      .replace(/^#####\s+(.+)$/gm, "<h5>$1</h5>")
+      .replace(/^####\s+(.+)$/gm, "<h4>$1</h4>")
+      .replace(/^###\s+(.+)$/gm, "<h3>$1</h3>")
+      .replace(/^##\s+(.+)$/gm, "<h2>$1</h2>")
+      .replace(/^#\s+(.+)$/gm, "<h1>$1</h1>")
+      // Bold
+      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+      // Italic
+      .replace(/\*(.+?)\*/g, "<em>$1</em>")
+      // Links
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
+      // Bullet points
+      .replace(/^[-*]\s+(.+)$/gm, "<li>$1</li>")
+      // Table handling (basic)
+      .replace(/\|(.+)\|/g, (match) => {
+        if (match.includes("---")) return "";
+        const cells = match
+          .split("|")
+          .filter((c) => c.trim())
+          .map((c) => `<td>${c.trim()}</td>`)
+          .join("");
+        return `<tr>${cells}</tr>`;
+      })
+      // Line breaks
+      .replace(/\n\n/g, "</p><p>")
+      .replace(/\n/g, "<br/>");
+
+    // Wrap list items
+    html = html.replace(/(<li>.*?<\/li>)/gs, "<ul>$1</ul>");
+    // Remove duplicate ul wraps
+    html = html.replace(/<\/ul>\s*<ul>/g, "");
+
+    return `<div class="blog-content"><p>${html}</p></div>`;
+  }
+
+  const fmtDate = (d: string) =>
+    new Date(d).toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+  return (
+    <div className="cgen">
+      <div className="cgen__header">
+        <h1 className="cgen__title">Edit Draft</h1>
+        <div className="cgen__nav">
+          <Link href="/admin/content-generator/drafts" className="cgen__back-link">
+            Back to Drafts
+          </Link>
+          <Link href="/admin/content-generator" className="btn btn--secondary">
+            Generator
+          </Link>
+        </div>
+      </div>
+
+      {/* Status bar */}
+      <div className="cgen__status-bar">
+        <span className={`cgen__badge cgen__badge--${published ? "published" : "draft"}`}>
+          {published ? "PUBLISHED" : "DRAFT"}
+        </span>
+        {draft.confidence === "LOW" && (
+          <span className="cgen__badge cgen__badge--low">LOW CONFIDENCE</span>
+        )}
+        <span className="cgen__status-meta">
+          Created: {fmtDate(draft.createdAt)}
+        </span>
+        {draft.run && (
+          <span className="cgen__status-meta">
+            Model: {draft.run.modelUsed || "unknown"}
+            {draft.run.tokenUsage ? ` | Tokens: ${draft.run.tokenUsage}` : ""}
+          </span>
+        )}
+      </div>
+
+      {/* Metadata fields */}
+      <div className="cgen__form-card">
+        <div className="cgen__form-grid">
+          <div className="cgen__field cgen__field--full">
+            <label className="cgen__label" htmlFor="edit-title">
+              Title
+            </label>
+            <input
+              id="edit-title"
+              type="text"
+              className="cgen__input"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+            />
+          </div>
+          <div className="cgen__field">
+            <label className="cgen__label" htmlFor="edit-meta-title">
+              Meta Title ({metaTitle.length}/60)
+            </label>
+            <input
+              id="edit-meta-title"
+              type="text"
+              className="cgen__input"
+              value={metaTitle}
+              onChange={(e) => setMetaTitle(e.target.value)}
+              maxLength={60}
+            />
+          </div>
+          <div className="cgen__field">
+            <label className="cgen__label" htmlFor="edit-meta-desc">
+              Meta Description ({metaDescription.length}/160)
+            </label>
+            <input
+              id="edit-meta-desc"
+              type="text"
+              className="cgen__input"
+              value={metaDescription}
+              onChange={(e) => setMetaDescription(e.target.value)}
+              maxLength={160}
+            />
+          </div>
+          <div className="cgen__field">
+            <label className="cgen__label">City</label>
+            <div className="cgen__readonly">{draft.city}</div>
+          </div>
+          <div className="cgen__field">
+            <label className="cgen__label">Topic</label>
+            <div className="cgen__readonly">{draft.topic}</div>
+          </div>
+          <div className="cgen__field">
+            <label className="cgen__label">Audience</label>
+            <div className="cgen__readonly">{draft.audience}</div>
+          </div>
+          <div className="cgen__field">
+            <label className="cgen__label">Slug</label>
+            <div className="cgen__readonly">/{draft.slug}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Toggle between Preview and Edit */}
+      <div className="cgen__toggle-bar">
+        <button
+          className={`cgen__toggle-btn ${showPreview ? "cgen__toggle-btn--active" : ""}`}
+          onClick={() => setShowPreview(true)}
+        >
+          Preview
+        </button>
+        <button
+          className={`cgen__toggle-btn ${!showPreview ? "cgen__toggle-btn--active" : ""}`}
+          onClick={() => setShowPreview(false)}
+        >
+          Edit Markdown
+        </button>
+      </div>
+
+      {showPreview ? (
+        <div className="cgen__preview-card">
+          <div
+            className="blog-content"
+            dangerouslySetInnerHTML={{ __html: renderMarkdown(markdown) }}
+          />
+        </div>
+      ) : (
+        <div className="cgen__editor-card">
+          <textarea
+            className="cgen__editor-textarea"
+            value={markdown}
+            onChange={(e) => setMarkdown(e.target.value)}
+            rows={30}
+          />
+        </div>
+      )}
+
+      {/* Sources */}
+      {draft.sources.length > 0 && (
+        <div className="cgen__form-card">
+          <h2 className="cgen__section-title">Sources ({draft.sources.length})</h2>
+          <div className="cgen__sources-list">
+            {draft.sources.map((source) => (
+              <div key={source.id} className="cgen__source-item">
+                <a
+                  href={source.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="cgen__source-url"
+                >
+                  {source.title || source.url}
+                </a>
+                {source.publisher && (
+                  <span className="cgen__source-pub">{source.publisher}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Save message */}
+      {saveMsg && (
+        <div
+          className={`cgen__alert ${
+            saveMsg.includes("successfully")
+              ? "cgen__alert--success"
+              : "cgen__alert--error"
+          }`}
+        >
+          {saveMsg}
+        </div>
+      )}
+
+      {/* Action buttons */}
+      <div className="cgen__actions cgen__actions--sticky">
+        <button
+          className="btn btn--secondary"
+          onClick={handleSave}
+          disabled={saving}
+        >
+          {saving ? "Saving..." : "Save Changes"}
+        </button>
+        {!published && (
+          <button
+            className="btn btn--publish"
+            onClick={handlePublish}
+            disabled={publishing}
+          >
+            {publishing ? "Publishing..." : "Publish"}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}

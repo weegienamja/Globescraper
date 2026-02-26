@@ -474,3 +474,80 @@ model BlockedIp {
   @@index([ipCidr])
   @@index([expiresAt])
 }
+
+// ─── AI Blog Generator ─────────────────────────────────────
+
+enum ArticleStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum ArticleConfidence {
+  HIGH
+  LOW
+}
+
+enum ArticleRunStatus {
+  RUNNING
+  SUCCESS
+  FAILED
+}
+
+model GeneratedArticleDraft {
+  id                 String             @id @default(uuid())
+  city               String             @db.VarChar(100)
+  topic              String             @db.VarChar(200)
+  audience           String             @db.VarChar(100)
+  targetKeyword      String?            @db.VarChar(200)
+  secondaryKeywords  String?            @db.Text
+  title              String             @db.VarChar(300)
+  slug               String             @unique @db.VarChar(300)
+  metaTitle          String             @db.VarChar(200)
+  metaDescription    String             @db.VarChar(500)
+  markdown           String             @db.LongText
+  html               String?            @db.LongText
+  status             ArticleStatus      @default(DRAFT)
+  confidence         ArticleConfidence  @default(HIGH)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  sources            GeneratedArticleSource[]
+  runs               GeneratedArticleRun[]
+
+  @@index([status])
+  @@index([city])
+  @@index([createdAt])
+}
+
+model GeneratedArticleSource {
+  id          String    @id @default(uuid())
+  draftId     String
+  url         String    @db.VarChar(2000)
+  title       String?   @db.VarChar(500)
+  publisher   String?   @db.VarChar(200)
+  publishedAt DateTime?
+  fetchedAt   DateTime  @default(now())
+  excerpt     String?   @db.Text
+
+  draft       GeneratedArticleDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
+
+  @@index([draftId])
+}
+
+model GeneratedArticleRun {
+  id           String           @id @default(uuid())
+  draftId      String?
+  startedAt    DateTime         @default(now())
+  finishedAt   DateTime?
+  status       ArticleRunStatus @default(RUNNING)
+  error        String?          @db.Text
+  modelUsed    String?          @db.VarChar(100)
+  tokenUsage   Int?
+  settingsJson String?          @db.Text
+
+  draft        GeneratedArticleDraft? @relation(fields: [draftId], references: [id], onDelete: SetNull)
+
+  @@index([draftId])
+  @@index([status])
+  @@index([startedAt])
+}

@@ -6,6 +6,7 @@ import { ReportsSection } from "./reports-section";
 import { AdminUserManagement, AdminAuditLog, AdminBlockedIps } from "./admin-client-sections";
 import { unstable_noStore as noStore } from "next/cache";
 import { COUNTRY_LABELS } from "@/lib/validations/profile";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -116,6 +117,17 @@ export default async function AdminPage() {
           </div>
         </div>
         <SignOutButton />
+      </div>
+
+      {/* ── AI Blog Generator ────────────────────────────── */}
+      <div className="admin__section">
+        <Link href="/admin/content-generator" className="admin__cgen-btn">
+          <span className="admin__cgen-btn-icon">✍️</span>
+          <span className="admin__cgen-btn-text">
+            <strong>AI Blog Generator</strong>
+            <small>Create SEO articles for Phnom Penh and Siem Reap</small>
+          </span>
+        </Link>
       </div>
 
       {/* ── Metrics Cards ────────────────────────────────── */}

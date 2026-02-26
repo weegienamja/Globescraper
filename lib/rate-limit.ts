@@ -81,3 +81,30 @@ export function getDmRatelimit(): Ratelimit | null {
 
   return _dmInstance;
 }
+
+/**
+ * AI content generation rate limiter — 10 generations per 24-hour sliding window per admin.
+ */
+
+let _contentGenInstance: Ratelimit | null | undefined;
+
+export function getContentGenRatelimit(): Ratelimit | null {
+  if (_contentGenInstance !== undefined) return _contentGenInstance;
+
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+
+  if (!url || !token) {
+    _contentGenInstance = null;
+    return null;
+  }
+
+  _contentGenInstance = new Ratelimit({
+    redis: new Redis({ url, token }),
+    limiter: Ratelimit.slidingWindow(10, "24 h"),
+    prefix: "ratelimit:content-gen",
+    analytics: true,
+  });
+
+  return _contentGenInstance;
+}
