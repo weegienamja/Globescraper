@@ -3,6 +3,17 @@
 import { useState } from "react";
 import Link from "next/link";
 
+/** Safely parse a fetch response as JSON; falls back to a clear error message. */
+async function safeJson(res: Response): Promise<Record<string, unknown>> {
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    // Vercel/infra errors often return plain text like "An error occurred..."
+    throw new Error(text.slice(0, 300) || `Server returned ${res.status} with no body`);
+  }
+}
+
 const CITIES = ["Phnom Penh", "Siem Reap"] as const;
 
 const TOPICS = [
@@ -133,8 +144,8 @@ export default function ContentGeneratorClient() {
         }),
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Title generation failed.");
+      const data = await safeJson(res);
+      if (!res.ok) throw new Error((data.error as string) || "Title generation failed.");
 
       setGeneratedTitle(data.title || "");
       setTitleKeywords(data.keywords || []);
@@ -167,8 +178,8 @@ export default function ContentGeneratorClient() {
         }),
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Search failed.");
+      const data = await safeJson(res);
+      if (!res.ok) throw new Error((data.error as string) || "Search failed.");
 
       setNewsTopics(data.topics || []);
       setNewsSearchState("done");
@@ -218,20 +229,20 @@ export default function ContentGeneratorClient() {
       });
 
       clearInterval(interval);
-      const data = await res.json();
+      const data = await safeJson(res);
 
-      if (!res.ok) throw new Error(data.error || "Generation failed.");
+      if (!res.ok) throw new Error((data.error as string) || "Generation failed.");
 
       setNewsProgress(100);
       setNewsProgressLabel("Draft saved successfully!");
       setNewsGenState("success");
       setNewsResult({
-        draftId: data.draftId,
-        title: data.title || topic.title,
-        slug: data.slug || "",
-        confidence: data.confidence || "HIGH",
-        sourceCount: data.sourceCount || 0,
-        imageCount: data.imageCount || 0,
+        draftId: data.draftId as string,
+        title: (data.title as string) || topic.title,
+        slug: (data.slug as string) || "",
+        confidence: (data.confidence as "HIGH" | "LOW") || "HIGH",
+        sourceCount: (data.sourceCount as number) || 0,
+        imageCount: (data.imageCount as number) || 0,
       });
     } catch (err) {
       clearInterval(interval);
@@ -313,16 +324,16 @@ export default function ContentGeneratorClient() {
 
       clearInterval(interval);
 
-      const data = await res.json();
+      const data = await safeJson(res);
 
       if (!res.ok) {
-        throw new Error(data.error || "Generation failed.");
+        throw new Error((data.error as string) || "Generation failed.");
       }
 
       setProgress(100);
       setProgressLabel("Draft saved successfully!");
       setState("success");
-      setResult(data);
+      setResult(data as unknown as GenerationResult);
     } catch (err) {
       clearInterval(interval);
       setProgress(0);
@@ -339,8 +350,8 @@ export default function ContentGeneratorClient() {
         method: "POST",
       });
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Publish failed.");
+        const data = await safeJson(res);
+        throw new Error((data.error as string) || "Publish failed.");
       }
       setPublished(true);
     } catch (err) {
