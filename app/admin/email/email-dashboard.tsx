@@ -4,13 +4,14 @@ import { useState } from "react";
 import { EmailMetrics } from "@/components/admin/email/EmailMetrics";
 import { SingleEmailForm } from "@/components/admin/email/SingleEmailForm";
 import { CampaignBuilder } from "@/components/admin/email/CampaignBuilder";
+import { TemplateBuilder } from "@/components/admin/email/TemplateBuilder";
 import { SubscriberTable } from "@/components/admin/email/SubscriberTable";
 import { SuppressionList } from "@/components/admin/email/SuppressionList";
 import { AnalyticsDashboard } from "@/components/admin/email/AnalyticsDashboard";
 
 /* ── Types ────────────────────────────────────────────────── */
 
-type Tab = "single" | "campaigns" | "subscribers" | "suppression" | "analytics";
+type Tab = "templates" | "single" | "campaigns" | "subscribers" | "suppression" | "analytics";
 
 interface Campaign {
   id: string;
@@ -107,9 +108,10 @@ export function AdminEmailDashboard({
   initialLogs: EmailLogRow[];
   dailyStats: DailyStat[];
 }) {
-  const [tab, setTab] = useState<Tab>("single");
+  const [tab, setTab] = useState<Tab>("templates");
 
   const tabs: { key: Tab; label: string; icon: string }[] = [
+    { key: "templates", label: "Templates", icon: "🎨" },
     { key: "single", label: "Single Email", icon: "✉️" },
     { key: "campaigns", label: "Campaigns", icon: "📨" },
     { key: "subscribers", label: "Subscribers", icon: "👥" },
@@ -138,6 +140,7 @@ export function AdminEmailDashboard({
 
       {/* Tab panels */}
       <div className="email-panel">
+        {tab === "templates" && <TemplateBuilder />}
         {tab === "single" && <SingleEmailForm users={initialUsers} />}
         {tab === "campaigns" && (
           <CampaignBuilder
