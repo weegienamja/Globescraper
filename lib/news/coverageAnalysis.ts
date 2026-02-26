@@ -2,11 +2,13 @@
  * Coverage analysis for the Cambodia News Blog Generator.
  *
  * Scans existing GlobeScraper posts and AI drafts, maps covered intents,
- * identifies gaps, and produces scored candidate titles for "Generate Title".
+ * identifies gaps, and uses Gemini to produce a unique candidate title for "Generate Title".
  */
 
 import { prisma } from "@/lib/prisma";
 import { getPostsMeta } from "@/lib/content";
+import { callGeminiWithSchema } from "@/lib/ai/geminiClient";
+import { z } from "zod";
 import type { CityFocus, AudienceFocus } from "@/lib/newsTopicTypes";
 
 /* ------------------------------------------------------------------ */
@@ -223,101 +225,11 @@ export function identifyGaps(
 }
 
 /* ------------------------------------------------------------------ */
-/*  Step C & D: Build and score candidate titles                        */
+/*  Intent stem normalisation (used by fallback)                        */
 /* ------------------------------------------------------------------ */
-
-/** Title templates organized by intent+audience combos. */
-const TITLE_TEMPLATES: Record<string, string[]> = {
-  "visa_travellers": [
-    "{city} Visa and Entry Requirements: What Changed and What to Expect",
-    "{city} E-Visa Application Process: Step by Step for First Time Visitors",
-    "Cambodia Visa on Arrival vs E-Visa: Which to Choose When Flying into {city}",
-  ],
-  "visa_teachers": [
-    "{city} Work Visa and Business Visa for Teachers: What You Actually Need",
-    "Cambodia Work Permit for English Teachers: Costs, Process, and Common Mistakes",
-  ],
-  "border_travellers": [
-    "{city} Border Crossing and Entry Points: Updated Rules and Tips",
-    "Cambodia Land Border Crossings: What to Know Before Your Trip to {city}",
-  ],
-  "transport_travellers": [
-    "{city} Airport and Entry Process Updates: What to Expect",
-    "{city} Getting Around: Transport Options, Costs, and Safety Tips",
-    "{city} Night Transport and Late Ride Safety: What Changed and How to Plan",
-    "Cambodia Domestic Flights vs Bus: Getting Between {city} and Other Cities",
-  ],
-  "transport_teachers": [
-    "{city} Daily Commute Options for Teachers: Costs, Routes, and Realistic Times",
-    "Buying vs Renting a Motorbike in {city}: What Teachers Need to Know",
-  ],
-  "safety_travellers": [
-    "{city} Safety and Common Scams Tourists Face: How to Stay Smart",
-    "New Fees and Common Extra Charges Tourists Hit in {city} and How to Avoid Them",
-    "{city} Solo Travel Safety: Updated Advice for First Timers",
-  ],
-  "safety_teachers": [
-    "{city} Safety Tips for New Teachers: What to Watch Out For",
-  ],
-  "healthcare_travellers": [
-    "{city} Healthcare for Tourists: Emergency Clinics, Pharmacies, and Insurance Tips",
-    "Cambodia Travel Insurance: What to Get Before Flying into {city}",
-  ],
-  "healthcare_teachers": [
-    "{city} Healthcare for Expats and Teachers: Clinics, Insurance, and What It Costs",
-  ],
-  "renting_travellers": [
-    "{city} Short Stay Accommodation: Beyond Hotels and Hostels",
-  ],
-  "renting_teachers": [
-    "{city} Renting Checklist: Deposits, Contracts, and Utility Setups Teachers Miss",
-    "{city} Best Neighbourhoods for Teachers: Rent, Commute, and Lifestyle",
-  ],
-  "cost of living_travellers": [
-    "{city} Daily Budget Breakdown: What Things Actually Cost for Tourists",
-    "{city} Money Saving Tips: Where Tourists Overpay and What to Do Instead",
-  ],
-  "cost of living_teachers": [
-    "{city} Cost of Living for Teachers: Realistic Monthly Budget Breakdown",
-    "Cambodia Teacher Salary vs Cost of Living: Can You Save Money in {city}?",
-  ],
-  "teaching_teachers": [
-    "{city} School Hiring Cycle: When Jobs Open and What Salaries Look Like Now",
-    "Cambodia TEFL Jobs: What Schools in {city} Actually Look For",
-    "{city} Teaching Contract Red Flags: What to Check Before Signing",
-  ],
-  "SIM_travellers": [
-    "{city} SIM Card and Mobile Data: Which Provider and Plan to Pick",
-    "Cambodia eSIM vs Physical SIM: What Works Best for Tourists in {city}",
-  ],
-  "SIM_teachers": [
-    "{city} Phone and Internet Setup for New Teachers: SIM, WiFi, and Apps",
-  ],
-  "banking_travellers": [
-    "{city} ATMs, Cash, and Cards: Money Tips for Tourists",
-  ],
-  "banking_teachers": [
-    "{city} Banking for Teachers: Opening an Account and Getting Paid",
-  ],
-  "food_travellers": [
-    "{city} Street Food Guide: What to Eat, Where, and What It Costs",
-    "{city} Best Markets for Food and Shopping: A Tourist Walkthrough",
-  ],
-  "neighbourhood_teachers": [
-    "{city} Area Guide for Teachers: Where to Live Based on Your School",
-  ],
-  "coworking_travellers": [
-    "{city} Coworking Spaces and Cafes for Digital Nomads: Updated List",
-  ],
-  "festival_travellers": [
-    "Visiting {city} During Khmer New Year: What to Expect and How to Prepare",
-    "Cambodia Festival Calendar: Best Times to Visit {city}",
-  ],
-};
 
 /** Normalize an intent to a template key stem. */
 function intentToTemplateStem(intent: string): string {
-  // Map related intents to a common stem
   const map: Record<string, string> = {
     "visa": "visa", "e-visa": "visa", "evisa": "visa", "immigration": "visa", "passport": "visa",
     "border": "border", "entry": "border",
@@ -343,112 +255,15 @@ function intentToTemplateStem(intent: string): string {
   return map[intent] || intent;
 }
 
-export function buildCandidateTitles(
-  gaps: CoverageGap[],
-  coverage: CoverageEntry[],
-  cityFocus: CityFocus,
-  audienceFocus: AudienceFocus
-): CandidateTitle[] {
-  const candidates: CandidateTitle[] = [];
-  const city = cityFocus === "Cambodia wide" ? "Cambodia" : cityFocus;
-  const audiences = audienceFocus === "both" ? ["travellers", "teachers"] : [audienceFocus];
-
-  // Score and sort gaps: prefer uncovered + freshness-relevant + stale
-  const scoredGaps = gaps
-    .map((g) => {
-      let gapScore = 0;
-      if (g.coverageCount === 0) gapScore += 40;
-      else if (g.coverageCount === 1) gapScore += 20;
-      else gapScore += 5;
-      gapScore += g.staleness * 3; // 0-30
-      if (g.isFreshnessRelevant) gapScore += 15;
-      return { ...g, gapScore };
-    })
-    .sort((a, b) => b.gapScore - a.gapScore);
-
-  // Pick top gaps and generate titles
-  for (const gap of scoredGaps.slice(0, 15)) {
-    const stem = intentToTemplateStem(gap.intent);
-
-    for (const aud of audiences) {
-      const templateKey = `${stem}_${aud}`;
-      const templates = TITLE_TEMPLATES[templateKey] || [];
-
-      for (const template of templates.slice(0, 2)) {
-        const title = template.replace(/\{city\}/g, city);
-
-        // Build why reasons
-        const why: string[] = [];
-        if (gap.coverageCount === 0) why.push("gap: not covered");
-        else why.push(`weak coverage: ${gap.coverageCount} article(s)`);
-        if (gap.isFreshnessRelevant) why.push("freshness-relevant topic");
-        if (gap.staleness >= 7) why.push("content is stale");
-        why.push(`intent: ${gap.intent}`);
-        why.push(`audience: ${aud}`);
-        why.push(`city: ${city}`);
-
-        // Keywords
-        const keywords = [city.toLowerCase(), gap.intent, aud];
-        if (stem !== gap.intent) keywords.push(stem);
-
-        candidates.push({
-          title,
-          score: gap.gapScore,
-          why,
-          keywords,
-          intent: gap.intent,
-          city,
-          audience: aud,
-        });
-      }
-    }
-  }
-
-  return candidates;
-}
-
 /* ------------------------------------------------------------------ */
-/*  Step D: Uniqueness check via trigram similarity                      */
+/*  Step E: Choose best title (main entry point) — Gemini-powered       */
 /* ------------------------------------------------------------------ */
 
-function trigramSet(text: string): Set<string> {
-  const s = new Set<string>();
-  const lower = text.toLowerCase().replace(/[^a-z0-9 ]/g, "");
-  for (let i = 0; i <= lower.length - 3; i++) {
-    s.add(lower.slice(i, i + 3));
-  }
-  return s;
-}
-
-function trigramSimilarity(a: string, b: string): number {
-  const setA = trigramSet(a);
-  const setB = trigramSet(b);
-  if (setA.size === 0 || setB.size === 0) return 0;
-  let intersection = 0;
-  for (const tri of setA) {
-    if (setB.has(tri)) intersection++;
-  }
-  return intersection / Math.max(setA.size, setB.size);
-}
-
-export function filterUniqueTitles(
-  candidates: CandidateTitle[],
-  existingTitles: string[],
-  threshold = 0.62
-): CandidateTitle[] {
-  return candidates.filter((c) => {
-    for (const existing of existingTitles) {
-      if (trigramSimilarity(c.title, existing) > threshold) {
-        return false;
-      }
-    }
-    return true;
-  });
-}
-
-/* ------------------------------------------------------------------ */
-/*  Step E: Choose best title (main entry point)                        */
-/* ------------------------------------------------------------------ */
+const GeneratedTitleSchema = z.object({
+  title: z.string().min(10).max(120),
+  why: z.array(z.string()),
+  keywords: z.array(z.string()),
+});
 
 export async function generateBestTitle(
   cityFocus: CityFocus,
@@ -460,33 +275,118 @@ export async function generateBestTitle(
   // Step B: Identify gaps
   const gaps = identifyGaps(coverage, cityFocus, audienceFocus);
 
-  // Step C: Build candidate titles
-  const candidates = buildCandidateTitles(gaps, coverage, cityFocus, audienceFocus);
+  // Step C: Score gaps and pick top uncovered intents
+  const scoredGaps = gaps
+    .map((g) => {
+      let gapScore = 0;
+      if (g.coverageCount === 0) gapScore += 40;
+      else if (g.coverageCount === 1) gapScore += 20;
+      else gapScore += 5;
+      gapScore += g.staleness * 3;
+      if (g.isFreshnessRelevant) gapScore += 15;
+      return { ...g, gapScore };
+    })
+    .sort((a, b) => b.gapScore - a.gapScore);
 
-  // Step D: Filter for uniqueness
-  const existingTitles = coverage.map((e) => e.title);
-  const unique = filterUniqueTitles(candidates, existingTitles);
-
-  // Step E: Return best
-  if (unique.length === 0) {
-    // Fallback: use the best candidate even if somewhat similar
-    const best = candidates[0];
-    if (best) {
-      return { title: best.title, why: [...best.why, "note: may overlap with existing content"], keywords: best.keywords };
-    }
-    // Ultimate fallback
-    const city = cityFocus === "Cambodia wide" ? "Cambodia" : cityFocus;
-    return {
-      title: `${city} Travel and Living Update: What Changed Recently`,
-      why: ["fallback: no specific gaps identified"],
-      keywords: [city.toLowerCase(), "travel", "update"],
-    };
+  // Pick a random subset of top gaps to feed to Gemini (prevents determinism)
+  const topGaps = scoredGaps.slice(0, 12);
+  // Shuffle the top gaps so Gemini sees them in random order each time
+  for (let i = topGaps.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [topGaps[i], topGaps[j]] = [topGaps[j], topGaps[i]];
   }
+  // Pick 4-6 random gaps for the prompt
+  const selectedGaps = topGaps.slice(0, 4 + Math.floor(Math.random() * 3));
 
-  // Sort by score descending, pick best
-  unique.sort((a, b) => b.score - a.score);
-  const best = unique[0];
-  return { title: best.title, why: best.why, keywords: best.keywords };
+  // Build list of existing titles to avoid
+  const existingTitles = coverage.map((e) => e.title).slice(0, 30);
+
+  const city = cityFocus === "Cambodia wide" ? "Cambodia" : cityFocus;
+  const audienceLabel = audienceFocus === "both"
+    ? "both travellers and teachers"
+    : audienceFocus === "travellers" ? "travellers and tourists" : "English teachers and expats";
+
+  const gapSummary = selectedGaps.map(
+    (g) => `- "${g.intent}" (covered ${g.coverageCount}x, staleness ${g.staleness}/10${g.isFreshnessRelevant ? ", time-sensitive" : ""})`
+  ).join("\n");
+
+  const existingList = existingTitles.map((t) => `- ${t}`).join("\n");
+
+  const prompt = `You are a blog title generator for GlobeScraper, a Cambodia travel and expat information site.
+
+TASK: Generate ONE unique, specific, SEO-friendly blog title about ${city} for ${audienceLabel}.
+
+CITY FOCUS: ${cityFocus}
+AUDIENCE FOCUS: ${audienceFocus}
+
+Here are content gap areas we haven't covered well (pick ONE to write about — choose something DIFFERENT every time):
+${gapSummary}
+
+EXISTING TITLES (do NOT repeat or closely match any of these):
+${existingList}
+
+RULES:
+1. The title MUST be specific to ${city} (mention the city by name)
+2. The title MUST be relevant to ${audienceLabel}
+3. Pick a DIFFERENT gap/topic each time — do NOT default to visa topics
+4. Make it sound like a real, helpful blog post (not clickbait)
+5. Include a year or "Updated" if the topic is time-sensitive
+6. Keep it under 80 characters if possible
+7. Do NOT use em dashes (—)
+8. Be creative and vary your approach — sometimes use "How to", sometimes "Guide to", sometimes a question, sometimes a list format like "X Things..."
+
+Return a JSON object with: title, why (array of reasons this was chosen), keywords (array of 3-5 SEO keywords).`;
+
+  try {
+    const result = await callGeminiWithSchema(prompt, GeneratedTitleSchema, "title generation result");
+    return {
+      title: result.data.title,
+      why: result.data.why,
+      keywords: result.data.keywords,
+    };
+  } catch (err) {
+    console.error("[Generate Title] Gemini call failed, using random template fallback:", err);
+    // Fallback: pick a random template from a random gap
+    return randomTemplateFallback(selectedGaps, city, audienceFocus);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Fallback: random template if Gemini fails                           */
+/* ------------------------------------------------------------------ */
+
+const FALLBACK_TEMPLATES: Record<string, string[]> = {
+  visa: ["{city} Visa Guide: What You Need to Know", "{city} Entry Requirements Update"],
+  border: ["{city} Border Crossing Tips", "Arriving in {city}: Updated Entry Guide"],
+  transport: ["{city} Transport Guide: Getting Around Safely", "How to Get Around {city} on a Budget"],
+  safety: ["{city} Safety Tips: What to Watch Out For", "Staying Safe in {city}: Practical Advice"],
+  healthcare: ["{city} Healthcare Guide: Clinics and Insurance", "Medical Care in {city}: What to Expect"],
+  renting: ["Renting in {city}: A Practical Guide", "{city} Housing: Finding the Right Place"],
+  "cost of living": ["{city} Cost of Living: Monthly Budget Breakdown", "How Much Does It Cost to Live in {city}?"],
+  teaching: ["Teaching English in {city}: What to Expect", "{city} TEFL Jobs: Salaries and Schools"],
+  SIM: ["{city} SIM Cards and Internet: Setup Guide", "Getting Connected in {city}: Phone and WiFi"],
+  banking: ["{city} Banking and ATMs: Money Guide", "Managing Money in {city}: Cards, Cash, and Apps"],
+  food: ["{city} Food Guide: Street Food and Markets", "Best Eats in {city}: Where Locals Go"],
+  coworking: ["{city} Digital Nomad Guide: Workspaces and WiFi", "Best Coworking Spaces in {city}"],
+  festival: ["Festivals in {city}: What to See and When", "Visiting {city} During Khmer New Year"],
+};
+
+function randomTemplateFallback(
+  selectedGaps: Array<{ intent: string; gapScore: number }>,
+  city: string,
+  audienceFocus: AudienceFocus
+): { title: string; why: string[]; keywords: string[] } {
+  // Pick a random gap
+  const gap = selectedGaps[Math.floor(Math.random() * selectedGaps.length)];
+  const stem = intentToTemplateStem(gap?.intent || "transport");
+  const templates = FALLBACK_TEMPLATES[stem] || FALLBACK_TEMPLATES["transport"];
+  const template = templates[Math.floor(Math.random() * templates.length)];
+  const title = template.replace(/\{city\}/g, city);
+  return {
+    title,
+    why: [`fallback: Gemini unavailable, random template for "${gap?.intent || "general"}"`, `audience: ${audienceFocus}`],
+    keywords: [city.toLowerCase(), gap?.intent || "travel", audienceFocus],
+  };
 }
 
 /* ------------------------------------------------------------------ */

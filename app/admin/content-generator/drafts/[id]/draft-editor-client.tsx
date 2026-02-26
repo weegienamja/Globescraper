@@ -54,6 +54,7 @@ export default function DraftEditorClient({ draft }: Props) {
   const [title, setTitle] = useState(draft.title);
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [regeneratingImages, setRegeneratingImages] = useState(false);
   const [saveMsg, setSaveMsg] = useState("");
   const [published, setPublished] = useState(draft.status === "PUBLISHED");
   const [showPreview, setShowPreview] = useState(true);
@@ -96,6 +97,27 @@ export default function DraftEditorClient({ draft }: Props) {
       setSaveMsg(err instanceof Error ? err.message : "Publish failed.");
     } finally {
       setPublishing(false);
+    }
+  }
+
+  async function handleRegenerateImages() {
+    if (!confirm("Regenerate all images for this draft? This will replace existing images.")) return;
+    setRegeneratingImages(true);
+    setSaveMsg("");
+    try {
+      const res = await fetch(`/api/admin/content-generator/drafts/${draft.id}/regenerate-images`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Image regeneration failed.");
+      }
+      const data = await res.json();
+      setSaveMsg(`Images regenerated (${data.imageCount} images). Reload to see changes.`);
+    } catch (err) {
+      setSaveMsg(err instanceof Error ? err.message : "Image regeneration failed.");
+    } finally {
+      setRegeneratingImages(false);
     }
   }
 
@@ -286,6 +308,13 @@ export default function DraftEditorClient({ draft }: Props) {
           disabled={saving}
         >
           {saving ? "Saving..." : "Save Changes"}
+        </button>
+        <button
+          className="btn btn--secondary"
+          onClick={handleRegenerateImages}
+          disabled={regeneratingImages}
+        >
+          {regeneratingImages ? "Regenerating Images..." : "Regenerate Images"}
         </button>
         {!published && (
           <button
