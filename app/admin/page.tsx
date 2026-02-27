@@ -142,6 +142,28 @@ export default async function AdminPage() {
             <small>Send emails, campaigns, AI generation &amp; subscriber management</small>
           </span>
         </Link>
+        <Link href="/tools" className="admin__cgen-btn admin__cgen-btn--tools" style={{ flex: 1, minWidth: "260px" }}>
+          <span className="admin__cgen-btn-preview">
+            <svg width="56" height="40" viewBox="0 0 56 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect width="56" height="40" rx="6" fill="#0f172a" />
+              <rect x="4" y="4" width="14" height="8" rx="2" fill="#1e293b" />
+              <rect x="20" y="4" width="14" height="8" rx="2" fill="#1e293b" />
+              <rect x="36" y="4" width="16" height="8" rx="2" fill="#1e293b" />
+              <rect x="4" y="14" width="24" height="3" rx="1.5" fill="#334155" />
+              <rect x="4" y="19" width="18" height="3" rx="1.5" fill="#334155" />
+              <rect x="4" y="24" width="21" height="3" rx="1.5" fill="#334155" />
+              <rect x="4" y="29" width="16" height="3" rx="1.5" fill="#334155" />
+              <rect x="36" y="14" width="16" height="18" rx="3" fill="#1e293b" />
+              <circle cx="44" cy="23" r="5" fill="#60a5fa" opacity="0.3" />
+              <circle cx="44" cy="23" r="3" fill="#60a5fa" opacity="0.6" />
+              <rect x="4" y="34" width="48" height="2" rx="1" fill="#1e3a5f" />
+            </svg>
+          </span>
+          <span className="admin__cgen-btn-text">
+            <strong>Data Tools</strong>
+            <small>Rental pipeline, scraping dashboards &amp; heatmaps</small>
+          </span>
+        </Link>
       </div>
 
       {/* ── Metrics Cards ────────────────────────────────── */}
