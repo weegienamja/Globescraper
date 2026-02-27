@@ -8,7 +8,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { RentalSource, QueueStatus } from "@prisma/client";
-import { isSourceEnabled, PROCESS_QUEUE_MAX } from "../config";
+import { isSourceEnabled, PROCESS_QUEUE_MAX, PROCESS_QUEUE_CONCURRENCY } from "../config";
 import { scrapeListingKhmer24 } from "../sources/khmer24";
 import { scrapeListingRealestateKh } from "../sources/realestate-kh";
 import { computeFingerprint } from "../fingerprint";
@@ -83,160 +83,176 @@ export async function processQueueJob(
     log("info", `Found ${items.length} pending items in queue`);
     const startTime = Date.now();
 
-    for (const item of items) {
-      processed++;
-      log("info", `[${processed}/${items.length}] Scraping: ${item.canonicalUrl}`);
+    /* ── Process in parallel batches ─────────────────────── */
+    const BATCH_SIZE = PROCESS_QUEUE_CONCURRENCY;
 
-      try {
-        // Scrape the listing
-        const scraped = await scrapeForSource(source, item.canonicalUrl, log);
+    for (let batchStart = 0; batchStart < items.length; batchStart += BATCH_SIZE) {
+      const batch = items.slice(batchStart, batchStart + BATCH_SIZE);
+      const batchNum = Math.floor(batchStart / BATCH_SIZE) + 1;
+      log("info", `Batch ${batchNum}: processing ${batch.length} items concurrently…`);
 
-        if (!scraped) {
-          log("warn", `[${processed}/${items.length}] ✗ Filtered out (not condo/apartment or empty)`);
-          // Mark as RETRY if under 3 attempts; DONE otherwise
-          await prisma.scrapeQueue.update({
-            where: { id: item.id },
-            data: {
-              status: item.attempts + 1 >= 3 ? QueueStatus.DONE : QueueStatus.RETRY,
-              attempts: item.attempts + 1,
-              lastError: "Failed to scrape or filtered out (not condo/apartment)",
-            },
-          });
-          failed++;
-          await politeDelay();
-          continue;
-        }
+      const results = await Promise.allSettled(
+        batch.map(async (item) => {
+          const idx = batchStart + batch.indexOf(item) + 1;
+          log("info", `[${idx}/${items.length}] Scraping: ${item.canonicalUrl}`);
 
-        const now = new Date();
-        const imageCount = scraped.imageUrls.length;
-        const priceStr = scraped.priceMonthlyUsd ? `$${scraped.priceMonthlyUsd}/mo` : "no price";
-        log("info", `[${processed}/${items.length}] → ${scraped.title}`, {
-          type: scraped.propertyType,
-          district: scraped.district,
-          price: priceStr,
-          beds: scraped.bedrooms,
-          baths: scraped.bathrooms,
-          images: imageCount,
-        });
+          try {
+            const scraped = await scrapeForSource(source, item.canonicalUrl, log);
 
-        const imageUrlsJson = scraped.imageUrls.length > 0
-          ? JSON.stringify(scraped.imageUrls)
-          : null;
+            if (!scraped) {
+              log("warn", `[${idx}/${items.length}] ✗ Filtered out (not condo/apartment or empty)`);
+              await prisma.scrapeQueue.update({
+                where: { id: item.id },
+                data: {
+                  status: item.attempts + 1 >= 3 ? QueueStatus.DONE : QueueStatus.RETRY,
+                  attempts: item.attempts + 1,
+                  lastError: "Failed to scrape or filtered out (not condo/apartment)",
+                },
+              });
+              return { type: "failed" as const };
+            }
 
-        // Compute fingerprint if no sourceListingId
-        const fingerprint = !scraped.sourceListingId
-          ? computeFingerprint({
-              title: scraped.title,
+            const now = new Date();
+            const priceStr = scraped.priceMonthlyUsd ? `$${scraped.priceMonthlyUsd}/mo` : "no price";
+            log("info", `[${idx}/${items.length}] → ${scraped.title}`, {
+              type: scraped.propertyType,
               district: scraped.district,
-              bedrooms: scraped.bedrooms,
-              propertyType: scraped.propertyType,
-              priceMonthlyUsd: scraped.priceMonthlyUsd,
-              firstImageUrl: scraped.imageUrls[0] ?? null,
-            })
-          : null;
+              price: priceStr,
+              beds: scraped.bedrooms,
+              baths: scraped.bathrooms,
+              images: scraped.imageUrls.length,
+            });
 
-        // Upsert listing
-        const existing = await prisma.rentalListing.findUnique({
-          where: { canonicalUrl: item.canonicalUrl },
-        });
+            const imageUrlsJson = scraped.imageUrls.length > 0
+              ? JSON.stringify(scraped.imageUrls)
+              : null;
 
-        let listingId: string;
+            const fingerprint = !scraped.sourceListingId
+              ? computeFingerprint({
+                  title: scraped.title,
+                  district: scraped.district,
+                  bedrooms: scraped.bedrooms,
+                  propertyType: scraped.propertyType,
+                  priceMonthlyUsd: scraped.priceMonthlyUsd,
+                  firstImageUrl: scraped.imageUrls[0] ?? null,
+                })
+              : null;
 
-        if (existing) {
-          // Update existing listing
-          await prisma.rentalListing.update({
-            where: { id: existing.id },
-            data: {
-              title: scraped.title,
-              description: scraped.description,
-              city: scraped.city ?? "Phnom Penh",
-              district: scraped.district,
-              propertyType: scraped.propertyType,
-              bedrooms: scraped.bedrooms,
-              bathrooms: scraped.bathrooms,
-              sizeSqm: scraped.sizeSqm,
-              priceOriginal: scraped.priceOriginal,
-              priceMonthlyUsd: scraped.priceMonthlyUsd,
-              currency: scraped.currency,
-              imageUrlsJson,
-              postedAt: scraped.postedAt,
-              lastSeenAt: now,
-              isActive: true,
-              contentFingerprint: fingerprint ?? existing.contentFingerprint,
-            },
-          });
-          listingId = existing.id;
-          updated++;
-          log("info", `[${processed}/${items.length}] ✓ Updated existing listing`);
+            const existing = await prisma.rentalListing.findUnique({
+              where: { canonicalUrl: item.canonicalUrl },
+            });
+
+            let listingId: string;
+            let wasInserted = false;
+
+            if (existing) {
+              await prisma.rentalListing.update({
+                where: { id: existing.id },
+                data: {
+                  title: scraped.title,
+                  description: scraped.description,
+                  city: scraped.city ?? "Phnom Penh",
+                  district: scraped.district,
+                  propertyType: scraped.propertyType,
+                  bedrooms: scraped.bedrooms,
+                  bathrooms: scraped.bathrooms,
+                  sizeSqm: scraped.sizeSqm,
+                  priceOriginal: scraped.priceOriginal,
+                  priceMonthlyUsd: scraped.priceMonthlyUsd,
+                  currency: scraped.currency,
+                  imageUrlsJson,
+                  postedAt: scraped.postedAt,
+                  lastSeenAt: now,
+                  isActive: true,
+                  contentFingerprint: fingerprint ?? existing.contentFingerprint,
+                },
+              });
+              listingId = existing.id;
+              log("info", `[${idx}/${items.length}] ✓ Updated existing listing`);
+            } else {
+              const newListing = await prisma.rentalListing.create({
+                data: {
+                  source,
+                  sourceListingId: scraped.sourceListingId ?? item.sourceListingId,
+                  canonicalUrl: item.canonicalUrl,
+                  title: scraped.title,
+                  description: scraped.description,
+                  city: scraped.city ?? "Phnom Penh",
+                  district: scraped.district,
+                  propertyType: scraped.propertyType,
+                  bedrooms: scraped.bedrooms,
+                  bathrooms: scraped.bathrooms,
+                  sizeSqm: scraped.sizeSqm,
+                  priceOriginal: scraped.priceOriginal,
+                  priceMonthlyUsd: scraped.priceMonthlyUsd,
+                  currency: scraped.currency,
+                  imageUrlsJson,
+                  postedAt: scraped.postedAt,
+                  firstSeenAt: now,
+                  lastSeenAt: now,
+                  isActive: true,
+                  contentFingerprint: fingerprint,
+                },
+              });
+              listingId = newListing.id;
+              wasInserted = true;
+              log("info", `[${idx}/${items.length}] ✓ Inserted new listing`);
+            }
+
+            await prisma.rentalSnapshot.create({
+              data: {
+                listingId,
+                city: scraped.city ?? "Phnom Penh",
+                district: scraped.district,
+                bedrooms: scraped.bedrooms,
+                propertyType: scraped.propertyType,
+                priceMonthlyUsd: scraped.priceMonthlyUsd,
+                postedAt: scraped.postedAt,
+              },
+            });
+
+            await prisma.scrapeQueue.update({
+              where: { id: item.id },
+              data: {
+                status: QueueStatus.DONE,
+                attempts: item.attempts + 1,
+                lastError: null,
+              },
+            });
+
+            return { type: wasInserted ? "inserted" as const : "updated" as const };
+          } catch (err) {
+            const errMsg = err instanceof Error ? err.message : String(err);
+            log("error", `[${idx}/${items.length}] ✗ Failed: ${errMsg}`);
+            await prisma.scrapeQueue.update({
+              where: { id: item.id },
+              data: {
+                status: item.attempts + 1 >= 3 ? QueueStatus.DONE : QueueStatus.RETRY,
+                attempts: item.attempts + 1,
+                lastError: errMsg.slice(0, 2000),
+              },
+            });
+            return { type: "failed" as const };
+          }
+        })
+      );
+
+      /* Tally batch results */
+      for (const r of results) {
+        processed++;
+        if (r.status === "fulfilled") {
+          if (r.value.type === "inserted") { inserted++; snapshots++; }
+          else if (r.value.type === "updated") { updated++; snapshots++; }
+          else { failed++; }
         } else {
-          // Insert new listing
-          const newListing = await prisma.rentalListing.create({
-            data: {
-              source,
-              sourceListingId: scraped.sourceListingId ?? item.sourceListingId,
-              canonicalUrl: item.canonicalUrl,
-              title: scraped.title,
-              description: scraped.description,
-              city: scraped.city ?? "Phnom Penh",
-              district: scraped.district,
-              propertyType: scraped.propertyType,
-              bedrooms: scraped.bedrooms,
-              bathrooms: scraped.bathrooms,
-              sizeSqm: scraped.sizeSqm,
-              priceOriginal: scraped.priceOriginal,
-              priceMonthlyUsd: scraped.priceMonthlyUsd,
-              currency: scraped.currency,
-              imageUrlsJson,
-              postedAt: scraped.postedAt,
-              firstSeenAt: now,
-              lastSeenAt: now,
-              isActive: true,
-              contentFingerprint: fingerprint,
-            },
-          });
-          listingId = newListing.id;
-          inserted++;
-          log("info", `[${processed}/${items.length}] ✓ Inserted new listing`);
+          failed++;
         }
-
-        // Create snapshot
-        await prisma.rentalSnapshot.create({
-          data: {
-            listingId,
-            city: scraped.city ?? "Phnom Penh",
-            district: scraped.district,
-            bedrooms: scraped.bedrooms,
-            propertyType: scraped.propertyType,
-            priceMonthlyUsd: scraped.priceMonthlyUsd,
-            postedAt: scraped.postedAt,
-          },
-        });
-        snapshots++;
-
-        // Mark queue item done
-        await prisma.scrapeQueue.update({
-          where: { id: item.id },
-          data: {
-            status: QueueStatus.DONE,
-            attempts: item.attempts + 1,
-            lastError: null,
-          },
-        });
-      } catch (err) {
-        const errMsg = err instanceof Error ? err.message : String(err);
-        log("error", `[${processed}/${items.length}] ✗ Failed: ${errMsg}`);
-        await prisma.scrapeQueue.update({
-          where: { id: item.id },
-          data: {
-            status: item.attempts + 1 >= 3 ? QueueStatus.DONE : QueueStatus.RETRY,
-            attempts: item.attempts + 1,
-            lastError: errMsg.slice(0, 2000),
-          },
-        });
-        failed++;
       }
 
-      await politeDelay();
+      /* Brief pause between batches (not between each item) */
+      if (batchStart + BATCH_SIZE < items.length) {
+        await politeDelay();
+      }
     }
 
     const endTime = Date.now();

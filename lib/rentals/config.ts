@@ -28,14 +28,17 @@ export const DISCOVER_MAX_URLS = 500;
 /** Max listing detail pages processed per process-queue run */
 export const PROCESS_QUEUE_MAX = 50;
 
+/** How many listings to scrape in parallel within a batch */
+export const PROCESS_QUEUE_CONCURRENCY = 5;
+
 /** HTTP concurrency limit for outbound requests */
-export const CONCURRENCY_LIMIT = 2;
+export const CONCURRENCY_LIMIT = 6;
 
 /** Base delay between HTTP requests (ms) */
-export const REQUEST_DELAY_BASE_MS = 800;
+export const REQUEST_DELAY_BASE_MS = 600;
 
 /** Random jitter range added to base delay (ms) */
-export const REQUEST_DELAY_JITTER_MS = 500;
+export const REQUEST_DELAY_JITTER_MS = 400;
 
 /** Max retries for transient network errors */
 export const MAX_RETRIES = 3;
