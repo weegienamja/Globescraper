@@ -15,7 +15,6 @@ import {
   Chips,
   GallerySection,
   ActivityFeed,
-  ConnectionsPreview,
   SidebarAccordion,
 } from "@/components/community";
 import { BlockButton, HideButton } from "./profile-actions";
@@ -232,12 +231,6 @@ export default async function CommunityProfilePage({
             targetUserId={userId}
             showReport={!!currentUserId && !isOwner}
           />
-          <ConnectionsPreview
-            connections={profile.connectionsPreview}
-            totalCount={profile.connectionsCount}
-            mutualCount={profile.mutualConnectionsCount}
-            profileUserId={userId}
-          />
           {/* Quick recent items */}
           {profile.recentActivity.length > 0 && (
             <div className="profile-sidebar-card">
@@ -282,14 +275,6 @@ export default async function CommunityProfilePage({
               lastActiveAt={profile.lastActiveAt}
               targetUserId={userId}
               showReport={!!currentUserId && !isOwner}
-            />
-          </SidebarAccordion>
-          <SidebarAccordion title="Connections">
-            <ConnectionsPreview
-              connections={profile.connectionsPreview}
-              totalCount={profile.connectionsCount}
-              mutualCount={profile.mutualConnectionsCount}
-              profileUserId={userId}
             />
           </SidebarAccordion>
         </div>

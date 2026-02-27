@@ -42,8 +42,7 @@ export type CommunityProfileViewModel = {
   meetupsAttendedCount: number;
   connectionsCount: number;
   // Connections preview
-  connectionsPreview: { userId: string; displayName: string; avatarUrl: string | null }[];
-  mutualConnectionsCount: number;
+
   // Recent activity
   recentActivity: {
     id: string;
@@ -143,66 +142,6 @@ export async function getCommunityProfile(
     }),
   ]);
 
-  // Connections preview (up to 3)
-  const connections = await prisma.connection.findMany({
-    where: {
-      status: "ACCEPTED",
-      OR: [{ userLowId: userId }, { userHighId: userId }],
-    },
-    take: 3,
-    orderBy: { acceptedAt: "desc" },
-    include: {
-      userLow: { select: { id: true, profile: { select: { displayName: true, avatarUrl: true } } } },
-      userHigh: { select: { id: true, profile: { select: { displayName: true, avatarUrl: true } } } },
-    },
-  });
-
-  const connectionsPreview = connections.map((c) => {
-    const other = c.userLowId === userId ? c.userHigh : c.userLow;
-    return {
-      userId: other.id,
-      displayName: other.profile?.displayName ?? "Member",
-      avatarUrl: other.profile?.avatarUrl ?? null,
-    };
-  });
-
-  // Mutual connections count (if viewer is logged in)
-  let mutualConnectionsCount = 0;
-  if (viewerUserId && viewerUserId !== userId) {
-    // Find users connected to both
-    const [viewerConns, profileConns] = await Promise.all([
-      prisma.connection.findMany({
-        where: {
-          status: "ACCEPTED",
-          OR: [{ userLowId: viewerUserId }, { userHighId: viewerUserId }],
-        },
-        select: { userLowId: true, userHighId: true },
-      }),
-      prisma.connection.findMany({
-        where: {
-          status: "ACCEPTED",
-          OR: [{ userLowId: userId }, { userHighId: userId }],
-        },
-        select: { userLowId: true, userHighId: true },
-      }),
-    ]);
-
-    const viewerSet = new Set(
-      viewerConns.map((c) =>
-        c.userLowId === viewerUserId ? c.userHighId : c.userLowId,
-      ),
-    );
-    const profileSet = new Set(
-      profileConns.map((c) =>
-        c.userLowId === userId ? c.userHighId : c.userLowId,
-      ),
-    );
-
-    for (const id of viewerSet) {
-      if (profileSet.has(id)) mutualConnectionsCount++;
-    }
-  }
-
   // Activity events from the activity table
   const recentActivity = profile.activityEvents.map((e) => ({
     id: e.id,
@@ -250,8 +189,7 @@ export async function getCommunityProfile(
     commentsCount,
     meetupsAttendedCount,
     connectionsCount,
-    connectionsPreview,
-    mutualConnectionsCount,
+
     recentActivity,
     targetCountries,
     visibility: profile.visibility,

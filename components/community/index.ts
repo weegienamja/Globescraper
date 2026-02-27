@@ -5,5 +5,5 @@ export { TrustPanel } from "./TrustPanel";
 export { Chips } from "./Chips";
 export { GallerySection } from "./GallerySection";
 export { ActivityFeed } from "./ActivityFeed";
-export { ConnectionsPreview } from "./ConnectionsPreview";
+
 export { SidebarAccordion } from "./SidebarAccordion";
