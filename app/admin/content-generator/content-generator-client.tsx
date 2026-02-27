@@ -189,7 +189,15 @@ export default function ContentGeneratorClient() {
       setNewsSearchState("done");
 
       if (((data.topics as unknown[]) || []).length === 0) {
-        setNewsSearchError((data.message as string) || "No topics found. Try adjusting filters or try again later.");
+        const errorCode = data.errorCode as string | undefined;
+        const defaultMsg = "No topics found. Try adjusting filters or try again later.";
+        if (errorCode === "NO_SOURCES") {
+          setNewsSearchError(
+            "No usable sources returned from search. Try again, or pick a less niche title."
+          );
+        } else {
+          setNewsSearchError((data.message as string) || defaultMsg);
+        }
       }
     } catch (err) {
       setNewsSearchState("error");

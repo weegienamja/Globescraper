@@ -4,8 +4,8 @@
  * Stage A: generateSearchQueries – Gemini returns search queries only
  * Stage B: generateTopicVariations – Gemini returns topics grounded in fetched results
  *
- * This replaces the old single-shot curation that conflated query generation,
- * source discovery, and topic curation into one Gemini call.
+ * Between stages: scored result normalization, fallback query expansion,
+ * and structured logging for debuggability.
  */
 
 import {
@@ -29,16 +29,39 @@ export interface SearchResult {
   id: string;
   query: string;
   title: string;
-  snippet: string;
+  snippet: string | null;
   url: string;
-  publishedAt?: string;
-  sourceName?: string;
+  publishedAt?: string | null;
+  sourceName?: string | null;
+  /** Quality score used for ranking (higher = better). */
+  score: number;
+}
+
+export interface QueryStats {
+  query: string;
+  rawCount: number;
+  normalizedCount: number;
+  keptCount: number;
+  topDomains: string[];
+}
+
+export interface RejectionCounts {
+  missingUrl: number;
+  missingTitle: number;
+  blockedDomain: number;
+  duplicateUrl: number;
+  ownDomain: number;
 }
 
 export interface PipelineLog {
   seedTitle: string;
+  cityFocus: string;
+  audienceFocus: string;
   queryList: string[];
+  queryStats: QueryStats[];
   usableResultCount: number;
+  rejections: RejectionCounts;
+  fallbackUsed: boolean;
   totalTokenUsage: number;
   topicsCount: number;
 }
@@ -47,13 +70,34 @@ export interface PipelineLog {
 /*  Constants                                                           */
 /* ------------------------------------------------------------------ */
 
-const MIN_USABLE_RESULTS = 5;
-const MAX_RESULTS = 15;
+const MIN_SOURCES = 6;
+const TARGET_SOURCES = 15;
 const SEARCH_TIMEOUT_MS = 8_000;
-const USER_AGENT =
-  "GlobescraperBot/1.0 (+https://globescraper.com; research-only)";
 
 const VALID_AUDIENCE = new Set<string>(["TRAVELLERS", "TEACHERS"]);
+
+/**
+ * High-trust domains that get a scoring boost.
+ * Government, embassies, aviation authorities, major news outlets.
+ */
+const HIGH_TRUST_DOMAINS = new Set([
+  "gov.kh", "gov.uk", "gov.au", "gov.sg", "state.gov",
+  "iata.org", "icao.int",
+  "reuters.com", "apnews.com", "bbc.com", "bbc.co.uk",
+  "aljazeera.com", "thediplomat.com",
+  "phnompenhpost.com", "khmertimeskh.com", "cambodianess.com",
+  "lonelyplanet.com",
+  "immigration.gov.kh", "evisa.gov.kh", "mfaic.gov.kh",
+]);
+
+/**
+ * Tracking query parameters to strip during URL canonicalization.
+ */
+const TRACKING_PARAMS = new Set([
+  "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content",
+  "fbclid", "gclid", "gclsrc", "msclkid", "dclid",
+  "ref", "ref_src", "ref_url",
+]);
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                             */
@@ -67,6 +111,107 @@ function cleanStr(s: string): string {
 /** Check if a string contains em dash. */
 function hasEmDash(s: string): boolean {
   return s.includes("\u2014") || s.includes("\u2013");
+}
+
+/**
+ * Canonicalize a URL: strip tracking params, trailing slash, www prefix.
+ * Exported for unit testing.
+ */
+export function canonicalizeUrl(raw: string): string {
+  try {
+    const u = new URL(raw);
+    // Strip tracking params
+    for (const key of [...u.searchParams.keys()]) {
+      if (TRACKING_PARAMS.has(key.toLowerCase())) {
+        u.searchParams.delete(key);
+      }
+    }
+    // Rebuild: lowercase host, strip www, strip trailing slash
+    let out = u.origin.replace(/^https?:\/\/www\./, "https://") + u.pathname;
+    if (out.endsWith("/")) out = out.slice(0, -1);
+    const qs = u.searchParams.toString();
+    if (qs) out += `?${qs}`;
+    return out;
+  } catch {
+    // If URL parsing fails, do minimal cleanup
+    return raw.replace(/\/$/, "").replace(/^https?:\/\/www\./, "https://");
+  }
+}
+
+/**
+ * Extract hostname from a URL (without www prefix).
+ */
+function extractHostname(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Check if a hostname matches any domain in a set (exact or subdomain).
+ */
+function matchesDomainSet(hostname: string, domainSet: Set<string>): boolean {
+  if (domainSet.has(hostname)) return true;
+  for (const d of domainSet) {
+    if (hostname.endsWith("." + d)) return true;
+  }
+  return false;
+}
+
+/**
+ * Score a search result for quality ranking.
+ * Higher score = more useful result.
+ * Exported for unit testing.
+ */
+export function scoreSearchResult(
+  result: { title: string; snippet: string | null; url: string },
+  cityFocus: string
+): number {
+  let score = 0;
+  const hostname = extractHostname(result.url);
+  const city = cityFocus === "Cambodia wide" ? "Cambodia" : cityFocus;
+  const cityLower = city.toLowerCase();
+
+  // +3: snippet present and >= 40 chars
+  if (result.snippet && result.snippet.trim().length >= 40) {
+    score += 3;
+  } else if (result.snippet && result.snippet.trim().length > 0) {
+    // +1: snippet present but short
+    score += 1;
+  }
+
+  // +2: high-trust domain
+  if (matchesDomainSet(hostname, HIGH_TRUST_DOMAINS)) {
+    score += 2;
+  }
+
+  // +1: title includes cityFocus or "Cambodia"
+  const titleLower = result.title.toLowerCase();
+  if (titleLower.includes(cityLower) || titleLower.includes("cambodia")) {
+    score += 1;
+  }
+
+  // +1: snippet mentions cityFocus or "Cambodia"
+  if (result.snippet) {
+    const snippetLower = result.snippet.toLowerCase();
+    if (snippetLower.includes(cityLower) || snippetLower.includes("cambodia")) {
+      score += 1;
+    }
+  }
+
+  // -2: our own domain (exclude from research)
+  if (hostname === "globescraper.com" || hostname.endsWith(".globescraper.com")) {
+    score -= 2;
+  }
+
+  // -1: title looks like forum spam (very short, all caps, lots of punctuation)
+  if (result.title.length < 10 || /^[A-Z\s!?]{10,}$/.test(result.title)) {
+    score -= 1;
+  }
+
+  return score;
 }
 
 /* ------------------------------------------------------------------ */
@@ -155,7 +300,6 @@ Return ONLY the JSON.`;
     if (retryFailures.length === 0 && retryQueries.length >= 4) {
       queries = retryQueries;
     }
-    // else keep original — some queries are better than none
 
     return {
       queries: queries.slice(0, 6),
@@ -208,27 +352,50 @@ function validateQueries(
 /*  Search step (code, not Gemini)                                      */
 /* ------------------------------------------------------------------ */
 
+interface RawSearchData {
+  results: SearchResult[];
+  queryStats: QueryStats[];
+  rejections: RejectionCounts;
+}
+
 /**
  * Execute web searches for each query via Google CSE.
- * Returns deduplicated, filtered results.
+ * Normalizes defensively (keeps results even without snippet).
+ * Scores and ranks results, keeping top TARGET_SOURCES.
  */
 export async function executeSearchQueries(
-  queries: string[]
-): Promise<SearchResult[]> {
+  queries: string[],
+  cityFocus: CityFocus | string
+): Promise<RawSearchData> {
   const apiKey = process.env.GOOGLE_CSE_API_KEY;
   const cseId = process.env.GOOGLE_CSE_ID;
+
+  const rejections: RejectionCounts = {
+    missingUrl: 0,
+    missingTitle: 0,
+    blockedDomain: 0,
+    duplicateUrl: 0,
+    ownDomain: 0,
+  };
+  const queryStats: QueryStats[] = [];
+
   if (!apiKey || !cseId) {
     console.warn(
-      "[SearchTopics] Google CSE not configured — returning empty results"
+      "[SearchTopics] Google CSE not configured (GOOGLE_CSE_API_KEY / GOOGLE_CSE_ID missing)"
     );
-    return [];
+    return { results: [], queryStats, rejections };
   }
 
-  const seenUrls = new Set<string>();
-  const results: SearchResult[] = [];
+  const seenCanonical = new Set<string>();
+  const allResults: SearchResult[] = [];
   let resultId = 0;
 
   for (const query of queries) {
+    let rawCount = 0;
+    let normalizedCount = 0;
+    let keptCount = 0;
+    const domainsForQuery: string[] = [];
+
     try {
       const params = new URLSearchParams({
         key: apiKey,
@@ -252,45 +419,159 @@ export async function executeSearchQueries(
 
       clearTimeout(timeout);
 
-      if (!response.ok) continue;
+      if (!response.ok) {
+        console.warn(
+          `[SearchTopics] CSE query "${query}" returned HTTP ${response.status}`
+        );
+        queryStats.push({
+          query,
+          rawCount: 0,
+          normalizedCount: 0,
+          keptCount: 0,
+          topDomains: [],
+        });
+        continue;
+      }
       const data = await response.json();
+      const items = data.items || [];
+      rawCount = items.length;
 
-      for (const item of data.items || []) {
-        const url: string = item.link;
-        if (!url) continue;
+      for (const item of items) {
+        const url: string | undefined = item.link;
+        const title: string | undefined = item.title;
 
-        // Canonical URL dedup
-        const canonical = url.replace(/\/$/, "").replace(/^https?:\/\/www\./, "https://");
-        if (seenUrls.has(canonical)) continue;
-        if (isBlockedDomain(url)) continue;
+        // Must have URL
+        if (!url) {
+          rejections.missingUrl++;
+          continue;
+        }
 
-        const snippet: string = item.snippet || "";
-        // Filter out empty / "No snippet" items
-        if (!snippet || snippet.trim().length < 20) continue;
+        // Must have title
+        if (!title || title.trim().length === 0) {
+          rejections.missingTitle++;
+          continue;
+        }
 
-        seenUrls.add(canonical);
-        const trusted = findTrustedSource(url);
+        normalizedCount++;
+        const canonical = canonicalizeUrl(url);
+        const hostname = extractHostname(url);
+
+        // Dedup by canonical URL
+        if (seenCanonical.has(canonical)) {
+          rejections.duplicateUrl++;
+          continue;
+        }
+
+        // Blocked domain
+        if (isBlockedDomain(url)) {
+          rejections.blockedDomain++;
+          continue;
+        }
+
+        // Skip our own domain — we don't want to cite ourselves
+        if (hostname === "globescraper.com" || hostname.endsWith(".globescraper.com")) {
+          rejections.ownDomain++;
+          continue;
+        }
+
+        seenCanonical.add(canonical);
+        domainsForQuery.push(hostname);
         resultId++;
 
-        results.push({
+        const snippet: string | null =
+          item.snippet && item.snippet.trim().length > 0
+            ? item.snippet.trim()
+            : null;
+
+        const trusted = findTrustedSource(url);
+
+        const result: SearchResult = {
           id: `r${resultId}`,
           query,
-          title: item.title || "",
+          title: title.trim(),
           snippet,
           url,
           publishedAt:
-            item.pagemap?.metatags?.[0]?.["article:published_time"] ||
-            undefined,
-          sourceName: trusted?.publisher || item.displayLink || undefined,
-        });
+            item.pagemap?.metatags?.[0]?.["article:published_time"] || null,
+          sourceName: trusted?.publisher || item.displayLink || null,
+          score: 0,
+        };
+
+        result.score = scoreSearchResult(result, cityFocus);
+        allResults.push(result);
+        keptCount++;
       }
-    } catch {
-      // Continue with other queries
+    } catch (err) {
+      console.warn(`[SearchTopics] CSE query "${query}" failed:`, err);
     }
+
+    queryStats.push({
+      query,
+      rawCount,
+      normalizedCount,
+      keptCount,
+      topDomains: [...new Set(domainsForQuery)].slice(0, 5),
+    });
   }
 
-  // Cap at MAX_RESULTS
-  return results.slice(0, MAX_RESULTS);
+  // Sort by score descending, keep top TARGET_SOURCES
+  allResults.sort((a, b) => b.score - a.score);
+  const kept = allResults.slice(0, TARGET_SOURCES);
+
+  return { results: kept, queryStats, rejections };
+}
+
+/* ------------------------------------------------------------------ */
+/*  Fallback query expansion                                            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Generate fallback queries when the initial search yields too few results.
+ * These are code-generated (no Gemini call), broader but still specific.
+ * Exported for unit testing.
+ */
+export function buildFallbackQueries(
+  seedTitle: string,
+  cityFocus: CityFocus,
+  audienceFocus: AudienceFocus,
+  originalQueries: string[]
+): string[] {
+  const city = cityFocus === "Cambodia wide" ? "Cambodia" : cityFocus;
+  const titleWords = seedTitle
+    .replace(/\b\d{4}\b/g, "") // strip years
+    .replace(/[^\w\s]/g, " ")
+    .split(/\s+/)
+    .filter((w) => w.length > 3)
+    .slice(0, 4);
+
+  const fallback: string[] = [];
+
+  // a) Broader topic queries without year constraint
+  if (titleWords.length >= 2) {
+    fallback.push(`${city} ${titleWords.join(" ")}`);
+    fallback.push(`Cambodia ${titleWords.slice(0, 3).join(" ")}`);
+  }
+
+  // b) Audience-specific queries
+  if (audienceFocus === "teachers" || audienceFocus === "both") {
+    fallback.push(`${city} work permit requirements teacher`);
+    fallback.push(`Cambodia visa types for working as teacher`);
+    fallback.push(`Cambodia immigration rules entry requirements`);
+  }
+  if (audienceFocus === "travellers" || audienceFocus === "both") {
+    fallback.push(`${city} entry requirements visitors`);
+    fallback.push(`Cambodia e-visa vs ordinary visa`);
+    fallback.push(`Cambodia travel requirements tourists`);
+  }
+
+  // c) Authoritative-source queries
+  fallback.push(`site:gov.kh entry requirements Cambodia`);
+  fallback.push(`Cambodia embassy visa requirements`);
+  fallback.push(`UK FCDO Cambodia entry requirements`);
+
+  // Dedupe against original queries (case-insensitive)
+  const originalLower = new Set(originalQueries.map((q) => q.toLowerCase()));
+  return fallback.filter((q) => !originalLower.has(q.toLowerCase()));
 }
 
 /* ------------------------------------------------------------------ */
@@ -324,11 +605,16 @@ export async function generateTopicVariations(
         ? "travellers to Cambodia"
         : "people interested in teaching English in Cambodia";
 
+  // Build result list for prompt — omit snippet if null (never emit "No snippet")
   const resultsList = results
-    .map(
-      (r) =>
-        `[${r.id}] "${r.title}" — ${r.snippet} (URL: ${r.url}${r.publishedAt ? `, Published: ${r.publishedAt}` : ""}${r.sourceName ? `, Source: ${r.sourceName}` : ""})`
-    )
+    .map((r) => {
+      const parts = [`[${r.id}] "${r.title}"`];
+      if (r.snippet) parts.push(r.snippet);
+      parts.push(`(URL: ${r.url})`);
+      if (r.publishedAt) parts.push(`Published: ${r.publishedAt}`);
+      if (r.sourceName) parts.push(`Source: ${r.sourceName}`);
+      return parts.join(" | ");
+    })
     .join("\n");
 
   const allowedUrls = results.map((r) => r.url);
@@ -442,7 +728,7 @@ function validateAndCleanTopics(
   seedTitle: string,
   currentYear: number
 ): NewsTopic[] {
-  const allowedSet = new Set(allowedUrls.map((u) => u.replace(/\/$/, "")));
+  const allowedSet = new Set(allowedUrls.map((u) => canonicalizeUrl(u)));
   const topics: NewsTopic[] = [];
 
   for (const raw of rawTopics as any[]) {
@@ -460,14 +746,14 @@ function validateAndCleanTopics(
     const whyItMatters = cleanStr(String(raw.whyItMatters));
     const intent = cleanStr(String(raw.intent || "informational"));
 
-    // Filter sourceUrls to only allowed URLs
+    // Filter sourceUrls to only allowed URLs (canonicalize for comparison)
     let sourceUrls: string[] = [];
     if (Array.isArray(raw.sourceUrls)) {
       sourceUrls = raw.sourceUrls
         .map(String)
         .filter((u: string) => {
-          const normalized = u.replace(/\/$/, "");
-          return allowedSet.has(normalized);
+          const canon = canonicalizeUrl(u);
+          return allowedSet.has(canon);
         })
         .slice(0, 3);
     }
@@ -520,7 +806,7 @@ function validateTopicsStrict(
   currentYear: number
 ): string[] {
   const failures: string[] = [];
-  const allowedSet = new Set(allowedUrls.map((u) => u.replace(/\/$/, "")));
+  const allowedSet = new Set(allowedUrls.map((u) => canonicalizeUrl(u)));
   const cityLower = city.toLowerCase();
 
   if (topics.length < 4 || topics.length > 8) {
@@ -563,7 +849,7 @@ function validateTopicsStrict(
       );
     }
     for (const u of urls) {
-      if (!allowedSet.has(u.replace(/\/$/, ""))) {
+      if (!allowedSet.has(canonicalizeUrl(u))) {
         failures.push(
           `Topic "${t.title}" cites URL not in search results: ${u}`
         );
@@ -598,7 +884,7 @@ export interface PipelineResult {
 /**
  * Run the full 2-stage Search Topics pipeline:
  * 1. Generate search queries from seed title
- * 2. Execute web searches
+ * 2. Execute web searches (with fallback expansion if needed)
  * 3. Generate topic variations grounded in results
  */
 export async function runSearchTopicsPipeline(
@@ -608,6 +894,7 @@ export async function runSearchTopicsPipeline(
 ): Promise<PipelineResult> {
   const currentYear = new Date().getFullYear();
   let totalTokens = 0;
+  let fallbackUsed = false;
 
   // Stage A: Generate search queries
   console.log("[SearchTopics] Stage A: Generating search queries...");
@@ -625,8 +912,13 @@ export async function runSearchTopicsPipeline(
       topics: [],
       log: {
         seedTitle,
+        cityFocus,
+        audienceFocus,
         queryList: [],
+        queryStats: [],
         usableResultCount: 0,
+        rejections: { missingUrl: 0, missingTitle: 0, blockedDomain: 0, duplicateUrl: 0, ownDomain: 0 },
+        fallbackUsed: false,
         totalTokenUsage: totalTokens,
         topicsCount: 0,
       },
@@ -634,69 +926,120 @@ export async function runSearchTopicsPipeline(
     };
   }
 
-  // Stage B (search): Execute web searches for each query
-  console.log("[SearchTopics] Executing web searches...");
-  let results = await executeSearchQueries(queries);
-  console.log(`[SearchTopics] Found ${results.length} usable results.`);
+  // Primary search pass
+  console.log("[SearchTopics] Primary search pass...");
+  let searchData = await executeSearchQueries(queries, cityFocus);
+  let allResults = searchData.results;
+  let allQueryStats = searchData.queryStats;
+  let allRejections = searchData.rejections;
+  console.log(
+    `[SearchTopics] Primary pass: ${allResults.length} results. Rejections:`,
+    JSON.stringify(allRejections)
+  );
 
-  // If too few results, try widening queries
-  if (results.length < MIN_USABLE_RESULTS) {
-    console.log("[SearchTopics] Too few results, widening queries...");
-    const city =
-      cityFocus === "Cambodia wide" ? "Cambodia" : cityFocus;
-    const widenedQueries = [
-      `${seedTitle} ${city}`,
-      `Cambodia ${seedTitle.split(" ").slice(0, 3).join(" ")}`,
-      `${city} latest news ${currentYear}`,
-    ];
-    const extraResults = await executeSearchQueries(widenedQueries);
-    // Merge, dedup by URL
-    const seenUrls = new Set(results.map((r) => r.url));
-    for (const r of extraResults) {
-      if (!seenUrls.has(r.url)) {
-        results.push(r);
-        seenUrls.add(r.url);
-      }
-    }
+  // Fallback query expansion if needed
+  if (allResults.length < MIN_SOURCES) {
+    fallbackUsed = true;
     console.log(
-      `[SearchTopics] After widening: ${results.length} usable results.`
+      `[SearchTopics] Only ${allResults.length} results (need ${MIN_SOURCES}). Running fallback search...`
     );
+    const fallbackQueries = buildFallbackQueries(
+      seedTitle,
+      cityFocus,
+      audienceFocus,
+      queries
+    );
+    console.log(
+      `[SearchTopics] Fallback queries (${fallbackQueries.length}):`,
+      fallbackQueries.slice(0, 6)
+    );
+
+    if (fallbackQueries.length > 0) {
+      const fallbackData = await executeSearchQueries(
+        fallbackQueries.slice(0, 6),
+        cityFocus
+      );
+
+      // Merge, dedup by canonical URL
+      const seenCanonical = new Set(
+        allResults.map((r) => canonicalizeUrl(r.url))
+      );
+      for (const r of fallbackData.results) {
+        const canon = canonicalizeUrl(r.url);
+        if (!seenCanonical.has(canon)) {
+          allResults.push(r);
+          seenCanonical.add(canon);
+        }
+      }
+
+      // Merge stats
+      allQueryStats = [...allQueryStats, ...fallbackData.queryStats];
+      allRejections = {
+        missingUrl: allRejections.missingUrl + fallbackData.rejections.missingUrl,
+        missingTitle: allRejections.missingTitle + fallbackData.rejections.missingTitle,
+        blockedDomain: allRejections.blockedDomain + fallbackData.rejections.blockedDomain,
+        duplicateUrl: allRejections.duplicateUrl + fallbackData.rejections.duplicateUrl,
+        ownDomain: allRejections.ownDomain + fallbackData.rejections.ownDomain,
+      };
+
+      // Re-sort by score, cap at TARGET_SOURCES
+      allResults.sort((a, b) => b.score - a.score);
+      allResults = allResults.slice(0, TARGET_SOURCES);
+
+      console.log(
+        `[SearchTopics] After fallback: ${allResults.length} total results.`
+      );
+    }
   }
 
-  if (results.length < MIN_USABLE_RESULTS) {
+  // Build the log
+  const log: PipelineLog = {
+    seedTitle,
+    cityFocus,
+    audienceFocus,
+    queryList: queries,
+    queryStats: allQueryStats,
+    usableResultCount: allResults.length,
+    rejections: allRejections,
+    fallbackUsed,
+    totalTokenUsage: totalTokens,
+    topicsCount: 0,
+  };
+
+  if (allResults.length === 0) {
+    log.totalTokenUsage = totalTokens;
     return {
       topics: [],
-      log: {
-        seedTitle,
-        queryList: queries,
-        usableResultCount: results.length,
-        totalTokenUsage: totalTokens,
-        topicsCount: 0,
-      },
-      error: `Not enough sources found (${results.length}). Try a different title or try again later.`,
+      log,
+      error:
+        "No usable sources returned from search. Try again, or pick a less niche title.",
     };
   }
 
+  // Even if below MIN_SOURCES, proceed with what we have (>0) rather than failing.
+  if (allResults.length < MIN_SOURCES) {
+    console.warn(
+      `[SearchTopics] Proceeding with ${allResults.length} results (below MIN_SOURCES=${MIN_SOURCES}).`
+    );
+  }
+
   // Stage B (Gemini): Generate topic variations grounded in results
-  console.log("[SearchTopics] Stage B: Generating topic variations...");
+  console.log(
+    `[SearchTopics] Stage B: Generating topic variations from ${allResults.length} results...`
+  );
   const { topics, tokenUsage: topicTokens } =
     await generateTopicVariations(
       seedTitle,
       cityFocus,
       audienceFocus,
       currentYear,
-      results
+      allResults
     );
   totalTokens += topicTokens;
   console.log(`[SearchTopics] Generated ${topics.length} topics.`);
 
-  const log: PipelineLog = {
-    seedTitle,
-    queryList: queries,
-    usableResultCount: results.length,
-    totalTokenUsage: totalTokens,
-    topicsCount: topics.length,
-  };
+  log.totalTokenUsage = totalTokens;
+  log.topicsCount = topics.length;
 
   return { topics, log };
 }

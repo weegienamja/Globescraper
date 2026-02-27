@@ -65,7 +65,12 @@ export async function POST(req: NextRequest) {
 
       if (result.error) {
         return NextResponse.json(
-          { topics: [], message: result.error, pipelineLog: result.log },
+          {
+            topics: [],
+            message: result.error,
+            pipelineLog: result.log,
+            errorCode: result.log.usableResultCount === 0 ? "NO_SOURCES" : "LOW_SOURCES",
+          },
           { status: 200 }
         );
       }
