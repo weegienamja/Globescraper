@@ -9,7 +9,7 @@ import { RentalSource } from "@prisma/client";
 /* ── Source toggles ──────────────────────────────────────── */
 
 export const enabledSources: Record<RentalSource, boolean> = {
-  KHMER24: true,
+  KHMER24: false, // Blocked by Cloudflare WAF – needs Playwright
   REALESTATE_KH: true,
 };
 

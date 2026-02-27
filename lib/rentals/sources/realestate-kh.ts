@@ -68,8 +68,8 @@ export async function discoverRealestateKh(): Promise<DiscoveredUrl[]> {
 
       const $ = cheerio.load(html);
 
-      // Extract listing links
-      $('a[href*="/rent/"]').each((_i, el) => {
+      // Extract listing links from article elements (each listing is an <article>)
+      $("article a[href]").each((_i, el) => {
         if (urls.length >= DISCOVER_MAX_URLS) return false;
 
         const href = $(el).attr("href");
@@ -89,16 +89,55 @@ export async function discoverRealestateKh(): Promise<DiscoveredUrl[]> {
         }
       });
 
-      // Find next page link
-      const nextLink = $(
-        'a[rel="next"], .pagination a:contains("Next"), .pagination a:last-child'
-      )
-        .first()
-        .attr("href");
-      if (nextLink && nextLink !== pageUrl) {
-        pageUrl = nextLink.startsWith("http")
-          ? nextLink
-          : `https://www.realestate.com.kh${nextLink}`;
+      // Also pick up links from .info.listing containers
+      $("div.info.listing a[href]").each((_i, el) => {
+        if (urls.length >= DISCOVER_MAX_URLS) return false;
+
+        const href = $(el).attr("href");
+        if (!href) return;
+
+        const full = href.startsWith("http")
+          ? href
+          : `https://www.realestate.com.kh${href}`;
+
+        if (!isListingUrl(full)) return;
+
+        const canonical = canonicalizeUrl(full);
+        const sourceId = extractListingId(full);
+
+        if (!urls.some((u) => u.url === canonical)) {
+          urls.push({ url: canonical, sourceListingId: sourceId });
+        }
+      });
+
+      // Find next page link — realestate.com.kh uses ?page=N
+      let nextPageUrl: string | null = null;
+      $("a[href]").each((_i, el) => {
+        const href = $(el).attr("href") || "";
+        const text = $(el).text().trim();
+        // Look for "next" link or numbered page links
+        if (text === "›" || text === "Next" || text === "»") {
+          nextPageUrl = href.startsWith("http")
+            ? href
+            : `https://www.realestate.com.kh${href}`;
+          return false;
+        }
+      });
+
+      // Fallback: try incrementing ?page=N
+      if (!nextPageUrl) {
+        const currentUrl = new URL(pageUrl);
+        const currentPage = parseInt(currentUrl.searchParams.get("page") || "1", 10);
+        // Only try next page if we found listings on this page
+        if (urls.length > 0 && currentPage < DISCOVER_MAX_PAGES) {
+          const paginatedUrl: URL = new URL(pageUrl as string);
+          paginatedUrl.searchParams.set("page", String(currentPage + 1));
+          nextPageUrl = paginatedUrl.toString();
+        }
+      }
+
+      if (nextPageUrl && nextPageUrl !== pageUrl) {
+        pageUrl = nextPageUrl;
       } else {
         pageUrl = null;
       }
@@ -149,13 +188,27 @@ export async function scrapeListingRealestateKh(
     $('[class*="price"], .listing-price').first().text().trim() || null;
   const priceMonthlyUsd = parsePriceMonthlyUsd(priceText);
 
-  // Location
+  // Location — try multiple selectors, then fallback to URL slug
   const locationText =
-    $('[class*="location"], .listing-location, .address')
+    $('[class*="location"], .listing-location, .address, [class*="breadcrumb"]')
       .first()
       .text()
       .trim() || null;
-  const district = parseDistrict(locationText);
+  let district = parseDistrict(locationText);
+
+  // Fallback: extract district from title (e.g. "3 Bed, 4 Bath Apartment for Rent in BKK 1")
+  if (!district) {
+    const titleMatch = title.match(/(?:in|at)\s+(.+?)$/i);
+    if (titleMatch) {
+      district = parseDistrict(titleMatch[1].trim());
+      if (!district) district = titleMatch[1].trim();
+    }
+  }
+
+  // Fallback: extract from URL slug (e.g. /rent/bkk-1/... → "BKK 1")
+  if (!district) {
+    district = extractDistrictFromUrl(url);
+  }
 
   // Beds, baths, size
   const detailText = $(
@@ -165,16 +218,44 @@ export async function scrapeListingRealestateKh(
     `${title} ${detailText} ${description ?? ""}`
   );
 
-  // Images
+  // Size: also try to find "floor area" or "m²" in specific elements
+  let finalSizeSqm = sizeSqm;
+  if (!finalSizeSqm) {
+    const sizeMatch = $.html().match(/(\d+)\s*m²/i);
+    if (sizeMatch) finalSizeSqm = parseFloat(sizeMatch[1]);
+  }
+
+  // Images — try multiple selectors and also look for og:image and srcset
   const imageUrls: string[] = [];
-  $('[class*="gallery"] img, .listing-image img, .carousel img, [class*="photo"] img').each(
+  const imageSet = new Set<string>();
+
+  // Try og:image first
+  const ogImage = $('meta[property="og:image"]').attr("content");
+  if (ogImage && ogImage.startsWith("http")) {
+    imageSet.add(ogImage);
+  }
+
+  // Try all img tags with common listing image patterns
+  $('img[src*="realestate"], img[src*="cloudfront"], img[src*="cdn"], img[data-src]').each(
     (_i, el) => {
       const src = $(el).attr("src") || $(el).attr("data-src");
-      if (src && src.startsWith("http")) {
-        imageUrls.push(src);
+      if (src && src.startsWith("http") && !src.includes("logo") && !src.includes("icon") && !src.includes("avatar")) {
+        imageSet.add(src);
       }
     }
   );
+
+  // Also try gallery/slider containers
+  $('[class*="gallery"] img, [class*="slider"] img, [class*="carousel"] img, [class*="photo"] img').each(
+    (_i, el) => {
+      const src = $(el).attr("src") || $(el).attr("data-src");
+      if (src && src.startsWith("http")) {
+        imageSet.add(src);
+      }
+    }
+  );
+
+  imageUrls.push(...imageSet);
 
   // Posted date (often in meta or structured data)
   let postedAt: Date | null = null;
@@ -199,7 +280,7 @@ export async function scrapeListingRealestateKh(
     propertyType,
     bedrooms,
     bathrooms,
-    sizeSqm,
+    sizeSqm: finalSizeSqm,
     priceOriginal: priceText,
     priceMonthlyUsd,
     currency,
@@ -213,26 +294,58 @@ export async function scrapeListingRealestateKh(
 function isListingUrl(url: string): boolean {
   try {
     const u = new URL(url);
-    // Individual listings typically have IDs or long slugs
-    return (
-      u.hostname.includes("realestate.com.kh") &&
-      u.pathname.startsWith("/rent/") &&
-      // Must be a detail page, not a category index
-      u.pathname.split("/").filter(Boolean).length >= 3
-    );
+    if (!u.hostname.includes("realestate.com.kh")) return false;
+
+    const path = u.pathname;
+
+    // Individual listing pages have a numeric ID at the end of the slug:
+    // /rent/<district>/<beds>-bed-<baths>-bath-<type>-<id>/
+    // /new-developments/<project>/<beds>-bed-<baths>-bath-<type>-<id>/
+    // The ID is always a 5-6 digit number at the end
+    if (/\d{5,}\/?\s*$/.test(path)) {
+      // Must contain "rent" or "new-developments" in the path
+      if (path.includes("/rent/") || path.includes("/new-developments/")) {
+        // Exclude category/filter pages (those don't have numeric IDs)
+        return true;
+      }
+    }
+
+    return false;
   } catch {
     return false;
   }
 }
 
 function extractListingId(url: string): string | null {
-  // Try patterns like /rent/condos/12345 or /rent/...-12345.html
-  const numMatch = url.match(/\/(\d{4,})(?:\.html)?(?:[?#]|$)/);
-  if (numMatch) return numMatch[1];
+  // Extract numeric ID from end of URL path
+  // e.g. /rent/bkk-1/3-bed-4-bath-apartment-259490/ → "259490"
+  const match = url.match(/-(\d{5,})\/?(?:[?#]|$)/);
+  return match ? match[1] : null;
+}
 
-  // Try slug-based ID from last path segment
-  const slugMatch = url.match(/\/([a-z0-9-]+(?:-\d+))(?:\.html)?(?:[?#]|$)/i);
-  if (slugMatch) return slugMatch[1];
-
-  return null;
+/**
+ * Extract district name from URL slug.
+ * /rent/bkk-1/... → "BKK 1"
+ * /rent/tonle-bassac/... → "Tonle Bassac"
+ */
+function extractDistrictFromUrl(url: string): string | null {
+  try {
+    const u = new URL(url);
+    const segments = u.pathname.split("/").filter(Boolean);
+    // For /rent/<district>/<listing-slug>, district is segments[1]
+    if (segments[0] === "rent" && segments.length >= 3) {
+      const slug = segments[1];
+      // Convert slug to display name: "bkk-1" → "BKK 1", "tonle-bassac" → "Tonle Bassac"
+      if (slug.startsWith("bkk")) {
+        return slug.replace(/-/g, " ").toUpperCase();
+      }
+      return slug
+        .split("-")
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(" ");
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
