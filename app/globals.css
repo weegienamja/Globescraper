@@ -632,9 +632,9 @@ img {
     gap: 4px;
   }
   .header__logo {
-    width: 72px;
-    height: 72px;
-    margin: -8px 0;
+    width: 56px;
+    height: 56px;
+    margin: -4px 0;
   }
 }
 
