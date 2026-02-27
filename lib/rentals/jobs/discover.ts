@@ -11,7 +11,7 @@ import { RentalSource, QueueStatus } from "@prisma/client";
 import { isSourceEnabled, DISCOVER_MAX_URLS } from "../config";
 import { discoverKhmer24 } from "../sources/khmer24";
 import { discoverRealestateKh } from "../sources/realestate-kh";
-import { type PipelineLogFn, noopLogger } from "../pipelineLogger";
+import { type PipelineLogFn, type PipelineProgressFn, noopLogger, noopProgress } from "../pipelineLogger";
 
 export interface DiscoverOptions {
   maxUrls?: number;
@@ -31,7 +31,8 @@ export interface DiscoverResult {
 export async function discoverListingsJob(
   source: RentalSource,
   options?: DiscoverOptions,
-  log: PipelineLogFn = noopLogger
+  log: PipelineLogFn = noopLogger,
+  progress: PipelineProgressFn = noopProgress
 ): Promise<DiscoverResult> {
   const maxUrls = options?.maxUrls ?? DISCOVER_MAX_URLS;
   log("info", `Starting discover job for ${source} (max ${maxUrls} URLs)`);
@@ -62,7 +63,8 @@ export async function discoverListingsJob(
     }
 
     // Run the appropriate adapter
-    log("info", `Running ${source} adapter...`);
+    progress({ phase: "discover", percent: 5, label: `Connecting to ${source}…` });
+    log("info", `Running ${source} adapter — crawling category pages for listing URLs…`);
     const startTime = Date.now();
     let discovered;
     switch (source) {
@@ -75,7 +77,8 @@ export async function discoverListingsJob(
       default:
         throw new Error(`Unknown source: ${source}`);
     }
-    log("info", `Adapter returned ${discovered.length} listing URLs`);
+    progress({ phase: "discover", percent: 50, label: `Found ${discovered.length} listing URLs` });
+    log("info", `Adapter returned ${discovered.length} listing URLs from category pages`);
 
     // Cap results
     const capped = discovered.slice(0, maxUrls);
@@ -84,11 +87,13 @@ export async function discoverListingsJob(
     }
 
     // Enqueue URLs (upsert to avoid duplicates)
-    log("info", `Enqueueing ${capped.length} URLs to scrape queue...`);
+    log("info", `Enqueueing ${capped.length} URLs to scrape queue…`);
     let queued = 0;
     let skippedDuplicate = 0;
 
-    for (const item of capped) {
+    for (let i = 0; i < capped.length; i++) {
+      const item = capped[i];
+      const pct = 50 + Math.round((i / capped.length) * 45);
       try {
         await prisma.scrapeQueue.upsert({
           where: {
@@ -105,24 +110,27 @@ export async function discoverListingsJob(
             priority: 0,
           },
           update: {
-            // If it already exists and is DONE, re-queue as PENDING for freshness check
-            // If PENDING or RETRY, just leave it
             updatedAt: new Date(),
           },
         });
         queued++;
-        log("debug", `Queued: ${item.url}`, { sourceListingId: item.sourceListingId });
+        if (queued % 10 === 0 || i === capped.length - 1) {
+          progress({ phase: "discover", percent: pct, label: `Enqueued ${queued}/${capped.length} URLs` });
+          log("info", `Enqueued ${queued}/${capped.length} URLs so far…`);
+        }
+        log("debug", `✓ Queued: ${item.url}`, { sourceListingId: item.sourceListingId });
       } catch {
         skippedDuplicate++;
-        log("debug", `Duplicate skipped: ${item.url}`);
+        log("debug", `↩ Duplicate skipped: ${item.url}`);
       }
     }
 
     const endTime = Date.now();
     const durationMs = endTime - startTime;
 
-    log("info", `Enqueue complete: ${queued} queued, ${skippedDuplicate} duplicates skipped`);
-    log("info", `Discover job finished in ${(durationMs / 1000).toFixed(1)}s — ${capped.length} discovered, ${queued} queued`);
+    progress({ phase: "discover", percent: 100, label: `Done — ${queued} queued, ${skippedDuplicate} duplicates` });
+    log("info", `Enqueue complete: ${queued} new URLs queued, ${skippedDuplicate} duplicates skipped`);
+    log("info", `✔ Discover finished in ${(durationMs / 1000).toFixed(1)}s — ${capped.length} found, ${queued} queued`);
 
     // Update JobRun
     await prisma.jobRun.update({

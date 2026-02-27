@@ -13,7 +13,7 @@ import { scrapeListingKhmer24 } from "../sources/khmer24";
 import { scrapeListingRealestateKh } from "../sources/realestate-kh";
 import { computeFingerprint } from "../fingerprint";
 import { politeDelay } from "../http";
-import { type PipelineLogFn, noopLogger } from "../pipelineLogger";
+import { type PipelineLogFn, type PipelineProgressFn, noopLogger, noopProgress } from "../pipelineLogger";
 
 export interface ProcessQueueOptions {
   maxItems?: number;
@@ -34,7 +34,8 @@ export interface ProcessQueueResult {
 export async function processQueueJob(
   source: RentalSource,
   options?: ProcessQueueOptions,
-  log: PipelineLogFn = noopLogger
+  log: PipelineLogFn = noopLogger,
+  progress: PipelineProgressFn = noopProgress
 ): Promise<ProcessQueueResult> {
   const maxItems = options?.maxItems ?? PROCESS_QUEUE_MAX;
   log("info", `Starting process queue for ${source} (max ${maxItems} items)`);
@@ -81,6 +82,12 @@ export async function processQueueJob(
     });
 
     log("info", `Found ${items.length} pending items in queue`);
+    if (items.length === 0) {
+      progress({ phase: "process", percent: 100, label: "Queue empty — nothing to process" });
+      log("info", "Queue is empty — nothing to scrape. Run Discover first.");
+    } else {
+      progress({ phase: "process", percent: 2, label: `Starting — ${items.length} listings to scrape…` });
+    }
     const startTime = Date.now();
 
     /* ── Process in parallel batches ─────────────────────── */
@@ -89,12 +96,14 @@ export async function processQueueJob(
     for (let batchStart = 0; batchStart < items.length; batchStart += BATCH_SIZE) {
       const batch = items.slice(batchStart, batchStart + BATCH_SIZE);
       const batchNum = Math.floor(batchStart / BATCH_SIZE) + 1;
-      log("info", `Batch ${batchNum}: processing ${batch.length} items concurrently…`);
+      const totalBatches = Math.ceil(items.length / BATCH_SIZE);
+      log("info", `── Batch ${batchNum}/${totalBatches}: scraping ${batch.length} listings concurrently…`);
 
       const results = await Promise.allSettled(
         batch.map(async (item) => {
           const idx = batchStart + batch.indexOf(item) + 1;
-          log("info", `[${idx}/${items.length}] Scraping: ${item.canonicalUrl}`);
+          const shortUrl = item.canonicalUrl.replace(/^https?:\/\/[^/]+/, "");
+          log("info", `[${idx}/${items.length}] Fetching: ${shortUrl}`);
 
           try {
             const scraped = await scrapeForSource(source, item.canonicalUrl, log);
@@ -114,12 +123,14 @@ export async function processQueueJob(
 
             const now = new Date();
             const priceStr = scraped.priceMonthlyUsd ? `$${scraped.priceMonthlyUsd}/mo` : "no price";
-            log("info", `[${idx}/${items.length}] → ${scraped.title}`, {
+            log("info", `[${idx}/${items.length}] Parsed: ${scraped.title?.slice(0, 60) || "(no title)"}`, {
               type: scraped.propertyType,
-              district: scraped.district,
+              district: scraped.district || "unknown",
+              city: scraped.city || "Phnom Penh",
               price: priceStr,
-              beds: scraped.bedrooms,
-              baths: scraped.bathrooms,
+              beds: scraped.bedrooms ?? "?",
+              baths: scraped.bathrooms ?? "?",
+              size: scraped.sizeSqm ? `${scraped.sizeSqm}m²` : "?",
               images: scraped.imageUrls.length,
             });
 
@@ -168,7 +179,7 @@ export async function processQueueJob(
                 },
               });
               listingId = existing.id;
-              log("info", `[${idx}/${items.length}] ✓ Updated existing listing`);
+              log("info", `[${idx}/${items.length}] ✓ Updated existing listing (${priceStr}, ${scraped.district || "no district"})`);
             } else {
               const newListing = await prisma.rentalListing.create({
                 data: {
@@ -196,7 +207,7 @@ export async function processQueueJob(
               });
               listingId = newListing.id;
               wasInserted = true;
-              log("info", `[${idx}/${items.length}] ✓ Inserted new listing`);
+              log("info", `[${idx}/${items.length}] ✓ Inserted NEW listing (${priceStr}, ${scraped.district || "no district"})`);
             }
 
             await prisma.rentalSnapshot.create({
@@ -249,6 +260,11 @@ export async function processQueueJob(
         }
       }
 
+      /* Report progress */
+      const pct = Math.round((processed / items.length) * 100);
+      progress({ phase: "process", percent: pct, label: `Scraped ${processed}/${items.length} listings (${inserted} new, ${updated} updated, ${failed} failed)` });
+      log("info", `Batch ${batchNum} done — running totals: ${processed}/${items.length} processed, ${inserted} new, ${updated} updated, ${failed} failed`);
+
       /* Brief pause between batches (not between each item) */
       if (batchStart + BATCH_SIZE < items.length) {
         await politeDelay();
@@ -258,7 +274,8 @@ export async function processQueueJob(
     const endTime = Date.now();
     const durationMs = endTime - startTime;
 
-    log("info", `Process queue finished in ${(durationMs / 1000).toFixed(1)}s — ${processed} processed, ${inserted} inserted, ${updated} updated, ${snapshots} snapshots, ${failed} failed`);
+    log("info", `✔ Process queue finished in ${(durationMs / 1000).toFixed(1)}s — ${processed} scraped, ${inserted} new, ${updated} updated, ${snapshots} snapshots, ${failed} failed`);
+    progress({ phase: "process", percent: 100, label: `Done — ${processed} scraped, ${inserted} new, ${updated} updated` });
 
     await prisma.jobRun.update({
       where: { id: jobRun.id },

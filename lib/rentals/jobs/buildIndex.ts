@@ -10,7 +10,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { PropertyType } from "@prisma/client";
-import { type PipelineLogFn, noopLogger } from "../pipelineLogger";
+import { type PipelineLogFn, type PipelineProgressFn, noopLogger, noopProgress } from "../pipelineLogger";
 
 export interface BuildIndexOptions {
   /** The date to build the index for. Defaults to yesterday UTC. */
@@ -27,7 +27,8 @@ export interface BuildIndexResult {
  */
 export async function buildDailyIndexJob(
   options?: BuildIndexOptions,
-  log: PipelineLogFn = noopLogger
+  log: PipelineLogFn = noopLogger,
+  progress: PipelineProgressFn = noopProgress
 ): Promise<BuildIndexResult> {
   // Determine date (default = yesterday UTC at 00:00)
   const targetDate = options?.date ?? getYesterdayUTC();
@@ -35,8 +36,6 @@ export async function buildDailyIndexJob(
   dateStart.setUTCHours(0, 0, 0, 0);
   const dateEnd = new Date(dateStart);
   dateEnd.setUTCDate(dateEnd.getUTCDate() + 1);
-
-  log("info", `Starting build index for ${dateStart.toISOString().slice(0, 10)}`);
 
   const jobRun = await prisma.jobRun.create({
     data: {
@@ -49,6 +48,9 @@ export async function buildDailyIndexJob(
 
   try {
     const startTime = Date.now();
+
+    log("info", `Querying snapshots for ${dateStart.toISOString().slice(0, 10)}…`);
+    progress({ phase: "index", percent: 10, label: `Querying snapshots for ${dateStart.toISOString().slice(0, 10)}…` });
 
     // Fetch all snapshots for the target date
     const snapshots = await prisma.rentalSnapshot.findMany({
@@ -65,7 +67,13 @@ export async function buildDailyIndexJob(
       },
     });
 
-    log("info", `Found ${snapshots.length} snapshots for date range`);
+    log("info", `Found ${snapshots.length} snapshots with price data for ${dateStart.toISOString().slice(0, 10)}`);
+    if (snapshots.length === 0) {
+      log("warn", `No snapshots found for this date range — nothing to index`);
+      progress({ phase: "index", percent: 100, label: "No snapshots to index" });
+    } else {
+      progress({ phase: "index", percent: 30, label: `Grouping ${snapshots.length} snapshots…` });
+    }
 
     // Group by (city, district, bedrooms, propertyType)
     const groups = new Map<string, { prices: number[]; city: string; district: string | null; bedrooms: number | null; propertyType: PropertyType }>();
@@ -88,10 +96,12 @@ export async function buildDailyIndexJob(
     }
 
     // Upsert into RentalIndexDaily
-    log("info", `Computing stats for ${groups.size} groups...`);
+    log("info", `Computing stats for ${groups.size} groups…`);
     let indexRows = 0;
+    const groupArr = Array.from(groups.values());
 
-    for (const group of groups.values()) {
+    for (let i = 0; i < groupArr.length; i++) {
+      const group = groupArr[i];
       const sorted = group.prices.sort((a, b) => a - b);
       const count = sorted.length;
       if (count === 0) continue;
@@ -132,13 +142,23 @@ export async function buildDailyIndexJob(
         },
       });
       indexRows++;
-      log("debug", `Group: ${group.city} / ${group.district ?? "all"} / ${group.bedrooms ?? "any"} bed / ${group.propertyType} → median $${Math.round(median)}, count ${count}`);
+
+      const district = group.district ?? "all";
+      const beds = group.bedrooms ?? "any";
+      log("debug", `  ${district} / ${beds}bed / ${group.propertyType}: median $${Math.round(median)}, P25 $${Math.round(p25)}, P75 $${Math.round(p75)}, n=${count}`);
+
+      // Progress every 5 groups
+      if ((i + 1) % 5 === 0 || i === groupArr.length - 1) {
+        const pct = 40 + Math.round((i / groupArr.length) * 55);
+        progress({ phase: "index", percent: Math.min(pct, 95), label: `Indexed ${i + 1}/${groupArr.length} groups…` });
+      }
     }
 
     const endTime = Date.now();
     const durationMs = endTime - startTime;
 
-    log("info", `Build index finished in ${(durationMs / 1000).toFixed(1)}s — ${indexRows} index rows upserted`);
+    log("info", `✔ Build index done in ${(durationMs / 1000).toFixed(1)}s — ${indexRows} rows upserted across ${groups.size} groups`);
+    progress({ phase: "index", percent: 100, label: `Done — ${indexRows} index rows` });
 
     await prisma.jobRun.update({
       where: { id: jobRun.id },

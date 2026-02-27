@@ -83,6 +83,7 @@ export function RentalPipelineDashboard() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [logConnected, setLogConnected] = useState(false);
   const [showLogs, setShowLogs] = useState(false);
+  const [progress, setProgress] = useState<{ phase: string; percent: number; label: string } | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   const fetchSummary = useCallback(async () => {
@@ -121,12 +122,14 @@ export function RentalPipelineDashboard() {
       discover: "discover",
       "process-queue": "process-queue",
       "build-index": "build-index",
+      "run-all": "run-all",
     };
     const jobName = jobMap[endpoint] ?? endpoint;
 
     setRunningJob(label);
     setShowLogs(true);
     setLogConnected(true);
+    setProgress(null);
 
     // Add a separator for this run
     setLogs((prev) => [
@@ -180,6 +183,8 @@ export function RentalPipelineDashboard() {
               const parsed = JSON.parse(line.slice(6));
               if (currentEvent === "log") {
                 setLogs((prev) => [...prev, parsed as LogEntry]);
+              } else if (currentEvent === "progress") {
+                setProgress(parsed as { phase: string; percent: number; label: string });
               } else if (currentEvent === "complete") {
                 setLogs((prev) => [
                   ...prev,
@@ -224,6 +229,7 @@ export function RentalPipelineDashboard() {
     } finally {
       setRunningJob(null);
       setLogConnected(false);
+      setProgress(null);
       abortRef.current = null;
     }
   };
@@ -302,6 +308,25 @@ export function RentalPipelineDashboard() {
 
         {/* Action Buttons */}
         <div style={styles.actionsRow}>
+          <button
+            style={{
+              ...styles.actionBtn,
+              background: runningJob ? "#1a2e1a" : "linear-gradient(135deg, #065f46, #047857)",
+              borderColor: "#10b981",
+              color: "#ecfdf5",
+              fontWeight: 600,
+              opacity: runningJob ? 0.6 : 1,
+              minWidth: "180px",
+            }}
+            disabled={!!runningJob}
+            onClick={() => runJob("run-all", "Run Full Pipeline", "source=REALESTATE_KH")}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <polygon points="5 3 19 12 5 21 5 3" />
+            </svg>
+            {runningJob === "Run Full Pipeline" ? "Running..." : "▶ Run Full Pipeline"}
+          </button>
+          <div style={{ width: "1px", height: "32px", background: "#334155", alignSelf: "center" }} />
           <button
             style={{
               ...styles.actionBtn,
@@ -409,6 +434,60 @@ export function RentalPipelineDashboard() {
             )}
           </button>
         </div>
+
+        {/* Progress Bar */}
+        {runningJob && progress && (
+          <div style={{
+            marginTop: "16px",
+            background: "#0f172a",
+            border: "1px solid #1e293b",
+            borderRadius: "12px",
+            padding: "14px 18px",
+          }}>
+            <div style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "8px",
+              fontSize: "13px",
+            }}>
+              <span style={{ color: "#94a3b8" }}>
+                <span style={{
+                  display: "inline-block",
+                  background: "rgba(99,102,241,0.15)",
+                  color: "#818cf8",
+                  padding: "2px 8px",
+                  borderRadius: "6px",
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  textTransform: "uppercase",
+                  marginRight: "8px",
+                  letterSpacing: "0.5px",
+                }}>
+                  {progress.phase}
+                </span>
+                {progress.label}
+              </span>
+              <span style={{ color: "#e2e8f0", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
+                {progress.percent}%
+              </span>
+            </div>
+            <div style={{
+              height: "8px",
+              background: "#1e293b",
+              borderRadius: "4px",
+              overflow: "hidden",
+            }}>
+              <div style={{
+                height: "100%",
+                width: `${progress.percent}%`,
+                background: "linear-gradient(90deg, #6366f1, #818cf8)",
+                borderRadius: "4px",
+                transition: "width 0.4s ease-out",
+              }} />
+            </div>
+          </div>
+        )}
 
         {/* Live Log Viewer */}
         {showLogs && (
