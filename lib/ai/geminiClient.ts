@@ -6,7 +6,7 @@
 import { z, type ZodSchema } from "zod";
 
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta";
-const MODEL = "gemini-2.5-flash";
+const MODEL = "gemini-3-flash-preview";
 const GEMINI_TIMEOUT_MS = 60_000; // 60 seconds per Gemini call
 
 export interface GeminiResponse {
