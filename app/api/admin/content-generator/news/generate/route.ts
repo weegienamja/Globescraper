@@ -923,8 +923,8 @@ Fix it and return ONLY valid JSON. No prose, no explanation, no markdown fences.
         console.error("[News Gen] Humanization pass failed, using original:", humanError);
       }
 
-      // Strip hallucinated image markdown
-      finalMarkdown = finalMarkdown.replace(/!\[.*?\]\(https?:\/\/[^)]+\)\n?/g, "");
+      // Strip hallucinated image markdown and any trailing captions
+      finalMarkdown = finalMarkdown.replace(/!\[.*?\]\(https?:\/\/[^)]+\)\n?(?:\*[^*]+\*\n?)?/g, "");
 
       // =========================================
       // Step 6: Generate and upload images

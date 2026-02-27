@@ -46,8 +46,8 @@ export async function POST(
     }
 
     // Build new markdown with images injected
-    // First strip any existing image markdown
-    let cleanMarkdown = draft.markdown.replace(/!\[.*?\]\(https?:\/\/[^)]+\)\n?/g, "");
+    // First strip any existing image markdown and their captions
+    let cleanMarkdown = draft.markdown.replace(/!\[.*?\]\(https?:\/\/[^)]+\)\n?(?:\*[^*]+\*\n?)?/g, "");
     const finalMarkdown = injectImagesIntoMarkdown(cleanMarkdown, generatedImages);
 
     const hero = generatedImages.find((img) => img.kind === "HERO");

@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
           continue;
         }
 
-        let cleanMarkdown = draft.markdown.replace(/!\[.*?\]\(https?:\/\/[^)]+\)\n?/g, "");
+        let cleanMarkdown = draft.markdown.replace(/!\[.*?\]\(https?:\/\/[^)]+\)\n?(?:\*[^*]+\*\n?)?/g, "");
         const finalMarkdown = injectImagesIntoMarkdown(cleanMarkdown, generatedImages);
 
         const hero = generatedImages.find((img) => img.kind === "HERO");
