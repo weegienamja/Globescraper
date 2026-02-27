@@ -19,8 +19,10 @@ interface Listing {
   priceOriginal: string | null;
   firstSeenAt: string;
   lastSeenAt: string;
+  postedAt: string | null;
   isActive: boolean;
   imageUrlsJson: string | null;
+  amenitiesJson: string | null;
   _count: { snapshots: number };
 }
 
@@ -202,11 +204,25 @@ export function ListingsTable() {
                 </th>
                 <th style={s.th}>Type</th>
                 <th style={s.th}>Beds</th>
+                <th style={s.th}>Baths</th>
+                <th
+                  style={{ ...s.th, cursor: "pointer" }}
+                  onClick={() => handleSort("sizeSqm")}
+                >
+                  Size{sortIcon("sizeSqm")}
+                </th>
                 <th
                   style={{ ...s.th, cursor: "pointer" }}
                   onClick={() => handleSort("priceMonthlyUsd")}
                 >
                   Price/mo{sortIcon("priceMonthlyUsd")}
+                </th>
+                <th style={s.th}>$/m²</th>
+                <th
+                  style={{ ...s.th, cursor: "pointer" }}
+                  onClick={() => handleSort("postedAt")}
+                >
+                  Posted{sortIcon("postedAt")}
                 </th>
                 <th
                   style={{ ...s.th, cursor: "pointer" }}
@@ -294,6 +310,37 @@ export function ListingsTable() {
                               <span style={s.expandLabel}>First Seen:</span>
                               <span style={s.expandValue}>{formatDate(l.firstSeenAt)}</span>
                             </div>
+                            {l.amenitiesJson && (() => {
+                              try {
+                                const amenities: string[] = JSON.parse(l.amenitiesJson);
+                                if (amenities.length === 0) return null;
+                                return (
+                                  <div style={s.expandRow}>
+                                    <span style={s.expandLabel}>Amenities:</span>
+                                    <span style={s.expandValue}>
+                                      <span style={{ display: "flex", flexWrap: "wrap" as const, gap: "4px" }}>
+                                        {amenities.map((a) => (
+                                          <span
+                                            key={a}
+                                            style={{
+                                              display: "inline-block",
+                                              padding: "2px 7px",
+                                              borderRadius: "4px",
+                                              background: "rgba(99, 102, 241, 0.12)",
+                                              color: "#a5b4fc",
+                                              fontSize: "11px",
+                                              whiteSpace: "nowrap" as const,
+                                            }}
+                                          >
+                                            {a}
+                                          </span>
+                                        ))}
+                                      </span>
+                                    </span>
+                                  </div>
+                                );
+                              } catch { return null; }
+                            })()}
                             <div style={s.expandRow}>
                               <span style={s.expandLabel}>Snapshots:</span>
                               <span style={s.expandValue}>{l._count.snapshots}</span>
@@ -333,6 +380,12 @@ export function ListingsTable() {
                     <td style={{ ...s.td, color: "#e2e8f0" }}>
                       {l.bedrooms !== null ? l.bedrooms : "—"}
                     </td>
+                    <td style={{ ...s.td, color: "#e2e8f0" }}>
+                      {l.bathrooms !== null ? l.bathrooms : "—"}
+                    </td>
+                    <td style={{ ...s.td, color: "#94a3b8", fontSize: "13px", whiteSpace: "nowrap" }}>
+                      {l.sizeSqm ? `${l.sizeSqm} m²` : "—"}
+                    </td>
                     <td style={s.td}>
                       <span style={{
                         color: l.priceMonthlyUsd ? "#34d399" : "#64748b",
@@ -343,6 +396,14 @@ export function ListingsTable() {
                           ? `$${l.priceMonthlyUsd.toLocaleString()}`
                           : "—"}
                       </span>
+                    </td>
+                    <td style={{ ...s.td, color: "#94a3b8", fontSize: "13px", whiteSpace: "nowrap" }}>
+                      {l.priceMonthlyUsd && l.sizeSqm
+                        ? `$${(l.priceMonthlyUsd / l.sizeSqm).toFixed(1)}`
+                        : "—"}
+                    </td>
+                    <td style={{ ...s.td, color: "#94a3b8", fontSize: "13px", whiteSpace: "nowrap" }}>
+                      {l.postedAt ? formatDate(l.postedAt) : "—"}
                     </td>
                     <td style={{ ...s.td, color: "#94a3b8", fontSize: "13px", whiteSpace: "nowrap" }}>
                       {formatDate(l.lastSeenAt)}

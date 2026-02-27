@@ -31,7 +31,8 @@ export function safeInt(value: unknown): number | null {
  *
  * Rejects:
  *  - prices explicitly marked as nightly or weekly
- *  - prices below $50 or above $50,000 (likely errors)
+ *  - prices with "sale" context but no "rent" context (likely sale prices)
+ *  - prices below $50 or above $15,000 (likely errors or sale prices)
  */
 export function parsePriceMonthlyUsd(raw: string | null | undefined): number | null {
   if (!raw) return null;
@@ -41,6 +42,10 @@ export function parsePriceMonthlyUsd(raw: string | null | undefined): number | n
   // Reject nightly / weekly
   if (/\b(per\s*night|\/\s*night|nightly)\b/.test(text)) return null;
   if (/\b(per\s*week|\/\s*week|weekly)\b/.test(text)) return null;
+
+  // Reject sale-context prices (unless also mentions rent)
+  if (/\b(for\s*sale|sale\s*price)\b/.test(text) && !/\b(for\s*rent|per\s*month|\/\s*month)\b/.test(text))
+    return null;
 
   // Try to find a numeric value
   const cleaned = text.replace(/,/g, "");
@@ -56,7 +61,7 @@ export function parsePriceMonthlyUsd(raw: string | null | undefined): number | n
       const bare = cleaned.match(/(\d+(?:\.\d+)?)/);
       if (bare) {
         const n = parseFloat(bare[1]);
-        if (n >= 50 && n <= 50_000) return n;
+        if (n >= 50 && n <= 15_000) return n;
       }
     }
     return null;
@@ -65,8 +70,8 @@ export function parsePriceMonthlyUsd(raw: string | null | undefined): number | n
   const amount = parseFloat(match[1] || match[2]);
   if (!Number.isFinite(amount)) return null;
 
-  // Sanity bounds
-  if (amount < 50 || amount > 50_000) return null;
+  // Sanity bounds (max $15k/mo — highest realistic monthly rent)
+  if (amount < 50 || amount > 15_000) return null;
 
   return amount;
 }
@@ -114,35 +119,119 @@ export function parseBedsBathsSize(text: string): BedsBathsSize {
 
 /* ── District parsing ────────────────────────────────────── */
 
-/** Known district aliases → canonical name */
+/** Known district aliases → canonical name (must match GeoJSON polygon names) */
 const DISTRICT_ALIASES: Record<string, string> = {
+  /* ── BKK / Chamkarmon sangkats ─────────────────────── */
   "bkk1": "BKK1",
   "bkk 1": "BKK1",
   "boeung keng kang 1": "BKK1",
   "boeung keng kang i": "BKK1",
+  "boeng keng kang": "BKK1",
+  "chamkarmon": "BKK1",
+  "chamkar mon": "BKK1",
   "bkk2": "BKK2",
   "bkk 2": "BKK2",
   "bkk3": "BKK3",
   "bkk 3": "BKK3",
   "tonle bassac": "Tonle Bassac",
   "tonle basac": "Tonle Bassac",
-  "chamkarmon": "Chamkarmon",
-  "chamkar mon": "Chamkarmon",
-  "toul kork": "Toul Kork",
   "toul tom poung": "Toul Tom Poung",
+  "toul tum poung": "Toul Tom Poung",
+  "toul tum pong": "Toul Tom Poung",
   "russian market": "Toul Tom Poung",
   "tuol tom pong": "Toul Tom Poung",
+  "tuol tompong": "Toul Tom Poung",
+  "boeung trabek": "Toul Tom Poung",
+
+  /* ── Daun Penh sangkats ────────────────────────────── */
   "daun penh": "Daun Penh",
+  "doun penh": "Daun Penh",
+  "wat phnom": "Daun Penh",
+  "phsar kandal": "Daun Penh",
+  "srah chak": "Daun Penh",
+  "chakto mukh": "Daun Penh",
+  "boeng reang": "Daun Penh",
+  "chey chumneah": "Daun Penh",
+  "phsar thmey": "Daun Penh",
+
+  /* ── 7 Makara sangkats ────────────────────────────── */
   "7 makara": "7 Makara",
+  "prampi makara": "7 Makara",
+  "prampir meakkakra": "7 Makara",
+  "boeung prolit": "7 Makara",
+  "veal vong": "7 Makara",
+  "phsar depou": "7 Makara",
+  "tuol svay prey": "7 Makara",
+  "tuol sangkae": "7 Makara",
+
+  /* ── Toul Kork sangkats ────────────────────────────── */
+  "toul kork": "Toul Kork",
+  "tuol kork": "Toul Kork",
+  "tuol kouk": "Toul Kork",
+  "boeung kak 1": "Toul Kork",
+  "boeung kak 2": "Toul Kork",
+  "boeung kak": "Toul Kork",
+  "tuek l'ak": "Toul Kork",
+  "tuek l'ak 1": "Toul Kork",
+  "teuk laak": "Toul Kork",
+
+  /* ── Sen Sok sangkats ──────────────────────────────── */
   "sen sok": "Sen Sok",
+  "sensok": "Sen Sok",
+  "saensokh": "Sen Sok",
+  "phnom penh thmey": "Sen Sok",
+  "tuek thla": "Sen Sok",
+
+  /* ── Russey Keo ────────────────────────────────────── */
+  "russey keo": "Russey Keo",
+  "russei keo": "Russey Keo",
+  "ruessei kaev": "Russey Keo",
+
+  /* ── Chroy Changvar ────────────────────────────────── */
   "chroy changvar": "Chroy Changvar",
+  "chrouy changvar": "Chroy Changvar",
+  "chrouy changva": "Chroy Changvar",
+
+  /* ── Meanchey sangkats ─────────────────────────────── */
   "meanchey": "Meanchey",
   "mean chey": "Meanchey",
+  "boeung tumpun": "Meanchey",
+  "boeung tumpun 1": "Meanchey",
+  "phsar daeum thkov": "Meanchey",
+  "chak angrae": "Meanchey",
+
+  /* ── Chbar Ampov ───────────────────────────────────── */
   "chbar ampov": "Chbar Ampov",
-  "prampi makara": "7 Makara",
+  "nirouth": "Chbar Ampov",
+
+  /* ── Remaining outer khans ─────────────────────────── */
   "por sen chey": "Por Sen Chey",
-  "russey keo": "Russey Keo",
+  "pur senchey": "Por Sen Chey",
+  "por senchey": "Por Sen Chey",
   "stung meanchey": "Stung Meanchey",
+  "stueng meanchey": "Stung Meanchey",
+  "dangkao": "Dangkao",
+  "kakap": "Dangkao",
+  "prek pnov": "Prek Pnov",
+  "kamboul": "Kamboul",
+  "kambol": "Kamboul",
+
+  /* ── Siem Reap sangkats → ADM2 "Siem Reap" ────────── */
+  "siem reap": "Siem Reap",
+  "sala kamraeuk": "Siem Reap",
+  "svay dankum": "Siem Reap",
+  "sla kram": "Siem Reap",
+  "kouk chak": "Siem Reap",
+  "chreav": "Siem Reap",
+  "krong siem reab": "Siem Reap",
+
+  /* ── Other province / city mappings ────────────────── */
+  "krong preah sihanouk": "Sihanoukville",
+  "sihanoukville": "Sihanoukville",
+  "krong kaeb": "Kep",
+  "kep": "Kep",
+  "kampong trach": "Kampong Trach",
+  "kampot": "Kampot",
 };
 
 /**
@@ -197,4 +286,95 @@ export function parseCity(text: string | null | undefined): string {
     if (lower.includes(alias)) return canonical;
   }
   return "Phnom Penh";
+}
+
+/* ── Amenities extraction ────────────────────────────────── */
+
+/**
+ * Known amenity keywords / phrases to look for in listing descriptions.
+ * Each entry is [regex pattern, canonical display label].
+ * Patterns are matched case-insensitively against the full text.
+ */
+const AMENITY_PATTERNS: [RegExp, string][] = [
+  // Pool & fitness
+  [/\bswimming\s*pool\b/i, "Swimming Pool"],
+  [/\bpool\b(?!.*table)/i, "Swimming Pool"],
+  [/\bgym\b/i, "Gym"],
+  [/\bfitness\b/i, "Fitness Center"],
+  [/\bsauna\b/i, "Sauna"],
+  [/\bsteam\b/i, "Steam Room"],
+  [/\byoga\b/i, "Yoga Room"],
+
+  // Parking
+  [/\bcar\s*park/i, "Car Parking"],
+  [/\bparking\b/i, "Parking"],
+  [/\bmotorcycle\s*park/i, "Motorcycle Parking"],
+
+  // Outdoor / common
+  [/\bbalcon/i, "Balcony"],
+  [/\brooftop\b/i, "Rooftop"],
+  [/\bterrace\b/i, "Terrace"],
+  [/\bgarden\b/i, "Garden"],
+  [/\bplayground\b/i, "Playground"],
+  [/\bbbq\b|barbecue/i, "BBQ Area"],
+
+  // Building amenities
+  [/\belevator\b|\blift\b/i, "Elevator"],
+  [/\bsecurity\b|\b24\s*(?:hr|hour).*(?:security|guard)/i, "24h Security"],
+  [/\bcctv\b/i, "CCTV"],
+  [/\breception\b|\blob+y\b/i, "Reception/Lobby"],
+  [/\bco[\- ]?working\b/i, "Co-working Space"],
+  [/\bmeeting\s*room\b|conference\s*room/i, "Meeting Room"],
+  [/\blounge\b/i, "Lounge"],
+  [/\bsky\s*(?:bar|lounge|deck)\b/i, "Sky Bar/Lounge"],
+
+  // In-unit
+  [/\bfull(?:y)?\s*furnish/i, "Fully Furnished"],
+  [/\bsemi[\- ]?furnish/i, "Semi-Furnished"],
+  [/\bunfurnish/i, "Unfurnished"],
+  [/\bwash(?:ing)?\s*machine/i, "Washing Machine"],
+  [/\bair[\- ]?con/i, "Air Conditioning"],
+  [/\ba\/?c\b/i, "Air Conditioning"],
+  [/\bhot\s*water\b/i, "Hot Water"],
+  [/\bbathtub\b/i, "Bathtub"],
+  [/\bwifi\b|\bwi[\- ]?fi\b|\binternet\b/i, "WiFi/Internet"],
+  [/\bcable\s*tv\b/i, "Cable TV"],
+  [/\bkitchen\b/i, "Kitchen"],
+  [/\bmicrowave\b/i, "Microwave"],
+  [/\brefrigerator\b|\bfridge\b/i, "Refrigerator"],
+  [/\boven\b/i, "Oven"],
+
+  // Utilities info (useful context for renters)
+  [/\belectric(?:ity)?\s*\$?\s*[\d.]+\s*\/?\s*(?:unit|kwh)/i, "Electricity Metered"],
+  [/\bwater\s*\$?\s*[\d.]+\s*\/?\s*(?:unit|m3|cubic)/i, "Water Metered"],
+
+  // Services
+  [/\bcleaning\s*service/i, "Cleaning Service"],
+  [/\blaundry\b/i, "Laundry"],
+  [/\bconcierge\b/i, "Concierge"],
+];
+
+/**
+ * Extract amenities from description text.
+ *
+ * Returns a deduplicated list of canonical amenity labels found in the text.
+ * Handles free-form descriptions with bullet points, dashes, or plain prose.
+ */
+export function parseAmenities(text: string | null | undefined): string[] {
+  if (!text) return [];
+
+  const found = new Set<string>();
+
+  for (const [pattern, label] of AMENITY_PATTERNS) {
+    if (pattern.test(text)) {
+      found.add(label);
+    }
+  }
+
+  // If we found both "Swimming Pool" (from generic /pool/) and "Parking",
+  // make sure we don't double-count sub-patterns
+  // "Swimming Pool" takes precedence over the generic "Pool" match — already handled
+  // since they map to the same label.
+
+  return [...found].sort();
 }

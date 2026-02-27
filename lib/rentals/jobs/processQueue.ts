@@ -138,6 +138,10 @@ export async function processQueueJob(
               ? JSON.stringify(scraped.imageUrls)
               : null;
 
+            const amenitiesJson = scraped.amenities.length > 0
+              ? JSON.stringify(scraped.amenities)
+              : null;
+
             const fingerprint = !scraped.sourceListingId
               ? computeFingerprint({
                   title: scraped.title,
@@ -172,6 +176,7 @@ export async function processQueueJob(
                   priceMonthlyUsd: scraped.priceMonthlyUsd,
                   currency: scraped.currency,
                   imageUrlsJson,
+                  amenitiesJson,
                   postedAt: scraped.postedAt,
                   lastSeenAt: now,
                   isActive: true,
@@ -198,6 +203,7 @@ export async function processQueueJob(
                   priceMonthlyUsd: scraped.priceMonthlyUsd,
                   currency: scraped.currency,
                   imageUrlsJson,
+                  amenitiesJson,
                   postedAt: scraped.postedAt,
                   firstSeenAt: now,
                   lastSeenAt: now,
@@ -313,7 +319,7 @@ import type { PipelineLogFn as _LogFn } from "../pipelineLogger";
 async function scrapeForSource(source: RentalSource, url: string, log?: _LogFn) {
   switch (source) {
     case "KHMER24":
-      return scrapeListingKhmer24(url);
+      return scrapeListingKhmer24(url, log);
     case "REALESTATE_KH":
       return scrapeListingRealestateKh(url, log);
     default:

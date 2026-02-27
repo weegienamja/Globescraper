@@ -796,6 +796,7 @@ model RentalListing {
   priceMonthlyUsd    Float?
   currency           String?      @db.VarChar(20)
   imageUrlsJson      String?      @db.Text
+  amenitiesJson      String?      @db.Text
   postedAt           DateTime?
   firstSeenAt        DateTime     @default(now())
   lastSeenAt         DateTime

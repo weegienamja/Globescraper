@@ -12,7 +12,7 @@ import * as cheerio from "cheerio";
 import { fetchHtml, politeDelay } from "../http";
 import { canonicalizeUrl } from "../url";
 import { classifyPropertyType, shouldIngest } from "../classify";
-import { parsePriceMonthlyUsd, parseBedsBathsSize, parseDistrict, parseCity } from "../parse";
+import { parsePriceMonthlyUsd, parseBedsBathsSize, parseDistrict, parseCity, parseAmenities } from "../parse";
 import { DISCOVER_MAX_PAGES, DISCOVER_MAX_URLS } from "../config";
 import type { PropertyType } from "@prisma/client";
 import { type PipelineLogFn, noopLogger } from "../pipelineLogger";
@@ -45,6 +45,7 @@ export interface ScrapedListing {
   priceMonthlyUsd: number | null;
   currency: string | null;
   imageUrls: string[];
+  amenities: string[];
   postedAt: Date | null;
 }
 
@@ -212,11 +213,43 @@ export async function scrapeListingRealestateKh(
   }
   log("debug", `Classified as: ${propertyType}`);
 
-  // Price
-  const priceText =
-    $('[class*="price"], .listing-price').first().text().trim() || null;
+  // Price — intelligently extract the RENTAL price, not the sale price.
+  // realestate.com.kh shows both "For sale $X" and "For rent $Y" on dual-listed
+  // properties. We must pick the rental price only.
+  let priceText: string | null = null;
+
+  // Strategy 1: Look for structured price blocks labeled as "rent".
+  // Two patterns on the site:
+  //   .prices > .price  with  .prefix  ("For sale" / "For rent")
+  //   .price-section > .price-row  with  .price-title  ("Sale price" / "Rent per month")
+  $(".prices .price, .price-section .price-row").each((_i, el) => {
+    if (priceText) return; // already found rental price
+    const label = $(el).find(".prefix, .price-title").text().toLowerCase();
+    if (label.includes("rent") || label.includes("per month")) {
+      const m = $(el).text().match(/\$([\d,]+)/);
+      if (m) priceText = "$" + m[1];
+    }
+  });
+
+  // Strategy 2: Check the description for an explicit rent price
+  // e.g. "Price: $350/month for rent"
+  if (!priceText && description) {
+    const m = description.match(/\$([\d,]+)\s*\/?\s*(?:month|mo)\b/i);
+    if (m) priceText = "$" + m[1];
+  }
+
+  // Strategy 3: For /rent/ URLs (definitely rental listings), fall back to
+  // the first price element — these pages always show the rental price.
+  if (!priceText && url.includes("/rent/")) {
+    priceText =
+      $('[class*="price"], .listing-price').first().text().trim() || null;
+  }
+
   const priceMonthlyUsd = parsePriceMonthlyUsd(priceText);
-  log("debug", `Price: ${priceText ?? "not found"} → $${priceMonthlyUsd ?? "N/A"}/mo`);
+  log(
+    "debug",
+    `Price: ${priceText ?? "not found"} → $${priceMonthlyUsd ?? "N/A"}/mo`
+  );
 
   // Location — try multiple selectors, then fallback to URL slug
   const locationText =
@@ -322,6 +355,7 @@ export async function scrapeListingRealestateKh(
     priceMonthlyUsd,
     currency,
     imageUrls,
+    amenities: parseAmenities(`${title} ${description ?? ""}`),
     postedAt,
   };
 }

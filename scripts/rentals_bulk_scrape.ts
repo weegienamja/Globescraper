@@ -8,8 +8,10 @@
  * Usage:
  *   npx tsx scripts/rentals_bulk_scrape.ts
  *   npx tsx scripts/rentals_bulk_scrape.ts --max-pages 100 --max-process 500
+ *   npx tsx scripts/rentals_bulk_scrape.ts KHMER24
  *
  * Options:
+ *   REALESTATE_KH | KHMER24  Run only one source (default: all enabled)
  *   --max-pages N     Max category pages to crawl (default: 9999 = all)
  *   --max-urls N      Max listing URLs to discover (default: 99999 = all)
  *   --max-process N   Max listings to scrape (default: 99999 = all)
@@ -51,8 +53,14 @@ process.env.RENTALS_MAX_PROCESS = String(MAX_PROCESS);
 /* eslint-disable @typescript-eslint/no-var-requires */
 
 import type { PipelineLogFn, PipelineProgressFn } from "../lib/rentals/pipelineLogger";
+import type { RentalSource } from "@prisma/client";
 
-const SOURCE = "REALESTATE_KH" as const;
+/* ── Source selection ────────────────────────────────────── */
+const VALID_SOURCES: RentalSource[] = ["REALESTATE_KH", "KHMER24"];
+const sourceArg = process.argv.find((a) => VALID_SOURCES.includes(a as RentalSource));
+const SOURCES: RentalSource[] = sourceArg
+  ? [sourceArg as RentalSource]
+  : VALID_SOURCES; // run all enabled sources by default
 
 /* ── Logger ──────────────────────────────────────────────── */
 
@@ -77,11 +85,12 @@ async function main() {
   const { discoverListingsJob } = await import("../lib/rentals/jobs/discover");
   const { processQueueJob } = await import("../lib/rentals/jobs/processQueue");
   const { buildDailyIndexJob } = await import("../lib/rentals/jobs/buildIndex");
+  const { closeBrowser } = await import("../lib/rentals/playwright");
 
   console.log("\n╔══════════════════════════════════════════╗");
   console.log("║    Rental Pipeline — Bulk Scrape         ║");
   console.log("╚══════════════════════════════════════════╝\n");
-  console.log(`  Source:       ${SOURCE}`);
+  console.log(`  Sources:      ${SOURCES.join(", ")}`);
   console.log(`  Max Pages:    ${MAX_PAGES}`);
   console.log(`  Max URLs:     ${MAX_URLS}`);
   console.log(`  Max Process:  ${MAX_PROCESS}`);
@@ -89,6 +98,9 @@ async function main() {
   console.log();
 
   const totalStart = Date.now();
+
+  for (const SOURCE of SOURCES) {
+    console.log(`\n╠══ Source: ${SOURCE} ${"═".repeat(30 - SOURCE.length)}╣\n`);
 
   /* ── Phase 1: Discover ─────────────────────────────────── */
   if (!SKIP_DISCOVER) {
@@ -149,6 +161,8 @@ async function main() {
     console.log("━━━ Phase 2/3: Process Queue — SKIPPED ━━━\n");
   }
 
+  } // end for-each source
+
   /* ── Phase 3: Build Index ──────────────────────────────── */
   if (!SKIP_INDEX) {
     console.log("━━━ Phase 3/3: Build Daily Index ━━━\n");
@@ -174,6 +188,7 @@ async function main() {
   const secs = Math.round((totalMs % 60000) / 1000);
   console.log(`\n✔ Bulk scrape finished in ${mins}m ${secs}s`);
 
+  await closeBrowser();
   await prisma.$disconnect();
 }
 

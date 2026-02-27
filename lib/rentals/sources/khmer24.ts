@@ -1,25 +1,35 @@
 /**
  * Khmer24 source adapter for rental listings.
  *
- * Discover: fetches category index pages, extracts listing URLs.
+ * Uses Playwright (headless Chromium) to bypass Cloudflare WAF.
+ *
+ * Discover: fetches category index pages via ?page=N, extracts listing URLs.
  * ScrapeListing: fetches an individual listing page, parses fields.
+ *
+ * Category URLs (current site structure, Feb 2026):
+ *   /en/c-apartment-for-rent   — apartments
+ *   /en/c-room-for-rent        — rooms (studios, shared, etc.)
+ *
+ * Listing URL pattern:
+ *   /en/<slug>-adid-<digits>
  */
 
 import * as cheerio from "cheerio";
-import { fetchHtml, politeDelay } from "../http";
+import { fetchHtmlPlaywright, fetchCategoryPagePlaywright } from "../playwright";
 import { canonicalizeUrl } from "../url";
 import { classifyPropertyType, shouldIngest } from "../classify";
-import { parsePriceMonthlyUsd, parseBedsBathsSize, parseDistrict } from "../parse";
+import { parsePriceMonthlyUsd, parseBedsBathsSize, parseDistrict, parseCity, parseAmenities } from "../parse";
 import { DISCOVER_MAX_PAGES, DISCOVER_MAX_URLS } from "../config";
 import type { PropertyType } from "@prisma/client";
 
 import type { PipelineLogFn } from "../pipelineLogger";
+import { politeDelay } from "../http";
 
-/* ── Category URLs for condos / apartments ───────────────── */
+/* ── Category URLs ───────────────────────────────────────── */
 
 const CATEGORY_URLS = [
-  "https://www.khmer24.com/en/apartment-for-rent.html",
-  "https://www.khmer24.com/en/condo-for-rent.html",
+  "https://www.khmer24.com/en/c-apartment-for-rent",
+  "https://www.khmer24.com/en/c-room-for-rent",
 ];
 
 /* ── Types ───────────────────────────────────────────────── */
@@ -43,65 +53,82 @@ export interface ScrapedListing {
   priceMonthlyUsd: number | null;
   currency: string | null;
   imageUrls: string[];
+  amenities: string[];
   postedAt: Date | null;
 }
 
 /* ── Discover ────────────────────────────────────────────── */
 
 /**
- * Discover listing URLs from Khmer24 category index pages.
- * Respects DISCOVER_MAX_PAGES and DISCOVER_MAX_URLS caps.
+ * Discover listing URLs from Khmer24 category pages.
+ * Uses `?page=N` pagination (50 listings per page).
  */
-export async function discoverKhmer24(_log?: PipelineLogFn): Promise<DiscoveredUrl[]> {
+export async function discoverKhmer24(log?: PipelineLogFn): Promise<DiscoveredUrl[]> {
+  const noopLog: PipelineLogFn = () => {};
+  const _log = log ?? noopLog;
+
+  const seen = new Set<string>();
   const urls: DiscoveredUrl[] = [];
   let pagesVisited = 0;
 
   for (const baseUrl of CATEGORY_URLS) {
-    if (pagesVisited >= DISCOVER_MAX_PAGES) break;
+    if (pagesVisited >= DISCOVER_MAX_PAGES || urls.length >= DISCOVER_MAX_URLS) break;
 
-    let pageUrl: string | null = baseUrl;
+    _log("info", `Crawling category: ${baseUrl}`);
+    let pageNum = 1;
 
-    while (pageUrl && pagesVisited < DISCOVER_MAX_PAGES && urls.length < DISCOVER_MAX_URLS) {
+    while (pagesVisited < DISCOVER_MAX_PAGES && urls.length < DISCOVER_MAX_URLS) {
+      const pageUrl = pageNum === 1 ? baseUrl : `${baseUrl}?page=${pageNum}`;
       pagesVisited++;
-      const html = await fetchHtml(pageUrl);
-      if (!html) break;
+      _log("debug", `  Page ${pageNum}: ${pageUrl}`);
+
+      const html = await fetchCategoryPagePlaywright(pageUrl, 0);
+      if (!html) {
+        _log("warn", `  No HTML returned for ${pageUrl}`);
+        break;
+      }
 
       const $ = cheerio.load(html);
+      let newOnThisPage = 0;
 
-      // Extract listing links – Khmer24 uses various link patterns
-      $('a[href*="/en/"]').each((_i, el) => {
+      // Khmer24 listing links follow /en/<slug>-adid-<digits>
+      $("a[href]").each((_i, el) => {
         if (urls.length >= DISCOVER_MAX_URLS) return false;
 
         const href = $(el).attr("href");
         if (!href) return;
 
-        const full = href.startsWith("http") ? href : `https://www.khmer24.com${href}`;
+        const full = href.startsWith("http")
+          ? href
+          : `https://www.khmer24.com${href}`;
 
-        // Khmer24 listing URLs typically contain an ad ID
-        // Pattern: /en/<slug>-<id>.html  or similar with numeric segments
         if (!isListingUrl(full)) return;
 
         const canonical = canonicalizeUrl(full);
-        const sourceId = extractListingId(full);
+        if (seen.has(canonical)) return;
+        seen.add(canonical);
 
-        // Avoid duplicates in this batch
-        if (!urls.some((u) => u.url === canonical)) {
-          urls.push({ url: canonical, sourceListingId: sourceId });
-        }
+        urls.push({
+          url: canonical,
+          sourceListingId: extractListingId(full),
+        });
+        newOnThisPage++;
       });
 
-      // Find next page link
-      const nextLink = $('a[rel="next"], .pagination a:contains("Next"), .pagination a:contains("»")').first().attr("href");
-      if (nextLink && nextLink !== pageUrl) {
-        pageUrl = nextLink.startsWith("http") ? nextLink : `https://www.khmer24.com${nextLink}`;
-      } else {
-        pageUrl = null;
+      _log("debug", `  Found ${newOnThisPage} new listing URLs (total: ${urls.length})`);
+
+      // If no new listings were found, we've exhausted this category
+      if (newOnThisPage === 0) {
+        _log("info", `  No more listings on page ${pageNum} — moving on`);
+        break;
       }
 
+      pageNum++;
       await politeDelay();
     }
   }
 
+  _log("info", `Discover complete: ${urls.length} URLs from ${pagesVisited} pages`);
   return urls;
 }
 
@@ -110,66 +137,182 @@ export async function discoverKhmer24(_log?: PipelineLogFn): Promise<DiscoveredU
 /**
  * Scrape a single Khmer24 listing page and extract structured data.
  * Returns null if the page cannot be fetched or parsed.
+ *
+ * DOM structure (as of Feb 2026):
+ *   article > header — images, title, price, location badge
+ *   article > section — description, dt/dd spec grid
+ *   Price: p.text-error-500 or bold text with $ in the header
+ *   Specs: dt (label) + dd (value) pairs — Bedroom, Bathroom, Size, Category
+ *   Location: div.date-location contains "time • district, city"
+ *   Images: a[data-fancybox="gallery"] img (full-size links)
  */
-export async function scrapeListingKhmer24(url: string): Promise<ScrapedListing | null> {
-  const html = await fetchHtml(url);
-  if (!html) return null;
+export async function scrapeListingKhmer24(
+  url: string,
+  log?: PipelineLogFn
+): Promise<ScrapedListing | null> {
+  const noopLog: PipelineLogFn = () => {};
+  const _log = log ?? noopLog;
+
+  _log("debug", `Fetching listing page: ${url}`);
+
+  const html = await fetchHtmlPlaywright(url);
+  if (!html) {
+    _log("warn", `No HTML returned for listing: ${url}`);
+    return null;
+  }
 
   const $ = cheerio.load(html);
 
-  // Title
-  const title = $("h1").first().text().trim() || $(".item-title").first().text().trim();
-  if (!title) return null;
+  // ── Title ──
+  // Prefer h1, fall back to page <title> (format: "<title> price $X in <loc> | Khmer24.com")
+  const pageTitle = $("title").text().trim();
+  const h1 = $("h1").first().text().trim();
+  const titleFromMeta = pageTitle.split(" price ")[0].trim();
+  const title =
+    h1 || titleFromMeta || $("article header img").first().attr("alt")?.trim() || "";
 
-  // Description
+  if (!title) {
+    _log("warn", `No title found on page: ${url}`);
+    return null;
+  }
+  _log("debug", `Title: ${title}`);
+
+  // ── Description ──
   const description =
-    $(".item-description, .description, [class*='description']").first().text().trim() || null;
+    $("article section p.whitespace-break-spaces, article section [class*='text-base']")
+      .first()
+      .text()
+      .trim() || null;
 
-  // Classify property type
-  const propertyType = classifyPropertyType(title, description);
-  if (!shouldIngest(propertyType)) return null;
+  // ── Classify property type ──
+  const categoryDd = getSpecValue($, "Category");
+  const classifyText = `${title} ${categoryDd ?? ""} ${description ?? ""}`;
+  const propertyType = classifyPropertyType(title, classifyText);
+  if (!shouldIngest(propertyType)) {
+    _log("debug", `Skipping: classified as ${propertyType} (not condo/apartment)`);
+    return null;
+  }
+  _log("debug", `Classified as: ${propertyType}`);
 
-  // Price
-  const priceText =
-    $(".item-price, .price, [class*='price']").first().text().trim() || null;
+  // ── Price ──
+  // Primary: the bold red price in the header
+  let priceText =
+    $("p.text-error-500, .text-error-500").first().text().trim() ||
+    $("article header [class*='text-2xl']").first().text().trim() ||
+    null;
+
+  // Fallback: look for "$NNN" in the page title meta
+  if (!priceText && pageTitle) {
+    const m = pageTitle.match(/price\s+\$([\d,]+(?:\.\d+)?)/i);
+    if (m) priceText = "$" + m[1];
+  }
+
   const priceMonthlyUsd = parsePriceMonthlyUsd(priceText);
+  _log("debug", `Price: ${priceText ?? "not found"} → $${priceMonthlyUsd ?? "N/A"}/mo`);
 
-  // Location / district
-  const locationText =
-    $(".item-location, .location, [class*='location']").first().text().trim() || null;
-  const district = parseDistrict(locationText);
+  // ── Structured specs (dt/dd grid) ──
+  const bedroomSpec = getSpecValue($, "Bedroom");
+  const bathroomSpec = getSpecValue($, "Bathroom");
+  const sizeSpec = getSpecValue($, "Size");
 
-  // Beds, baths, size from detail table or text
-  const detailText = $(".item-detail, .detail-info, .amenities, [class*='detail']")
-    .text()
+  // ── Beds / Baths / Size — combine specs + title + description ──
+  const detailText = `${bedroomSpec ?? ""} bedroom ${bathroomSpec ?? ""} bathroom ${sizeSpec ?? ""} ${title} ${description ?? ""}`;
+  let { bedrooms, bathrooms, sizeSqm } = parseBedsBathsSize(detailText);
+
+  // Override with structured values if present
+  if (bedroomSpec && !bedrooms) {
+    const n = parseInt(bedroomSpec, 10);
+    if (n > 0 && n < 20) bedrooms = n;
+  }
+  if (bathroomSpec && !bathrooms) {
+    const n = parseInt(bathroomSpec, 10);
+    if (n > 0 && n < 20) bathrooms = n;
+  }
+  if (sizeSpec && !sizeSqm) {
+    const m = sizeSpec.match(/(\d+(?:\.\d+)?)\s*m/);
+    if (m) sizeSqm = parseFloat(m[1]);
+  }
+
+  _log("debug", `Specs: ${bedrooms ?? "?"}BR / ${bathrooms ?? "?"}BA / ${sizeSqm ?? "?"}m²`);
+
+  // ── Location ──
+  // div.date-location contains multiple text segments:
+  //   "1d • Boeng Keng Kang, Phnom Penh" + "Rent • 3 Bedroom • ..."
+  // Cheerio's .text() concatenates without separators, so we need to
+  // extract text from child nodes individually.
+  const dateLoc = $(".date-location").first();
+  // Get the first text node or first child's text (before condition badges)
+  let locationFirstLine = "";
+  dateLoc.contents().each((_i, node) => {
+    if (locationFirstLine) return; // only want first segment
+    const t = $(node).text().trim();
+    if (t && t.includes("•")) {
+      locationFirstLine = t;
+    }
+  });
+  // Fallback: full text (works when it's a single text node with \n)
+  if (!locationFirstLine) {
+    const fullText = dateLoc.text().trim();
+    locationFirstLine = fullText.split(/\n/)[0].replace(/\s+/g, " ").trim();
+  }
+  // Strip condition suffixes that cheerio may glue onto the location
+  // e.g. "Phnom PenhRent" → "Phnom Penh", "Phnom PenhUsed • Tax Paper" → "Phnom Penh"
+  locationFirstLine = locationFirstLine
+    .replace(/(?:Rent|Used|New|Sale)(?:\s*•.*)?$/i, "")
     .trim();
-  const { bedrooms, bathrooms, sizeSqm } = parseBedsBathsSize(
-    `${title} ${detailText} ${description ?? ""}`
-  );
 
-  // Images
+  const locMatch = locationFirstLine.match(/•\s*(.+)/);
+  const locationText = locMatch ? locMatch[1].trim() : null;
+
+  const city = parseCity(locationText || title);
+  let district = parseDistrict(locationText);
+  if (!district) {
+    const titleMatch = title.match(/(?:in|at)\s+(.+?)(?:\s*[-|]|$)/i);
+    if (titleMatch) {
+      district = parseDistrict(titleMatch[1].trim());
+    }
+  }
+  _log("debug", `Location: ${district ?? "unknown"}, ${city}`);
+
+  // ── Images ──
   const imageUrls: string[] = [];
-  $(".item-gallery img, .gallery img, [class*='gallery'] img, .item-image img").each((_i, el) => {
-    const src = $(el).attr("src") || $(el).attr("data-src");
-    if (src && src.startsWith("http")) {
-      imageUrls.push(src);
+  const imageSet = new Set<string>();
+
+  // Full-size gallery links
+  $('a[data-fancybox="gallery"]').each((_i, el) => {
+    const href = $(el).attr("href");
+    if (href && href.startsWith("http") && href.includes("khmer24")) {
+      imageSet.add(href);
     }
   });
 
-  // Posted date
-  const postedAt = parsePostedDate($);
+  // Header images (non-thumbnail)
+  $("article header img").each((_i, el) => {
+    const src = $(el).attr("src") || $(el).attr("data-src");
+    if (
+      src &&
+      src.startsWith("http") &&
+      src.includes("khmer24") &&
+      !src.includes("/s-") // skip small thumbnails
+    ) {
+      imageSet.add(src);
+    }
+  });
 
-  // Source listing ID
+  imageUrls.push(...imageSet);
+  _log("debug", `Found ${imageUrls.length} images`);
+
+  // ── Posted date ──
+  const postedAt = parsePostedDate(locationFirstLine);
+
+  // ── Source ID ──
   const sourceListingId = extractListingId(url);
-
-  // Currency
-  const currency = priceText?.toLowerCase().includes("usd") ? "USD" : priceText ? "USD" : null;
 
   return {
     sourceListingId,
     title,
     description,
-    city: "Phnom Penh",
+    city,
     district,
     propertyType,
     bedrooms,
@@ -177,62 +320,110 @@ export async function scrapeListingKhmer24(url: string): Promise<ScrapedListing 
     sizeSqm,
     priceOriginal: priceText,
     priceMonthlyUsd,
-    currency,
+    currency: "USD",
     imageUrls,
+    amenities: parseAmenities(`${title} ${description ?? ""}`),
     postedAt,
   };
 }
 
 /* ── Helpers ─────────────────────────────────────────────── */
 
+/**
+ * Check whether a URL looks like a Khmer24 listing page.
+ * Current pattern: /en/<slug>-adid-<digits>
+ */
 function isListingUrl(url: string): boolean {
   try {
     const u = new URL(url);
-    // Khmer24 listing pages are typically /en/<slug>-<id>.html
     return (
       u.hostname.includes("khmer24.com") &&
-      /\/en\/.+-\d+\.html/.test(u.pathname) &&
+      /\/en\/.+-adid-\d+$/.test(u.pathname) &&
       !u.pathname.includes("/search") &&
-      !u.pathname.includes("/category") &&
-      !u.pathname.includes("/page/")
+      !u.pathname.includes("/c-")
     );
   } catch {
     return false;
   }
 }
 
+/**
+ * Extract the numeric listing ID from a Khmer24 URL.
+ * E.g. /en/some-title-adid-12345 → "12345"
+ */
 function extractListingId(url: string): string | null {
-  // Try to extract numeric ID from URL like /en/...-12345.html
-  const match = url.match(/-(\d{4,})\.html/);
+  const match = url.match(/adid-(\d+)/);
   return match ? match[1] : null;
 }
 
-function parsePostedDate($: cheerio.CheerioAPI): Date | null {
-  // Look for posted date in common selectors
-  const dateText = $(".item-date, .posted-date, [class*='date'], time")
-    .first()
-    .text()
-    .trim();
-  if (!dateText) return null;
+/**
+ * Read a structured spec value from the dt/dd grid.
+ * Khmer24 renders specs as adjacent <dt> label / <dd> value pairs.
+ */
+function getSpecValue($: cheerio.CheerioAPI, label: string): string | null {
+  let result: string | null = null;
+  $("dt").each((_i, el) => {
+    if ($(el).text().trim().toLowerCase() === label.toLowerCase()) {
+      const dd = $(el).next("dd");
+      if (dd.length) {
+        result = dd.text().trim() || null;
+      }
+    }
+  });
+  return result;
+}
 
-  // Try ISO date
-  const d = new Date(dateText);
-  if (!isNaN(d.getTime()) && d.getFullYear() > 2000) return d;
+/**
+ * Parse a posted date from the date-location text.
+ *
+ * Formats seen:
+ *   "6h • Boeng Keng Kang, Phnom Penh"   → 6 hours ago
+ *   "2d • BKK, Phnom Penh"               → 2 days ago
+ *   "3w • ..."                            → 3 weeks ago
+ *   "Feb 11 • ..."                        → Feb 11 of current year
+ *   "Oct 21 2024 • ..."                   → Oct 21 2024
+ */
+function parsePostedDate(dateLocationText: string): Date | null {
+  if (!dateLocationText) return null;
 
-  // Try relative date patterns like "2 days ago"
-  const relative = dateText.match(/(\d+)\s*(day|hour|minute|week|month)s?\s*ago/i);
-  if (relative) {
-    const n = parseInt(relative[1]);
-    const unit = relative[2].toLowerCase();
-    const now = new Date();
+  // The date portion is before the first bullet "•"
+  const datePart = dateLocationText.split("•")[0].trim();
+  if (!datePart) return null;
+
+  const now = new Date();
+
+  // Relative: "6h", "2d", "3w", "1m"
+  const relMatch = datePart.match(/^(\d+)\s*(h|d|w|m)$/i);
+  if (relMatch) {
+    const n = parseInt(relMatch[1]);
+    const unit = relMatch[2].toLowerCase();
     switch (unit) {
-      case "minute": return new Date(now.getTime() - n * 60_000);
-      case "hour": return new Date(now.getTime() - n * 3_600_000);
-      case "day": return new Date(now.getTime() - n * 86_400_000);
-      case "week": return new Date(now.getTime() - n * 7 * 86_400_000);
-      case "month": return new Date(now.getTime() - n * 30 * 86_400_000);
+      case "h":
+        return new Date(now.getTime() - n * 3_600_000);
+      case "d":
+        return new Date(now.getTime() - n * 86_400_000);
+      case "w":
+        return new Date(now.getTime() - n * 7 * 86_400_000);
+      case "m":
+        return new Date(now.getTime() - n * 30 * 86_400_000);
     }
   }
+
+  // Absolute: "Feb 11" or "Oct 21 2024"
+  const absMatch = datePart.match(
+    /^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})(?:\s+(\d{4}))?$/i
+  );
+  if (absMatch) {
+    const monthStr = absMatch[1];
+    const day = parseInt(absMatch[2]);
+    const year = absMatch[3] ? parseInt(absMatch[3]) : now.getFullYear();
+    const d = new Date(`${monthStr} ${day}, ${year}`);
+    if (!isNaN(d.getTime())) return d;
+  }
+
+  // Last-ditch: try native Date parsing
+  const d = new Date(datePart);
+  if (!isNaN(d.getTime()) && d.getFullYear() > 2000) return d;
 
   return null;
 }

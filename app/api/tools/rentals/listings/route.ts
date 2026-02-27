@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
       ];
     }
 
-    const allowedSorts = ["lastSeenAt", "firstSeenAt", "priceMonthlyUsd", "title", "district"];
+    const allowedSorts = ["lastSeenAt", "firstSeenAt", "priceMonthlyUsd", "title", "district", "sizeSqm", "postedAt"];
     const sortField = allowedSorts.includes(sort) ? sort : "lastSeenAt";
 
     const [listings, total] = await Promise.all([
@@ -69,6 +69,8 @@ export async function GET(req: NextRequest) {
           lastSeenAt: true,
           isActive: true,
           imageUrlsJson: true,
+          amenitiesJson: true,
+          postedAt: true,
           _count: { select: { snapshots: true } },
         },
       }),

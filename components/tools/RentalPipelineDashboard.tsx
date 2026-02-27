@@ -84,6 +84,7 @@ export function RentalPipelineDashboard() {
   const [logConnected, setLogConnected] = useState(false);
   const [showLogs, setShowLogs] = useState(false);
   const [progress, setProgress] = useState<{ phase: string; percent: number; label: string } | null>(null);
+  const [selectedSource, setSelectedSource] = useState<string>("REALESTATE_KH");
   const abortRef = useRef<AbortController | null>(null);
 
   const fetchSummary = useCallback(async () => {
@@ -310,6 +311,27 @@ export function RentalPipelineDashboard() {
 
         {/* Action Buttons */}
         <div style={styles.actionsRow}>
+          {/* Source selector */}
+          <select
+            value={selectedSource}
+            onChange={(e) => setSelectedSource(e.target.value)}
+            disabled={!!runningJob}
+            style={{
+              padding: "8px 12px",
+              background: "#0f172a",
+              border: "1px solid #334155",
+              borderRadius: "8px",
+              color: "#e2e8f0",
+              fontSize: "13px",
+              fontWeight: 500,
+              cursor: "pointer",
+              outline: "none",
+              opacity: runningJob ? 0.6 : 1,
+            }}
+          >
+            <option value="REALESTATE_KH">Realestate.kh</option>
+            <option value="KHMER24">Khmer24</option>
+          </select>
           <button
             style={{
               ...styles.actionBtn,
@@ -321,7 +343,7 @@ export function RentalPipelineDashboard() {
               minWidth: "180px",
             }}
             disabled={!!runningJob}
-            onClick={() => runJob("run-all", "Run Full Pipeline", "source=REALESTATE_KH")}
+            onClick={() => runJob("run-all", "Run Full Pipeline", `source=${selectedSource}`)}
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <polygon points="5 3 19 12 5 21 5 3" />
@@ -335,7 +357,7 @@ export function RentalPipelineDashboard() {
               opacity: runningJob ? 0.6 : 1,
             }}
             disabled={!!runningJob}
-            onClick={() => runJob("discover", "Discover New Listings", "source=REALESTATE_KH")}
+            onClick={() => runJob("discover", "Discover New Listings", `source=${selectedSource}`)}
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
@@ -350,7 +372,7 @@ export function RentalPipelineDashboard() {
               opacity: runningJob ? 0.6 : 1,
             }}
             disabled={!!runningJob}
-            onClick={() => runJob("process-queue", "Process Queue Batch", "source=REALESTATE_KH")}
+            onClick={() => runJob("process-queue", "Process Queue Batch", `source=${selectedSource}`)}
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
