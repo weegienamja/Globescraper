@@ -130,6 +130,22 @@ async function searchSerperImages(
 /*  3. Download image → Vercel Blob                                     */
 /* ------------------------------------------------------------------ */
 
+/** Image extensions we trust even when the server sends wrong content-type */
+const IMAGE_EXT_RE = /\.(jpe?g|png|gif|webp|avif|svg|bmp|tiff?)(\?|$)/i;
+
+function resolveImageMimeType(ct: string, url: string): string | null {
+  if (ct.startsWith("image/")) return ct;
+  if (IMAGE_EXT_RE.test(url)) {
+    if (/\.jpe?g/i.test(url)) return "image/jpeg";
+    if (/\.png/i.test(url)) return "image/png";
+    if (/\.webp/i.test(url)) return "image/webp";
+    if (/\.gif/i.test(url)) return "image/gif";
+    return "image/jpeg";
+  }
+  if (ct === "application/octet-stream") return "image/jpeg";
+  return null;
+}
+
 async function downloadAndUploadImage(
   imageUrl: string,
   filename: string
@@ -151,7 +167,8 @@ async function downloadAndUploadImage(
     if (!resp.ok) return null;
 
     const ct = resp.headers.get("content-type") || "";
-    if (!ct.startsWith("image/")) return null;
+    const mimeType = resolveImageMimeType(ct, imageUrl);
+    if (!mimeType) return null;
 
     const buf = Buffer.from(await resp.arrayBuffer());
 
@@ -159,18 +176,18 @@ async function downloadAndUploadImage(
     if (buf.byteLength < 10_000) return null;
 
     const ext =
-      ct.includes("jpeg") || ct.includes("jpg")
+      mimeType.includes("jpeg") || mimeType.includes("jpg")
         ? "jpg"
-        : ct.includes("webp")
+        : mimeType.includes("webp")
           ? "webp"
           : "png";
     const blob = await put(`blog-images/${filename}.${ext}`, buf, {
       access: "public",
-      contentType: ct,
+      contentType: mimeType,
       addRandomSuffix: true,
     });
 
-    return { url: blob.url, mimeType: ct };
+    return { url: blob.url, mimeType };
   } catch {
     return null;
   }

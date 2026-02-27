@@ -6619,6 +6619,214 @@ body.menu-open {
   color: #fca5a5;
 }
 
+/* ── Admin Image Manager (sidebar widget, replaces hero editor) ── */
+
+.admin-img-mgr {
+  background: var(--bg-surface);
+  border: 1px solid var(--primary);
+  border-radius: var(--radius);
+  padding: 0.75rem;
+  margin-top: 1.25rem;
+}
+
+.admin-img-mgr__heading {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--primary);
+  margin: 0 0 0.15rem;
+}
+
+.admin-img-mgr__subtitle {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  margin: 0 0 0.6rem;
+}
+
+.admin-img-mgr__box {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.6rem;
+  margin-bottom: 0.65rem;
+  background: var(--bg-elevated);
+}
+.admin-img-mgr__box:last-child {
+  margin-bottom: 0;
+}
+
+.admin-img-mgr__slot-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  margin: 0 0 0.4rem;
+  color: var(--text);
+  line-height: 1.25;
+}
+
+.admin-img-mgr__preview {
+  border-radius: 6px;
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+  aspect-ratio: 16 / 9;
+  background: var(--bg-surface);
+}
+
+.admin-img-mgr__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.admin-img-mgr__empty {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.admin-img-mgr__actions {
+  margin-bottom: 0.4rem;
+}
+
+.admin-img-mgr__btn {
+  display: block;
+  width: 100%;
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 0.35rem 0.55rem;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  text-align: center;
+  transition: background 0.15s, border-color 0.15s;
+}
+.admin-img-mgr__btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.admin-img-mgr__btn--regen {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+.admin-img-mgr__btn--regen:hover:not(:disabled) {
+  opacity: 0.88;
+}
+
+.admin-img-mgr__btn--save {
+  background: #16a34a;
+  color: #fff;
+  border-color: #16a34a;
+  flex-shrink: 0;
+}
+.admin-img-mgr__btn--save:hover:not(:disabled) {
+  background: #15803d;
+}
+
+.admin-img-mgr__url-group {
+  display: flex;
+  gap: 0.3rem;
+  margin-bottom: 0.45rem;
+}
+
+.admin-img-mgr__input {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.66rem;
+  padding: 0.3rem 0.45rem;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.15s;
+}
+.admin-img-mgr__input:focus {
+  border-color: var(--primary);
+}
+.admin-img-mgr__input::placeholder {
+  color: var(--text-muted);
+}
+
+.admin-img-mgr__url-group .admin-img-mgr__btn--save {
+  width: auto;
+  white-space: nowrap;
+}
+
+.admin-img-mgr__seo {
+  border-top: 1px solid var(--border);
+  padding-top: 0.4rem;
+  margin-top: 0.1rem;
+}
+
+.admin-img-mgr__label {
+  display: block;
+  font-size: 0.64rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 0.3rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.admin-img-mgr__label .admin-img-mgr__input {
+  margin-top: 0.15rem;
+  display: block;
+  width: 100%;
+}
+
+.admin-img-mgr__seo-actions {
+  display: flex;
+  gap: 0.3rem;
+  margin-top: 0.15rem;
+}
+
+.admin-img-mgr__btn--seo-save {
+  background: #16a34a;
+  color: #fff;
+  border-color: #16a34a;
+  flex: 1;
+}
+.admin-img-mgr__btn--seo-save:hover:not(:disabled) {
+  background: #15803d;
+}
+
+.admin-img-mgr__btn--ai-seo {
+  background: #7c3aed;
+  color: #fff;
+  border-color: #7c3aed;
+  flex: 1;
+}
+.admin-img-mgr__btn--ai-seo:hover:not(:disabled) {
+  background: #6d28d9;
+}
+
+.admin-img-mgr__msg {
+  font-size: 0.64rem;
+  margin: 0.35rem 0 0;
+  padding: 0.2rem 0.45rem;
+  border-radius: 4px;
+}
+.admin-img-mgr__msg--ok {
+  background: rgba(34, 197, 94, 0.15);
+  color: #16a34a;
+}
+[data-theme="dark"] .admin-img-mgr__msg--ok {
+  color: #86efac;
+}
+.admin-img-mgr__msg--err {
+  background: rgba(239, 68, 68, 0.15);
+  color: #dc2626;
+}
+[data-theme="dark"] .admin-img-mgr__msg--err {
+  color: #fca5a5;
+}
+
 /* ══════════════════════════════════════════════════════════════
    Redesigned Email System (em-* prefix)
    ══════════════════════════════════════════════════════════ */
