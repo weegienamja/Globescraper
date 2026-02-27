@@ -74,7 +74,21 @@ export default async function CommunityProfilePage({
     if (currentUserId === userId) {
       redirect("/community/edit-profile");
     }
-    notFound();
+    // Show a placeholder instead of 404 so connected users aren't confused
+    return (
+      <div className="profile-page">
+        <Link href="/community" className="profile-page__back">
+          ← Back to community
+        </Link>
+        <div className="profile-section" style={{ textAlign: "center", padding: "48px 24px" }}>
+          <div style={{ fontSize: "3rem", marginBottom: 16 }}>👤</div>
+          <h2 style={{ marginBottom: 8 }}>Profile Not Yet Complete</h2>
+          <p style={{ color: "var(--text-muted)" }}>
+            This member hasn&apos;t finished setting up their profile yet. Check back later!
+          </p>
+        </div>
+      </div>
+    );
   }
 
   // Full profile view model
