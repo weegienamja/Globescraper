@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { validateGeminiKey } from "@/lib/ai/geminiClient";
 import { getNewsSearchRatelimit } from "@/lib/rate-limit";
-import { discoverNewsTopics, discoverNewsTopicsFromTitle } from "@/lib/newsTopicDiscovery";
+import { discoverNewsTopics } from "@/lib/newsTopicDiscovery";
+import { runSearchTopicsPipeline } from "@/lib/news/searchTopicsPipeline";
+import { scoreAndRankTopics } from "@/lib/newsTopicScoring";
 import type { CityFocus, AudienceFocus } from "@/lib/newsTopicTypes";
 
 export const maxDuration = 60;
@@ -50,10 +52,33 @@ export async function POST(req: NextRequest) {
         ? body.seedTitle.trim()
         : undefined;
 
-    // 5. Discover topics (seeded or broad)
-    const topics = seedTitle
-      ? await discoverNewsTopicsFromTitle(seedTitle, cityFocus, audienceFocus)
-      : await discoverNewsTopics(cityFocus, audienceFocus);
+    // 5. Discover topics
+    if (seedTitle) {
+      // ── 2-stage pipeline: queries → search → grounded topics ──
+      const result = await runSearchTopicsPipeline(
+        seedTitle,
+        cityFocus,
+        audienceFocus
+      );
+
+      console.log("[News Search] Pipeline log:", JSON.stringify(result.log));
+
+      if (result.error) {
+        return NextResponse.json(
+          { topics: [], message: result.error, pipelineLog: result.log },
+          { status: 200 }
+        );
+      }
+
+      const ranked = scoreAndRankTopics(result.topics).slice(0, 10);
+      return NextResponse.json({
+        topics: ranked,
+        pipelineLog: result.log,
+      });
+    }
+
+    // ── Broad discovery (no seed title) — existing flow ──
+    const topics = await discoverNewsTopics(cityFocus, audienceFocus);
 
     if (topics.length === 0) {
       return NextResponse.json(

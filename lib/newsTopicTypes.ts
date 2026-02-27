@@ -10,7 +10,8 @@ export type AudienceFocus = "travellers" | "teachers" | "both";
 /**
  * Feature flag: when true AND real external snippets are available,
  * include sourceUrls / sourceCount / freshnessScore / riskLevel.
- * When false, use the lean schema (searchQueries / intent / outlineAngles).
+ * When false (broad discovery), use the lean schema (searchQueries / intent / outlineAngles).
+ * The 2-stage pipeline (seeded flow) always populates sourceUrls/sourceCount.
  */
 export const USE_EXTERNAL_SOURCES = false;
 
@@ -27,14 +28,16 @@ export interface NewsTopic {
   /** True if this topic was generated from a seed title */
   fromSeedTitle?: boolean;
 
-  /* ── Lean schema (always present) ── */
+  /* ── Always present ── */
   searchQueries: string[];
   intent: string;
   outlineAngles: string[];
 
-  /* ── External-sources schema (only when USE_EXTERNAL_SOURCES is true) ── */
+  /* ── Source grounding (populated by 2-stage pipeline, optional in broad flow) ── */
   sourceUrls?: string[];
   sourceCount?: number;
+
+  /* ── Legacy (only when USE_EXTERNAL_SOURCES is true) ── */
   freshnessScore?: number;
   riskLevel?: RiskLevel;
 }

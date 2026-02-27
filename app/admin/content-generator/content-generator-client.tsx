@@ -66,9 +66,9 @@ interface NewsTopic {
   intent: string;
   outlineAngles: string[];
   fromSeedTitle?: boolean;
-  /* Legacy fields (only present when USE_EXTERNAL_SOURCES is true) */
   sourceUrls?: string[];
   sourceCount?: number;
+  /* Legacy fields (only present when USE_EXTERNAL_SOURCES is true) */
   freshnessScore?: number;
   riskLevel?: "LOW" | "MEDIUM" | "HIGH";
 }
@@ -753,10 +753,15 @@ export default function ContentGeneratorClient() {
                       {t.fromSeedTitle && (
                         <span className="cgen__chip cgen__chip--seed">From generated title</span>
                       )}
+                      {(t.sourceUrls?.length ?? 0) > 0 && (
+                        <span className="cgen__badge cgen__badge--confidence-high" title="Grounded source URLs">
+                          {t.sourceUrls!.length} source{t.sourceUrls!.length !== 1 ? "s" : ""}
+                        </span>
+                      )}
                       <span className="cgen__badge cgen__badge--confidence-med" title="Search queries">
                         {t.searchQueries?.length ?? 0} queries
                       </span>
-                      <span className="cgen__badge cgen__badge--confidence-high" title="Outline depth">
+                      <span className="cgen__badge cgen__badge--confidence-med" title="Outline depth">
                         {t.outlineAngles?.length ?? 0} angles
                       </span>
                     </div>
