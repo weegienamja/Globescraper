@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { JobRunsTable } from "./JobRunsTable";
 import { HeatmapPreviewCard } from "./HeatmapPreviewCard";
+import { ListingsTable } from "./ListingsTable";
 
 /* ── Types ───────────────────────────────────────────────── */
 
@@ -319,6 +320,9 @@ export function RentalPipelineDashboard() {
             </div>
           </div>
         </div>
+
+        {/* Scraped Listings Browser */}
+        <ListingsTable />
       </div>
     </div>
   );
