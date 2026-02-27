@@ -384,7 +384,6 @@ export function RentalPipelineDashboard() {
               ...styles.actionBtn,
               background: showLogs ? "#334155" : "#1e293b",
               borderColor: showLogs ? "#818cf8" : "#334155",
-              marginLeft: "auto",
             }}
             onClick={() => setShowLogs((v) => !v)}
           >
@@ -527,9 +526,10 @@ const styles: Record<string, React.CSSProperties> = {
   },
   actionsRow: {
     display: "flex",
-    gap: "16px",
+    gap: "12px",
     marginTop: "28px",
     flexWrap: "wrap" as const,
+    alignItems: "center",
   },
   actionBtn: {
     display: "flex",
