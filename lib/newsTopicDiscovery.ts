@@ -288,7 +288,6 @@ function cleanStr(s: string): string {
  */
 function validateAndCleanTopics(rawTopics: unknown[]): NewsTopic[] {
   const topics: NewsTopic[] = [];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   for (const raw of rawTopics as any[]) {
     if (!raw.id || !raw.title || !raw.angle || !raw.whyItMatters) continue;
 
