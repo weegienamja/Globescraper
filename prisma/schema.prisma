@@ -196,6 +196,37 @@ enum SavingsBand {
   HIGH
 }
 
+enum RelocationStage {
+  PLANNING
+  SECURED_JOB
+  ARRIVED
+  TEACHING
+  RENEWING_VISA
+}
+
+enum LookingFor {
+  FIRST_JOB
+  BETTER_SCHOOL
+  FLATMATES
+  LANGUAGE_EXCHANGE
+  FRIENDS
+  TRAVEL_BUDDIES
+}
+
+enum ReplyTimeHint {
+  WITHIN_HOUR
+  WITHIN_FEW_HOURS
+  WITHIN_DAY
+  NOT_ACTIVE
+}
+
+enum ActivityEventType {
+  COMMENTED
+  RSVP
+  POSTED
+  CONNECTED
+}
+
 model Profile {
   id                    String              @id @default(uuid())
   userId                String              @unique
@@ -217,13 +248,28 @@ model Profile {
   meetupJobAdvice       Boolean             @default(false)
   meetupStudyGroup      Boolean             @default(false)
   meetupLanguageExchange Boolean            @default(false)
+  meetupVisaHelp        Boolean             @default(false)
+  meetupSchoolReferrals Boolean             @default(false)
+  meetupExploring       Boolean             @default(false)
   hiddenFromCommunity   Boolean             @default(false)
+
+  // ── New community profile fields ───────────────────────
+  relocationStage       RelocationStage     @default(PLANNING)
+  lookingFor            LookingFor?         
+  replyTimeHint         ReplyTimeHint?      
+  certifications        Json?               // string[] e.g. ["TEFL/TESOL", "CELTA"]
+  languagesTeaching     Json?               // string[] e.g. ["English"]
+  interests             Json?               // string[] e.g. ["Motorbikes", "Coffee shops"]
+  showCityPublicly      Boolean             @default(true)
+  phoneVerified         Boolean             @default(false)
+
   createdAt             DateTime            @default(now())
   updatedAt             DateTime            @updatedAt
 
   user                  User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   targetCountries       ProfileTargetCountry[]
   images                ProfileImage[]
+  activityEvents        ActivityEvent[]
 
   @@index([currentCountry])
   @@index([currentCity])
@@ -246,12 +292,26 @@ model ProfileImage {
   id        String   @id @default(uuid())
   profileId String
   url       String   @db.VarChar(500)
+  caption   String?  @db.VarChar(200)
   sortOrder Int      @default(0)
   createdAt DateTime @default(now())
 
   profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
   @@index([profileId])
+}
+
+model ActivityEvent {
+  id          String            @id @default(uuid())
+  profileId   String
+  eventType   ActivityEventType
+  title       String            @db.VarChar(300)
+  linkUrl     String?           @db.VarChar(500)
+  createdAt   DateTime          @default(now())
+
+  profile     Profile           @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId, createdAt])
 }
 
 // ─── Community enums ─────────────────────────────────────────

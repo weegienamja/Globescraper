@@ -10,11 +10,14 @@ export const COMMUNITY_COUNTRIES = [
 ] as const;
 
 export const INTENT_LABELS: Record<string, string> = {
-  meetupCoffee: "☕ Coffee",
+  meetupCoffee: "☕ Coffee meetups",
   meetupCityTour: "🏙️ City tour",
   meetupJobAdvice: "💼 Job advice",
   meetupStudyGroup: "📚 Study group",
   meetupLanguageExchange: "🗣️ Language exchange",
+  meetupVisaHelp: "🛂 Visa help chat",
+  meetupSchoolReferrals: "🏫 School referrals",
+  meetupExploring: "🏛️ Exploring temples",
 };
 
 export const VISIBILITY_LABELS: Record<string, string> = {
@@ -30,14 +33,67 @@ export const REPORT_REASON_LABELS: Record<string, string> = {
   OTHER: "Other",
 };
 
+export const RELOCATION_STAGES = [
+  { value: "PLANNING", label: "Planning" },
+  { value: "SECURED_JOB", label: "Secured Job" },
+  { value: "ARRIVED", label: "Arrived" },
+  { value: "TEACHING", label: "Teaching" },
+  { value: "RENEWING_VISA", label: "Renewing Visa" },
+] as const;
+
+export const LOOKING_FOR_OPTIONS = [
+  { value: "FIRST_JOB", label: "First job" },
+  { value: "BETTER_SCHOOL", label: "Better school" },
+  { value: "FLATMATES", label: "Flatmates" },
+  { value: "LANGUAGE_EXCHANGE", label: "Language exchange" },
+  { value: "FRIENDS", label: "Friends" },
+  { value: "TRAVEL_BUDDIES", label: "Travel buddies" },
+] as const;
+
+export const REPLY_TIME_OPTIONS = [
+  { value: "WITHIN_HOUR", label: "Replies within an hour" },
+  { value: "WITHIN_FEW_HOURS", label: "Typically replies within a few hours" },
+  { value: "WITHIN_DAY", label: "Replies within a day" },
+  { value: "NOT_ACTIVE", label: "Not very active" },
+] as const;
+
+export const CERTIFICATION_OPTIONS = [
+  "TEFL/TESOL",
+  "CELTA",
+  "PGCE",
+  "DELTA",
+  "Trinity CertTESOL",
+] as const;
+
+export const SUGGESTED_INTERESTS = [
+  "Motorbikes",
+  "Coffee shops",
+  "History",
+  "Hiking",
+  "Gym",
+  "Muay Thai",
+  "Photography",
+  "Food",
+  "Nightlife",
+  "Tech",
+  "Property rental",
+  "Travel",
+  "Music",
+  "Gaming",
+  "Yoga",
+] as const;
+
 // ── Zod schemas ──────────────────────────────────────────────
 
 export const communityProfileSchema = z.object({
   displayName: z
     .string()
     .min(2, "Display name must be at least 2 characters")
-    .max(50),
-  bio: z.string().max(500).optional().or(z.literal("")),
+    .max(40, "Display name must be under 40 characters"),
+  bio: z
+    .string()
+    .min(10, "Bio must be at least 10 characters")
+    .max(240, "Bio must be under 240 characters"),
   currentCountry: z.string().max(100).optional().or(z.literal("")),
   currentCity: z.string().max(100).optional().or(z.literal("")),
   targetCountries: z
@@ -49,6 +105,36 @@ export const communityProfileSchema = z.object({
   meetupJobAdvice: z.boolean(),
   meetupStudyGroup: z.boolean(),
   meetupLanguageExchange: z.boolean(),
+  meetupVisaHelp: z.boolean(),
+  meetupSchoolReferrals: z.boolean(),
+  meetupExploring: z.boolean(),
+  // New fields
+  relocationStage: z.enum([
+    "PLANNING",
+    "SECURED_JOB",
+    "ARRIVED",
+    "TEACHING",
+    "RENEWING_VISA",
+  ]),
+  lookingFor: z
+    .enum([
+      "FIRST_JOB",
+      "BETTER_SCHOOL",
+      "FLATMATES",
+      "LANGUAGE_EXCHANGE",
+      "FRIENDS",
+      "TRAVEL_BUDDIES",
+    ])
+    .nullable()
+    .optional(),
+  replyTimeHint: z
+    .enum(["WITHIN_HOUR", "WITHIN_FEW_HOURS", "WITHIN_DAY", "NOT_ACTIVE"])
+    .nullable()
+    .optional(),
+  certifications: z.array(z.string().max(100)).max(10).optional(),
+  languagesTeaching: z.array(z.string().max(100)).max(10).optional(),
+  interests: z.array(z.string().max(100)).max(20).optional(),
+  showCityPublicly: z.boolean().optional(),
 });
 
 export const connectionRequestSchema = z.object({

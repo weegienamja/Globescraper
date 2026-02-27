@@ -6,7 +6,7 @@ import { put, del } from "@vercel/blob";
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB (client compresses to ~2 MB)
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
-const MAX_GALLERY_IMAGES = 5;
+const MAX_GALLERY_IMAGES = 9;
 
 type UploadResult = { url: string; id?: string } | { error: string };
 type ActionResult = { ok: true } | { error: string };

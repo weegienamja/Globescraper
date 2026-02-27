@@ -2,19 +2,23 @@ import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import Link from "next/link";
-import Image from "next/image";
-import { ConnectButton, BlockButton, ReportButton, HideButton } from "./profile-actions";
-import { INTENT_LABELS } from "@/lib/validations/community";
-import { GalleryGrid } from "@/components/Lightbox";
-
-const ENUM_COUNTRY_MAP: Record<string, string> = {
-  VIETNAM: "Vietnam",
-  THAILAND: "Thailand",
-  CAMBODIA: "Cambodia",
-  PHILIPPINES: "Philippines",
-  INDONESIA: "Indonesia",
-  MALAYSIA: "Malaysia",
-};
+import {
+  getCommunityProfile,
+  formatMemberSince,
+  type CommunityProfileViewModel,
+} from "@/lib/community-profile";
+import {
+  ProfileHeaderCard,
+  RelocationStepper,
+  StatCards,
+  TrustPanel,
+  Chips,
+  GallerySection,
+  ActivityFeed,
+  ConnectionsPreview,
+  SidebarAccordion,
+} from "@/components/community";
+import { BlockButton, HideButton } from "./profile-actions";
 
 export async function generateMetadata({
   params,
@@ -41,45 +45,49 @@ export default async function CommunityProfilePage({
   const session = await auth();
   const currentUserId = session?.user?.id;
 
-  const profile = await prisma.profile.findUnique({
+  // Basic existence check first
+  const rawProfile = await prisma.profile.findUnique({
     where: { userId },
-    include: {
-      targetCountries: { select: { country: true } },
-      user: { select: { name: true, disabled: true } },
-      images: { orderBy: { sortOrder: "asc" } },
+    select: {
+      visibility: true,
+      displayName: true,
+      hiddenFromCommunity: true,
+      user: { select: { disabled: true } },
     },
-    // hiddenFromCommunity is included by default in the full model
   });
 
-  if (!profile || profile.user.disabled) notFound();
+  if (!rawProfile || rawProfile.user.disabled) notFound();
 
   // Visibility checks
-  if (profile.visibility === "PRIVATE") {
+  if (rawProfile.visibility === "PRIVATE") {
     if (!currentUserId || (currentUserId !== userId && session?.user?.role !== "ADMIN")) {
       notFound();
     }
   }
 
-  if (profile.visibility === "MEMBERS_ONLY") {
+  if (rawProfile.visibility === "MEMBERS_ONLY") {
     if (!currentUserId) {
       redirect("/login?callbackUrl=/community/" + userId);
     }
   }
 
-  // Check if community profile is set up
-  if (!profile.displayName) {
+  if (!rawProfile.displayName) {
     if (currentUserId === userId) {
       redirect("/community/edit-profile");
     }
     notFound();
   }
 
-  const isOwner = currentUserId === userId;
+  // Full profile view model
+  const profile = await getCommunityProfile(userId, currentUserId);
+  if (!profile) notFound();
 
-  // Check connection status
+  const isOwner = currentUserId === userId;
+  const isAdmin = session?.user?.role === "ADMIN";
+
+  // Connection status
   let connectionStatus: string | null = null;
   let isBlockedByMe = false;
-  const isAdmin = session?.user?.role === "ADMIN";
 
   if (currentUserId && !isOwner) {
     const [connection, block] = await Promise.all([
@@ -100,124 +108,191 @@ export default async function CommunityProfilePage({
     isBlockedByMe = !!block;
   }
 
-  const intents: string[] = [];
-  if (profile.meetupCoffee) intents.push(INTENT_LABELS.meetupCoffee);
-  if (profile.meetupCityTour) intents.push(INTENT_LABELS.meetupCityTour);
-  if (profile.meetupJobAdvice) intents.push(INTENT_LABELS.meetupJobAdvice);
-  if (profile.meetupStudyGroup) intents.push(INTENT_LABELS.meetupStudyGroup);
-  if (profile.meetupLanguageExchange) intents.push(INTENT_LABELS.meetupLanguageExchange);
+  // Location string (respect showCityPublicly)
+  const locationParts: string[] = [];
+  if (profile.showCityPublicly && profile.currentCity) locationParts.push(profile.currentCity);
+  if (profile.currentCountry) locationParts.push(profile.currentCountry);
+  const locationStr = locationParts.join(", ");
 
-  const countries = profile.targetCountries.map(
-    (tc) => ENUM_COUNTRY_MAP[tc.country] ?? tc.country,
-  );
+  const stats = [
+    { label: "Posts written", value: profile.postsCount },
+    { label: "Comments", value: profile.commentsCount },
+    { label: "Meetups attended", value: profile.meetupsAttendedCount },
+    { label: "Connections", value: profile.connectionsCount },
+  ];
 
   return (
-    <div className="profile-view">
-      <Link href="/community" className="profile-view__back">
+    <div className="profile-page">
+      <Link href="/community" className="profile-page__back">
         ← Back to community
       </Link>
 
-      <div className="profile-view__card">
-        <div className="profile-view__header">
-          {profile.avatarUrl ? (
-            <Image
-              src={profile.avatarUrl}
-              alt={profile.displayName}
-              width={96}
-              height={96}
-              className="profile-view__avatar-img"
-            />
-          ) : (
-            <div className="community-card__avatar community-card__avatar--lg">
-              {profile.displayName[0]?.toUpperCase() ?? "?"}
+      {/* ── Header Card ────────────────────────── */}
+      <ProfileHeaderCard
+        displayName={profile.displayName}
+        avatarUrl={profile.avatarUrl}
+        location={locationStr}
+        relocationStageLabel={profile.relocationStageLabel}
+        memberSince={formatMemberSince(profile.memberSince)}
+        replyTimeLabel={profile.replyTimeLabel}
+        emailVerified={profile.emailVerified}
+        userId={userId}
+        isOwner={isOwner}
+        connectionStatus={connectionStatus}
+        isBlockedByMe={isBlockedByMe}
+      />
+
+      {/* ── Two-column grid ────────────────────── */}
+      <div className="profile-grid">
+        {/* ═══ LEFT COLUMN ═══ */}
+        <div className="profile-grid__main">
+          <RelocationStepper currentStageIndex={profile.relocationStageIndex} />
+
+          {/* About */}
+          {profile.bio && (
+            <div className="profile-section">
+              <h2 className="profile-section__title">
+                About {profile.displayName}
+              </h2>
+              <p className="profile-section__body">{profile.bio}</p>
             </div>
           )}
-          <div>
-            <h1 className="profile-view__name">{profile.displayName}</h1>
-            {(profile.currentCity || profile.currentCountry) && (
-              <p className="profile-view__location">
-                📍 {[profile.currentCity, profile.currentCountry].filter(Boolean).join(", ")}
-              </p>
-            )}
-          </div>
+
+          {/* Experience & Teaching Info */}
+          {(profile.certifications.length > 0 || profile.lookingForLabel || profile.languagesTeaching.length > 0) && (
+            <div className="profile-section">
+              <h2 className="profile-section__title">Experience &amp; Teaching Info</h2>
+              <ul className="experience-list">
+                {profile.certifications.length > 0 && (
+                  <li className="experience-list__item">
+                    <span className="experience-list__icon">✅</span>
+                    {profile.certifications.join(", ")} Certified
+                    <span className="experience-list__badge">✔</span>
+                  </li>
+                )}
+                {profile.lookingForLabel && (
+                  <li className="experience-list__item">
+                    <span className="experience-list__icon">🔍</span>
+                    Looking for: <strong>{profile.lookingForLabel}</strong>
+                  </li>
+                )}
+                {profile.languagesTeaching.length > 0 && (
+                  <li className="experience-list__item">
+                    <span className="experience-list__icon">🌐</span>
+                    Comfortable teaching:{" "}
+                    <strong>{profile.languagesTeaching.join(", ")}</strong>
+                  </li>
+                )}
+              </ul>
+            </div>
+          )}
+
+          {/* Available For chips */}
+          <Chips title="Available For" chips={profile.availableFor} variant="accent" />
+
+          {/* Interests chips */}
+          <Chips title="Interests" chips={profile.interests} />
+
+          {/* Gallery */}
+          <GallerySection images={profile.gallery} displayName={profile.displayName} />
+
+          {/* Recent Activity (main column) */}
+          <ActivityFeed events={profile.recentActivity} displayName={profile.displayName} />
+
+          {/* Admin/block actions */}
+          {currentUserId && !isOwner && (
+            <div className="profile-section profile-section--actions">
+              <BlockButton targetUserId={userId} isBlocked={isBlockedByMe} />
+              {isAdmin && (
+                <HideButton
+                  targetUserId={userId}
+                  isHidden={!!rawProfile.hiddenFromCommunity}
+                />
+              )}
+            </div>
+          )}
+
+          {/* Owner edit button (mobile) */}
+          {isOwner && (
+            <div className="profile-section profile-section--actions profile-section--mobile-only">
+              <Link href="/community/edit-profile" className="btn btn--primary">
+                Edit profile
+              </Link>
+            </div>
+          )}
         </div>
 
-        {profile.bio && (
-          <div className="profile-view__section">
-            <h2>About</h2>
-            <p>{profile.bio}</p>
-          </div>
-        )}
-
-        {countries.length > 0 && (
-          <div className="profile-view__section">
-            <h2>Target Countries</h2>
-            <div className="community-card__tags">
-              {countries.map((c) => (
-                <span key={c} className="tag">{c}</span>
-              ))}
+        {/* ═══ RIGHT SIDEBAR (desktop) ═══ */}
+        <aside className="profile-grid__sidebar profile-grid__sidebar--desktop">
+          <StatCards stats={stats} />
+          <TrustPanel
+            emailVerified={profile.emailVerified}
+            phoneVerified={profile.phoneVerified}
+            lastActiveAt={profile.lastActiveAt}
+            targetUserId={userId}
+            showReport={!!currentUserId && !isOwner}
+          />
+          <ConnectionsPreview
+            connections={profile.connectionsPreview}
+            totalCount={profile.connectionsCount}
+            mutualCount={profile.mutualConnectionsCount}
+            profileUserId={userId}
+          />
+          {/* Quick recent items */}
+          {profile.recentActivity.length > 0 && (
+            <div className="profile-sidebar-card">
+              <h3 className="profile-sidebar-card__title">Recent Activity</h3>
+              <ul className="sidebar-recent-list">
+                {profile.recentActivity.slice(0, 3).map((event) => (
+                  <li key={event.id} className="sidebar-recent-list__item">
+                    <span className="sidebar-recent-list__icon">
+                      {event.eventType === "POSTED"
+                        ? "📝"
+                        : event.eventType === "COMMENTED"
+                          ? "💬"
+                          : event.eventType === "RSVP"
+                            ? "🎉"
+                            : "🤝"}
+                    </span>
+                    <div>
+                      <span className="sidebar-recent-list__title">
+                        {event.linkUrl ? (
+                          <a href={event.linkUrl}>{event.title}</a>
+                        ) : (
+                          event.title
+                        )}
+                      </span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
             </div>
-          </div>
-        )}
+          )}
+        </aside>
 
-        {intents.length > 0 && (
-          <div className="profile-view__section">
-            <h2>Open to</h2>
-            <div className="community-card__intents">
-              {intents.map((i) => (
-                <span key={i} className="intent-badge">{i}</span>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {profile.images.length > 0 && (
-          <div className="profile-view__section">
-            <h2>Gallery</h2>
-            <GalleryGrid
-              images={profile.images.map((img) => ({
-                url: img.url,
-                alt: `Photo by ${profile.displayName}`,
-              }))}
+        {/* ═══ SIDEBAR (mobile accordion) ═══ */}
+        <div className="profile-grid__sidebar profile-grid__sidebar--mobile">
+          <SidebarAccordion title="Activity" defaultOpen>
+            <StatCards stats={stats} />
+          </SidebarAccordion>
+          <SidebarAccordion title="Verification & Trust">
+            <TrustPanel
+              emailVerified={profile.emailVerified}
+              phoneVerified={profile.phoneVerified}
+              lastActiveAt={profile.lastActiveAt}
+              targetUserId={userId}
+              showReport={!!currentUserId && !isOwner}
             />
-          </div>
-        )}
-
-        {/* Actions — only for other logged-in users */}
-        {currentUserId && !isOwner && (
-          <div className="profile-view__actions">
-            {connectionStatus === "ACCEPTED" && (
-              <>
-                <span className="badge badge--ok">✓ Connected</span>
-                <Link href={`/dashboard/messages?to=${userId}`} className="btn btn--primary btn--sm">
-                  💬 Message
-                </Link>
-              </>
-            )}
-            {connectionStatus === "PENDING" && (
-              <span className="badge badge--muted">⏳ Request pending</span>
-            )}
-            {!connectionStatus && !isBlockedByMe && (
-              <ConnectButton toUserId={userId} />
-            )}
-            {connectionStatus === "DECLINED" && !isBlockedByMe && (
-              <ConnectButton toUserId={userId} />
-            )}
-            <BlockButton targetUserId={userId} isBlocked={isBlockedByMe} />
-            {isAdmin && (
-              <HideButton targetUserId={userId} isHidden={!!profile.hiddenFromCommunity} />
-            )}
-            <ReportButton targetType="USER" targetId={userId} />
-          </div>
-        )}
-
-        {isOwner && (
-          <div className="profile-view__actions">
-            <Link href="/community/edit-profile" className="btn btn--primary btn--sm">
-              Edit profile
-            </Link>
-          </div>
-        )}
+          </SidebarAccordion>
+          <SidebarAccordion title="Connections">
+            <ConnectionsPreview
+              connections={profile.connectionsPreview}
+              totalCount={profile.connectionsCount}
+              mutualCount={profile.mutualConnectionsCount}
+              profileUserId={userId}
+            />
+          </SidebarAccordion>
+        </div>
       </div>
     </div>
   );
