@@ -18,11 +18,15 @@ const GEMINI_TIMEOUT_MS = 30_000;
 
 // ─── Low-cost generation config for title generation only ────
 const TITLE_GENERATION_CONFIG = {
-  maxOutputTokens: 256,
+  maxOutputTokens: 512,
   temperature: 0.5,
   topP: 0.9,
   topK: 40,
   responseMimeType: "application/json",
+  // Disable thinking/reasoning — title generation is simple and doesn't need it.
+  // Without this, Gemini 3 Flash burns most of maxOutputTokens on internal
+  // reasoning (thoughtsTokenCount) and runs out before producing the JSON.
+  thinkingConfig: { thinkingBudget: 0 },
 };
 
 /* ------------------------------------------------------------------ */
