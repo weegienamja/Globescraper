@@ -2,10 +2,11 @@
  * Topic scoring and ranking for the Cambodia News Blog Generator.
  *
  * Sorts curated topics by a composite score that weighs:
- * - Freshness (recent news scores higher)
- * - Source quality (more reputable sources = higher)
- * - Risk level (lower risk = higher score)
+ * - Search query quality (more queries = better research potential)
+ * - Outline depth (more outline angles = more substance)
  * - Audience fit breadth (fits both audiences = slight bonus)
+ * - Keyword quality (has target + secondary keywords)
+ * - Legacy: freshnessScore / sourceCount / riskLevel if present
  */
 
 import type { NewsTopic } from "@/lib/newsTopicTypes";
@@ -17,24 +18,33 @@ import type { NewsTopic } from "@/lib/newsTopicTypes";
 function calculateTopicScore(topic: NewsTopic): number {
   let score = 0;
 
-  // Freshness: 0-40 points
-  // freshnessScore is 1-10, map to 0-40
-  score += topic.freshnessScore * 4;
+  // Search queries quality: 0-30 points (3 queries = 15, 6 = 30)
+  const queryCount = topic.searchQueries?.length ?? 0;
+  score += Math.min(30, queryCount * 5);
 
-  // Source count: 0-25 points
-  // 2 sources = 10, 3 = 15, 4+ = 20-25
-  const sourcePoints = Math.min(25, topic.sourceCount * 5 + 5);
-  score += sourcePoints;
+  // Outline depth: 0-25 points (3 angles = 12.5, 6 = 25)
+  const outlineCount = topic.outlineAngles?.length ?? 0;
+  score += Math.min(25, Math.round(outlineCount * 4.2));
 
-  // Risk level: 0-20 points
-  // LOW = 20, MEDIUM = 10, HIGH = 0
-  if (topic.riskLevel === "LOW") score += 20;
-  else if (topic.riskLevel === "MEDIUM") score += 10;
+  // Keyword quality: 0-20 points
+  if (topic.suggestedKeywords?.target) score += 10;
+  const secondaryCount = topic.suggestedKeywords?.secondary?.length ?? 0;
+  score += Math.min(10, secondaryCount * 3);
 
   // Audience breadth: 0-15 points
-  // Both audiences = 15, one = 10
   if (topic.audienceFit.length >= 2) score += 15;
   else score += 10;
+
+  // Intent present: 0-10 points
+  if (topic.intent && topic.intent.length > 5) score += 10;
+
+  // Legacy fields (if present from USE_EXTERNAL_SOURCES mode)
+  if (typeof topic.freshnessScore === "number") {
+    score += topic.freshnessScore * 2; // 0-20 bonus
+  }
+  if (typeof topic.sourceCount === "number") {
+    score += Math.min(10, topic.sourceCount * 3); // 0-10 bonus
+  }
 
   return Math.min(100, Math.max(0, score));
 }

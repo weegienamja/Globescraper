@@ -271,6 +271,66 @@ function isCambodiaRelevant(item: RawDiscoveryItem): boolean {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Shared topic validation + cleaning                                  */
+/* ------------------------------------------------------------------ */
+
+const VALID_AUDIENCE = new Set(["TRAVELLERS", "TEACHERS"]);
+
+/** Strip em dashes from any string. */
+function cleanStr(s: string): string {
+  return s.replace(/\u2014/g, ", ").replace(/\u2013/g, ", ");
+}
+
+/**
+ * Validate, clean, and normalize an array of raw topic objects from Gemini.
+ * Enforces: required fields, audienceFit enum, searchQueries length 3-6,
+ * outlineAngles length 3-6.
+ */
+function validateAndCleanTopics(rawTopics: unknown[]): NewsTopic[] {
+  const topics: NewsTopic[] = [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const raw of rawTopics as any[]) {
+    if (!raw.id || !raw.title || !raw.angle || !raw.whyItMatters) continue;
+
+    // Enforce audienceFit enum
+    const audienceFit: ("TRAVELLERS" | "TEACHERS")[] = Array.isArray(raw.audienceFit)
+      ? raw.audienceFit.filter((a: string) => VALID_AUDIENCE.has(a))
+      : ["TRAVELLERS", "TEACHERS"];
+    if (audienceFit.length === 0) audienceFit.push("TRAVELLERS", "TEACHERS");
+
+    // Validate searchQueries (3-6)
+    const searchQueries: string[] = Array.isArray(raw.searchQueries)
+      ? raw.searchQueries.map(String).slice(0, 6)
+      : [];
+
+    // Validate outlineAngles (3-6)
+    const outlineAngles: string[] = Array.isArray(raw.outlineAngles)
+      ? raw.outlineAngles.map(String).slice(0, 6)
+      : [];
+
+    topics.push({
+      id: String(raw.id),
+      title: cleanStr(String(raw.title)),
+      angle: cleanStr(String(raw.angle)),
+      whyItMatters: cleanStr(String(raw.whyItMatters)),
+      audienceFit,
+      suggestedKeywords: {
+        target: String(raw.suggestedKeywords?.target || raw.title),
+        secondary: Array.isArray(raw.suggestedKeywords?.secondary)
+          ? raw.suggestedKeywords.secondary.map(String)
+          : [],
+      },
+      searchQueries,
+      intent: cleanStr(String(raw.intent || "informational")),
+      outlineAngles,
+      fromSeedTitle: Boolean(raw.fromSeedTitle),
+    });
+  }
+
+  return topics;
+}
+
+/* ------------------------------------------------------------------ */
 /*  Gemini topic curation                                               */
 /* ------------------------------------------------------------------ */
 
@@ -304,7 +364,7 @@ async function curateTopicsWithGemini(
 TODAY'S DATE: ${currentDate}
 CURRENT YEAR: ${currentYear}
 
-Analyze these recent news items and produce 6 to 10 strong blog topic ideas for ${audienceDesc}.
+Analyze these recent news items and produce 4 to 8 strong blog topic ideas for ${audienceDesc}.
 Focus area: ${cityFocus}.
 
 NEWS ITEMS:
@@ -323,14 +383,13 @@ TOPIC SELECTION CRITERIA:
 - Major political or legal changes that could disrupt travel or work plans
 
 QUALITY RULES:
-- Each topic must have at least 2 source URLs from the items above (unless it is a clear official announcement with 1 source).
 - Each topic must explain clearly why it matters to the audience.
 - Do not include sensational topics with weak sourcing.
-- Prefer topics where the news is recent (last 7 days preferred, last 30 days acceptable).
+- Prefer topics where the news is recent.
 - Group related news items into single coherent topics.
 - When including a year in titles, ALWAYS use the current year (${currentYear}). NEVER use past years like ${currentYear - 1}.
-
-NEVER use em dashes in any output. Use commas, colons, or semicolons instead.
+- NEVER use em dashes in any output. Use commas, colons, or semicolons instead.
+- audienceFit must ONLY contain "TRAVELLERS" and/or "TEACHERS". No other labels allowed.
 
 Return a JSON object:
 {
@@ -345,16 +404,16 @@ Return a JSON object:
         "target": "primary keyword phrase",
         "secondary": ["keyword2", "keyword3"]
       },
-      "sourceUrls": ["url1", "url2"],
-      "sourceCount": 2,
-      "freshnessScore": 8,
-      "riskLevel": "LOW"
+      "searchQueries": ["google search query 1 ${currentYear}", "google search query 2", "google search query 3"],
+      "intent": "One sentence describing the search intent (informational, safety checklist, etc)",
+      "outlineAngles": ["Sub-section angle 1", "Sub-section angle 2", "Sub-section angle 3"]
     }
   ]
 }
 
-freshnessScore: 1-10 (10 = breaking news today, 5 = last week, 1 = month old)
-riskLevel: LOW (well sourced), MEDIUM (needs more verification), HIGH (single weak source)
+searchQueries: 3 to 6 Google search queries this topic would use to find real sources.
+intent: one sentence describing the user search intent.
+outlineAngles: 3 to 6 bullet points describing sub-sections to cover.
 
 Return ONLY the JSON. No markdown fences. No commentary.`;
 
@@ -365,36 +424,7 @@ Return ONLY the JSON. No markdown fences. No commentary.`;
     throw new Error("Gemini did not return a valid topics array.");
   }
 
-  // Validate and clean each topic
-  const topics: NewsTopic[] = [];
-  for (const raw of parsed.topics) {
-    if (!raw.id || !raw.title || !raw.angle || !raw.whyItMatters) continue;
-
-    // Strip any em dashes
-    const cleanStr = (s: string) => s.replace(/\u2014/g, ", ").replace(/\u2013/g, ", ");
-
-    topics.push({
-      id: String(raw.id),
-      title: cleanStr(String(raw.title)),
-      angle: cleanStr(String(raw.angle)),
-      whyItMatters: cleanStr(String(raw.whyItMatters)),
-      audienceFit: Array.isArray(raw.audienceFit)
-        ? raw.audienceFit.filter((a: string) => a === "TRAVELLERS" || a === "TEACHERS")
-        : ["TRAVELLERS", "TEACHERS"],
-      suggestedKeywords: {
-        target: String(raw.suggestedKeywords?.target || raw.title),
-        secondary: Array.isArray(raw.suggestedKeywords?.secondary)
-          ? raw.suggestedKeywords.secondary.map(String)
-          : [],
-      },
-      sourceUrls: Array.isArray(raw.sourceUrls) ? raw.sourceUrls.map(String) : [],
-      sourceCount: Number(raw.sourceCount) || 0,
-      freshnessScore: Math.min(10, Math.max(1, Number(raw.freshnessScore) || 5)),
-      riskLevel: ["LOW", "MEDIUM", "HIGH"].includes(raw.riskLevel) ? raw.riskLevel : "MEDIUM",
-    });
-  }
-
-  return topics;
+  return validateAndCleanTopics(parsed.topics);
 }
 
 /* ------------------------------------------------------------------ */
@@ -670,13 +700,13 @@ NEWS ITEMS:
 ${itemsSummary}
 
 QUALITY RULES:
-- The first topic must match the seed title closely, adapted with sources from the items above.
+- The first topic must match the seed title closely.
 - Other topics should be related angles, sub-topics, or complementary pieces.
-- Each topic must have source URLs from the items above (at least 1, preferably 2+).
 - Each topic must explain clearly why it matters to the audience.
 - Do not include sensational topics with weak sourcing.
 - NEVER use em dashes in any output. Use commas, colons, or semicolons instead.
 - When including a year in titles, ALWAYS use the current year (${currentYear}). NEVER use past years like ${currentYear - 1}.
+- audienceFit must ONLY contain "TRAVELLERS" and/or "TEACHERS". No other labels allowed.
 
 Return a JSON object:
 {
@@ -691,18 +721,18 @@ Return a JSON object:
         "target": "primary keyword phrase",
         "secondary": ["keyword2", "keyword3"]
       },
-      "sourceUrls": ["url1", "url2"],
-      "sourceCount": 2,
-      "freshnessScore": 8,
-      "riskLevel": "LOW",
+      "searchQueries": ["google search query 1 ${currentYear}", "google search query 2", "google search query 3"],
+      "intent": "One sentence describing the search intent (informational, safety checklist, etc)",
+      "outlineAngles": ["Sub-section angle 1", "Sub-section angle 2", "Sub-section angle 3"],
       "fromSeedTitle": true
     }
   ]
 }
 
+searchQueries: 3 to 6 Google search queries this topic would use to find real sources. Include ${currentYear} where relevant.
+intent: one sentence describing the user search intent.
+outlineAngles: 3 to 6 bullet points describing sub-sections to cover.
 Set "fromSeedTitle": true for the topic that most closely matches the admin's seed title.
-freshnessScore: 1-10 (10 = breaking news today, 5 = last week, 1 = month old)
-riskLevel: LOW (well sourced), MEDIUM (needs more verification), HIGH (single weak source)
 
 Return ONLY the JSON. No markdown fences. No commentary.`;
 
@@ -713,33 +743,5 @@ Return ONLY the JSON. No markdown fences. No commentary.`;
     throw new Error("Gemini did not return a valid topics array.");
   }
 
-  const topics: NewsTopic[] = [];
-  for (const raw of parsed.topics) {
-    if (!raw.id || !raw.title || !raw.angle || !raw.whyItMatters) continue;
-
-    const cleanStr = (s: string) => s.replace(/\u2014/g, ", ").replace(/\u2013/g, ", ");
-
-    topics.push({
-      id: String(raw.id),
-      title: cleanStr(String(raw.title)),
-      angle: cleanStr(String(raw.angle)),
-      whyItMatters: cleanStr(String(raw.whyItMatters)),
-      audienceFit: Array.isArray(raw.audienceFit)
-        ? raw.audienceFit.filter((a: string) => a === "TRAVELLERS" || a === "TEACHERS")
-        : ["TRAVELLERS", "TEACHERS"],
-      suggestedKeywords: {
-        target: String(raw.suggestedKeywords?.target || raw.title),
-        secondary: Array.isArray(raw.suggestedKeywords?.secondary)
-          ? raw.suggestedKeywords.secondary.map(String)
-          : [],
-      },
-      sourceUrls: Array.isArray(raw.sourceUrls) ? raw.sourceUrls.map(String) : [],
-      sourceCount: Number(raw.sourceCount) || 0,
-      freshnessScore: Math.min(10, Math.max(1, Number(raw.freshnessScore) || 5)),
-      riskLevel: ["LOW", "MEDIUM", "HIGH"].includes(raw.riskLevel) ? raw.riskLevel : "MEDIUM",
-      fromSeedTitle: Boolean(raw.fromSeedTitle),
-    });
-  }
-
-  return topics;
+  return validateAndCleanTopics(parsed.topics);
 }

@@ -62,11 +62,15 @@ interface NewsTopic {
   whyItMatters: string;
   audienceFit: string[];
   suggestedKeywords: { target: string; secondary: string[] };
-  sourceUrls: string[];
-  sourceCount: number;
-  freshnessScore: number;
-  riskLevel: "LOW" | "MEDIUM" | "HIGH";
+  searchQueries: string[];
+  intent: string;
+  outlineAngles: string[];
   fromSeedTitle?: boolean;
+  /* Legacy fields (only present when USE_EXTERNAL_SOURCES is true) */
+  sourceUrls?: string[];
+  sourceCount?: number;
+  freshnessScore?: number;
+  riskLevel?: "LOW" | "MEDIUM" | "HIGH";
 }
 
 interface NewsGenResult {
@@ -224,7 +228,7 @@ export default function ContentGeneratorClient() {
           audienceFit: topic.audienceFit,
           targetKeyword: topic.suggestedKeywords.target,
           secondaryKeywords: topic.suggestedKeywords.secondary,
-          seedSourceUrls: topic.sourceUrls,
+          seedSourceUrls: topic.sourceUrls || [],
         }),
       });
 
@@ -749,21 +753,20 @@ export default function ContentGeneratorClient() {
                       {t.fromSeedTitle && (
                         <span className="cgen__chip cgen__chip--seed">From generated title</span>
                       )}
-                      <span className={`cgen__badge cgen__badge--risk-${t.riskLevel.toLowerCase()}`}>
-                        {t.riskLevel}
+                      <span className="cgen__badge cgen__badge--confidence-med" title="Search queries">
+                        {t.searchQueries?.length ?? 0} queries
                       </span>
-                      <span className="cgen__news-freshness" title="Freshness score">
-                        {t.freshnessScore}/10
-                      </span>
-                      <span className={`cgen__badge ${t.sourceCount >= 3 ? "cgen__badge--confidence-high" : t.sourceCount >= 2 ? "cgen__badge--confidence-med" : "cgen__badge--confidence-low"}`} title="Confidence based on source count">
-                        {t.sourceCount >= 3 ? "HIGH" : t.sourceCount >= 2 ? "MED" : "LOW"}
+                      <span className="cgen__badge cgen__badge--confidence-high" title="Outline depth">
+                        {t.outlineAngles?.length ?? 0} angles
                       </span>
                     </div>
                   </div>
                   <p className="cgen__news-topic-angle">{t.angle}</p>
                   <p className="cgen__news-topic-why">{t.whyItMatters}</p>
+                  {t.intent && (
+                    <p className="cgen__news-topic-intent"><strong>Intent:</strong> {t.intent}</p>
+                  )}
                   <div className="cgen__news-topic-meta">
-                    <span>{t.sourceCount} source{t.sourceCount !== 1 ? "s" : ""}</span>
                     <span>{t.audienceFit.join(", ")}</span>
                     <span className="cgen__news-topic-keyword">{t.suggestedKeywords.target}</span>
                   </div>
@@ -814,9 +817,8 @@ export default function ContentGeneratorClient() {
             </div>
             <h2 className="cgen__result-title">{newsResult.title}</h2>
             <div className="cgen__result-meta">
-              <span>Sources: {newsResult.sourceCount}</span>
-              {newsResult.imageCount > 0 && <span>Images: {newsResult.imageCount}</span>}
               <span>Confidence: {newsResult.confidence}</span>
+              {newsResult.imageCount > 0 && <span>Images: {newsResult.imageCount}</span>}
             </div>
             <div className="cgen__result-actions">
               <Link
