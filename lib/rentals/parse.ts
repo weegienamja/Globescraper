@@ -147,11 +147,21 @@ const DISTRICT_ALIASES: Record<string, string> = {
 
 /**
  * Attempt to parse a district from a location string.
+ * If the text contains breadcrumb separators (">"), takes the last segment.
  */
 export function parseDistrict(text: string | null | undefined): string | null {
   if (!text) return null;
 
-  const lower = text.toLowerCase().trim();
+  let cleaned = text.trim();
+
+  // Handle breadcrumb-style strings like "Rent>Siem Reap>Siem Reap>Sala Kamraeuk"
+  if (cleaned.includes(">")) {
+    const segments = cleaned.split(">").map((s) => s.trim()).filter(Boolean);
+    // Take the last segment (most specific location)
+    cleaned = segments[segments.length - 1] || cleaned;
+  }
+
+  const lower = cleaned.toLowerCase().trim();
 
   // Check known aliases
   for (const [alias, canonical] of Object.entries(DISTRICT_ALIASES)) {
@@ -159,9 +169,32 @@ export function parseDistrict(text: string | null | undefined): string | null {
   }
 
   // If the text is short enough (< 50 chars), return it as-is
-  if (text.trim().length > 0 && text.trim().length < 50) {
-    return text.trim();
+  if (cleaned.length > 0 && cleaned.length < 50) {
+    return cleaned;
   }
 
   return null;
+}
+
+/**
+ * Extract city name from a breadcrumb or location string.
+ * Look for known Cambodian cities; defaults to "Phnom Penh".
+ */
+const CITY_ALIASES: Record<string, string> = {
+  "phnom penh": "Phnom Penh",
+  "siem reap": "Siem Reap",
+  "sihanoukville": "Sihanoukville",
+  "kampot": "Kampot",
+  "battambang": "Battambang",
+  "kep": "Kep",
+  "kompong cham": "Kompong Cham",
+};
+
+export function parseCity(text: string | null | undefined): string {
+  if (!text) return "Phnom Penh";
+  const lower = text.toLowerCase();
+  for (const [alias, canonical] of Object.entries(CITY_ALIASES)) {
+    if (lower.includes(alias)) return canonical;
+  }
+  return "Phnom Penh";
 }

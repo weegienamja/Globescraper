@@ -33,6 +33,7 @@ export interface ScrapedListing {
   sourceListingId: string | null;
   title: string;
   description: string | null;
+  city: string;
   district: string | null;
   propertyType: PropertyType;
   bedrooms: number | null;
@@ -168,6 +169,7 @@ export async function scrapeListingKhmer24(url: string): Promise<ScrapedListing 
     sourceListingId,
     title,
     description,
+    city: "Phnom Penh",
     district,
     propertyType,
     bedrooms,

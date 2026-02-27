@@ -12,7 +12,7 @@ import * as cheerio from "cheerio";
 import { fetchHtml, politeDelay } from "../http";
 import { canonicalizeUrl } from "../url";
 import { classifyPropertyType, shouldIngest } from "../classify";
-import { parsePriceMonthlyUsd, parseBedsBathsSize, parseDistrict } from "../parse";
+import { parsePriceMonthlyUsd, parseBedsBathsSize, parseDistrict, parseCity } from "../parse";
 import { DISCOVER_MAX_PAGES, DISCOVER_MAX_URLS } from "../config";
 import type { PropertyType } from "@prisma/client";
 import { type PipelineLogFn, noopLogger } from "../pipelineLogger";
@@ -35,6 +35,7 @@ export interface ScrapedListing {
   sourceListingId: string | null;
   title: string;
   description: string | null;
+  city: string;
   district: string | null;
   propertyType: PropertyType;
   bedrooms: number | null;
@@ -223,6 +224,11 @@ export async function scrapeListingRealestateKh(
       .first()
       .text()
       .trim() || null;
+
+  // Extract city from breadcrumb / location text (defaults to Phnom Penh)
+  const city = parseCity(locationText || title);
+  log("debug", `City: ${city}`);
+
   let district = parseDistrict(locationText);
 
   // Fallback: extract district from title (e.g. "3 Bed, 4 Bath Apartment for Rent in BKK 1")
@@ -306,6 +312,7 @@ export async function scrapeListingRealestateKh(
     sourceListingId,
     title,
     description,
+    city,
     district,
     propertyType,
     bedrooms,

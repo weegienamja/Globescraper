@@ -149,6 +149,7 @@ export async function processQueueJob(
             data: {
               title: scraped.title,
               description: scraped.description,
+              city: scraped.city ?? "Phnom Penh",
               district: scraped.district,
               propertyType: scraped.propertyType,
               bedrooms: scraped.bedrooms,
@@ -176,6 +177,7 @@ export async function processQueueJob(
               canonicalUrl: item.canonicalUrl,
               title: scraped.title,
               description: scraped.description,
+              city: scraped.city ?? "Phnom Penh",
               district: scraped.district,
               propertyType: scraped.propertyType,
               bedrooms: scraped.bedrooms,
@@ -201,7 +203,7 @@ export async function processQueueJob(
         await prisma.rentalSnapshot.create({
           data: {
             listingId,
-            city: "Phnom Penh",
+            city: scraped.city ?? "Phnom Penh",
             district: scraped.district,
             bedrooms: scraped.bedrooms,
             propertyType: scraped.propertyType,
