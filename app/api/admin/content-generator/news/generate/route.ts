@@ -261,14 +261,20 @@ function buildNewsGenerationPrompt(
   const seedUrlsSection = seedUrls.length > 0
     ? `No page content could be fetched, but these source URLs were identified during topic discovery. Reference them in your sources array and write about the topic using your training knowledge:\n${seedUrls.map((u) => `- ${u}`).join("\n")}`
     : "";
-  const monthYear = new Date().toLocaleString("en-US", { month: "long", year: "numeric" });
+  const now = new Date();
+  const monthYear = now.toLocaleString("en-US", { month: "long", year: "numeric" });
+  const currentYear = now.getFullYear();
+  const todayFormatted = now.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
   const audienceDesc = audienceFit.includes("TRAVELLERS") && audienceFit.includes("TEACHERS")
     ? "both travellers to Cambodia and English teachers living or planning to live there"
     : audienceFit.includes("TRAVELLERS")
       ? "travellers to Cambodia"
       : "English teachers in Cambodia";
 
-  return `You are a professional news and travel content writer for GlobeScraper, a website about moving to and visiting Cambodia.
+  return `TODAY'S DATE: ${todayFormatted}
+CURRENT YEAR: ${currentYear}
+
+You are a professional news and travel content writer for GlobeScraper, a website about moving to and visiting Cambodia.
 
 Write an in-depth news-based blog post about: "${topicTitle}"
 Angle: ${angle}
@@ -295,6 +301,7 @@ STRICT STYLE RULES:
    Acceptable: "You land late. You want a SIM fast. Here is what changed and what to do."
    Not acceptable: "When I went last month, I did X."
 14. No text in alt text or captions should contain em dashes.
+15. When referencing a year, always use the current year (${currentYear}). NEVER use a past year like ${currentYear - 1} unless citing a specific historical event.
 
 RESEARCH DATA (paraphrase only, never copy):
 ${bulletText || seedUrlsSection || "No research data available. Write based on your training knowledge but mark confidence LOW."}

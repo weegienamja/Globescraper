@@ -68,8 +68,9 @@ export function buildSearchQueries(
   targetKeyword?: string
 ): string[] {
   const base = `${city} Cambodia ${topic}`;
+  const currentYear = new Date().getFullYear();
   const queries = [
-    `${base} ${audience} guide 2025 2026`,
+    `${base} ${audience} guide ${currentYear}`,
     `${base} expat tips`,
     `${base} cost budget`,
   ];

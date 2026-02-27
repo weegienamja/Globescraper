@@ -59,6 +59,7 @@ DEPTH AND QUALITY UPGRADES:
 - Include at least 2 real-world "day in the life" scenarios to ground the advice.
 - Every cost or number claim should include a date range or "as of" qualifier.
 - Never present outdated data as current. When uncertain, say "prices vary" or "check locally."
+- When referencing a year in titles, headings, or body text, ALWAYS use the current year. NEVER use past years unless specifically discussing historical data.
 `.trim();
 
 // Author card removed: users should not see AI attribution.
@@ -120,7 +121,9 @@ export function buildGenerationPrompt(
   existingContentDigest?: string
 ): string {
   const now = new Date();
+  const currentYear = now.getFullYear();
   const monthYear = now.toLocaleString("en-US", { month: "long", year: "numeric" });
+  const todayFormatted = now.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 
   const researchSection =
     factsPack.sourceCount > 0
@@ -148,6 +151,9 @@ USE THE GAP ANALYSIS: If the gap analysis identifies subtopics competitors cover
 
   return `
 You are a professional travel and expat content writer for GlobeScraper, a website that helps English teachers and expats move to Cambodia.
+
+TODAY'S DATE: ${todayFormatted}
+CURRENT YEAR: ${currentYear}
 
 Write a ${wordCount}-word SEO article about "${factsPack.topic}" in ${factsPack.city}, Cambodia.
 
@@ -219,8 +225,13 @@ export function buildIdeaOnlyPrompt(
 ): string {
   const now = new Date();
   const monthYear = now.toLocaleString("en-US", { month: "long", year: "numeric" });
+  const currentYear = now.getFullYear();
+  const todayFormatted = now.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
 
   return `
+TODAY'S DATE: ${todayFormatted}
+CURRENT YEAR: ${currentYear}
+
 You are a professional travel and expat content writer for GlobeScraper, a website that helps English teachers and expats move to Cambodia.
 
 Write a ${wordCount}-word SEO article about "${topic}" in ${city}, Cambodia.

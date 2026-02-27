@@ -281,6 +281,9 @@ async function curateTopicsWithGemini(
 ): Promise<NewsTopic[]> {
   validateGeminiKey();
 
+  const currentDate = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  const currentYear = new Date().getFullYear();
+
   const itemsSummary = rawItems
     .slice(0, 40)
     .map(
@@ -297,6 +300,9 @@ async function curateTopicsWithGemini(
         : "people interested in teaching English in Cambodia";
 
   const prompt = `You are a news editor for GlobeScraper, a website about moving to and visiting Cambodia.
+
+TODAY'S DATE: ${currentDate}
+CURRENT YEAR: ${currentYear}
 
 Analyze these recent news items and produce 6 to 10 strong blog topic ideas for ${audienceDesc}.
 Focus area: ${cityFocus}.
@@ -322,6 +328,7 @@ QUALITY RULES:
 - Do not include sensational topics with weak sourcing.
 - Prefer topics where the news is recent (last 7 days preferred, last 30 days acceptable).
 - Group related news items into single coherent topics.
+- When including a year in titles, ALWAYS use the current year (${currentYear}). NEVER use past years like ${currentYear - 1}.
 
 NEVER use em dashes in any output. Use commas, colons, or semicolons instead.
 
@@ -628,6 +635,9 @@ async function curateTopicsWithGeminiSeeded(
 ): Promise<NewsTopic[]> {
   validateGeminiKey();
 
+  const currentDate = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  const currentYear = new Date().getFullYear();
+
   const itemsSummary = rawItems
     .slice(0, 40)
     .map(
@@ -644,6 +654,9 @@ async function curateTopicsWithGeminiSeeded(
         : "people interested in teaching English in Cambodia";
 
   const prompt = `You are a news editor for GlobeScraper, a website about moving to and visiting Cambodia.
+
+TODAY'S DATE: ${currentDate}
+CURRENT YEAR: ${currentYear}
 
 The admin wants to write about this topic: "${seedTitle}"
 ${seedAngle ? `Suggested angle: ${seedAngle}` : ""}
@@ -663,6 +676,7 @@ QUALITY RULES:
 - Each topic must explain clearly why it matters to the audience.
 - Do not include sensational topics with weak sourcing.
 - NEVER use em dashes in any output. Use commas, colons, or semicolons instead.
+- When including a year in titles, ALWAYS use the current year (${currentYear}). NEVER use past years like ${currentYear - 1}.
 
 Return a JSON object:
 {

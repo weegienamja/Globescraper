@@ -302,6 +302,7 @@ export async function generateBestTitle(
   const existingTitles = coverage.map((e) => e.title).slice(0, 30);
 
   const city = cityFocus === "Cambodia wide" ? "Cambodia" : cityFocus;
+  const currentYear = new Date().getFullYear();
   const audienceLabel = audienceFocus === "both"
     ? "both travellers and teachers"
     : audienceFocus === "travellers" ? "travellers and tourists" : "English teachers and expats";
@@ -313,6 +314,9 @@ export async function generateBestTitle(
   const existingList = existingTitles.map((t) => `- ${t}`).join("\n");
 
   const prompt = `You are a blog title generator for GlobeScraper, a Cambodia travel and expat information site.
+
+TODAY'S DATE: ${new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+CURRENT YEAR: ${currentYear}
 
 TASK: Generate ONE unique, specific, SEO-friendly blog title about ${city} for ${audienceLabel}.
 
@@ -330,7 +334,7 @@ RULES:
 2. The title MUST be relevant to ${audienceLabel}
 3. Pick a DIFFERENT gap/topic each time — do NOT default to visa topics
 4. Make it sound like a real, helpful blog post (not clickbait)
-5. Include a year or "Updated" if the topic is time-sensitive
+5. If the topic is time-sensitive, include the current year (${currentYear}). NEVER use a past year like ${currentYear - 1}. If unsure, omit the year rather than using an old one.
 6. Keep it under 80 characters if possible
 7. Do NOT use em dashes (—)
 8. Be creative and vary your approach — sometimes use "How to", sometimes "Guide to", sometimes a question, sometimes a list format like "X Things..."
