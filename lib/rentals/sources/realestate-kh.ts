@@ -15,6 +15,7 @@ import { classifyPropertyType, shouldIngest } from "../classify";
 import { parsePriceMonthlyUsd, parseBedsBathsSize, parseDistrict } from "../parse";
 import { DISCOVER_MAX_PAGES, DISCOVER_MAX_URLS } from "../config";
 import type { PropertyType } from "@prisma/client";
+import { type PipelineLogFn, noopLogger } from "../pipelineLogger";
 
 /* ── Category URLs ───────────────────────────────────────── */
 
@@ -52,21 +53,27 @@ export interface ScrapedListing {
  * Discover listing URLs from realestate.com.kh category pages.
  * Respects DISCOVER_MAX_PAGES and DISCOVER_MAX_URLS caps.
  */
-export async function discoverRealestateKh(): Promise<DiscoveredUrl[]> {
+export async function discoverRealestateKh(log: PipelineLogFn = noopLogger): Promise<DiscoveredUrl[]> {
   const urls: DiscoveredUrl[] = [];
   let pagesVisited = 0;
 
   for (const baseUrl of CATEGORY_URLS) {
     if (pagesVisited >= DISCOVER_MAX_PAGES) break;
+    log("info", `Scanning category: ${baseUrl}`);
 
     let pageUrl: string | null = baseUrl;
 
     while (pageUrl && pagesVisited < DISCOVER_MAX_PAGES && urls.length < DISCOVER_MAX_URLS) {
       pagesVisited++;
+      log("info", `Fetching page ${pagesVisited}: ${pageUrl}`);
       const html = await fetchHtml(pageUrl);
-      if (!html) break;
+      if (!html) {
+        log("warn", `No HTML returned for ${pageUrl}`);
+        break;
+      }
 
       const $ = cheerio.load(html);
+      const beforeCount = urls.length;
 
       // Extract listing links from article elements (each listing is an <article>)
       $("article a[href]").each((_i, el) => {
@@ -86,6 +93,7 @@ export async function discoverRealestateKh(): Promise<DiscoveredUrl[]> {
 
         if (!urls.some((u) => u.url === canonical)) {
           urls.push({ url: canonical, sourceListingId: sourceId });
+          log("debug", `Found listing: ${canonical}`, { id: sourceId });
         }
       });
 
@@ -107,8 +115,12 @@ export async function discoverRealestateKh(): Promise<DiscoveredUrl[]> {
 
         if (!urls.some((u) => u.url === canonical)) {
           urls.push({ url: canonical, sourceListingId: sourceId });
+          log("debug", `Found listing: ${canonical}`, { id: sourceId });
         }
       });
+
+      const pageFound = urls.length - beforeCount;
+      log("info", `Page ${pagesVisited}: found ${pageFound} new listing links (total: ${urls.length})`);
 
       // Find next page link — realestate.com.kh uses ?page=N
       let nextPageUrl: string | null = null;
@@ -137,8 +149,10 @@ export async function discoverRealestateKh(): Promise<DiscoveredUrl[]> {
       }
 
       if (nextPageUrl && nextPageUrl !== pageUrl) {
+        log("info", `Pagination: moving to ${nextPageUrl}`);
         pageUrl = nextPageUrl;
       } else {
+        log("info", `No more pages for this category`);
         pageUrl = null;
       }
 
@@ -146,6 +160,7 @@ export async function discoverRealestateKh(): Promise<DiscoveredUrl[]> {
     }
   }
 
+  log("info", `Discovery complete: ${urls.length} unique URLs from ${pagesVisited} pages`);
   return urls;
 }
 
@@ -159,10 +174,15 @@ export async function discoverRealestateKh(): Promise<DiscoveredUrl[]> {
  * behind RENTALS_PLAYWRIGHT_ENABLED flag. Disabled by default.
  */
 export async function scrapeListingRealestateKh(
-  url: string
+  url: string,
+  log: PipelineLogFn = noopLogger
 ): Promise<ScrapedListing | null> {
+  log("debug", `Fetching listing page: ${url}`);
   const html = await fetchHtml(url);
-  if (!html) return null;
+  if (!html) {
+    log("warn", `No HTML returned for listing: ${url}`);
+    return null;
+  }
 
   const $ = cheerio.load(html);
 
@@ -170,7 +190,11 @@ export async function scrapeListingRealestateKh(
   const title =
     $("h1").first().text().trim() ||
     $('[class*="title"]').first().text().trim();
-  if (!title) return null;
+  if (!title) {
+    log("warn", `No title found on page: ${url}`);
+    return null;
+  }
+  log("debug", `Title: ${title}`);
 
   // Description
   const description =
@@ -181,12 +205,17 @@ export async function scrapeListingRealestateKh(
 
   // Classify
   const propertyType = classifyPropertyType(title, description);
-  if (!shouldIngest(propertyType)) return null;
+  if (!shouldIngest(propertyType)) {
+    log("debug", `Skipping: classified as ${propertyType} (not condo/apartment)`);
+    return null;
+  }
+  log("debug", `Classified as: ${propertyType}`);
 
   // Price
   const priceText =
     $('[class*="price"], .listing-price').first().text().trim() || null;
   const priceMonthlyUsd = parsePriceMonthlyUsd(priceText);
+  log("debug", `Price: ${priceText ?? "not found"} → $${priceMonthlyUsd ?? "N/A"}/mo`);
 
   // Location — try multiple selectors, then fallback to URL slug
   const locationText =
@@ -256,6 +285,7 @@ export async function scrapeListingRealestateKh(
   );
 
   imageUrls.push(...imageSet);
+  log("debug", `Found ${imageUrls.length} images`);
 
   // Posted date (often in meta or structured data)
   let postedAt: Date | null = null;

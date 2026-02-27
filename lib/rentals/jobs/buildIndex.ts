@@ -10,6 +10,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { PropertyType } from "@prisma/client";
+import { type PipelineLogFn, noopLogger } from "../pipelineLogger";
 
 export interface BuildIndexOptions {
   /** The date to build the index for. Defaults to yesterday UTC. */
@@ -25,7 +26,8 @@ export interface BuildIndexResult {
  * Build or rebuild the daily rental index for the specified date.
  */
 export async function buildDailyIndexJob(
-  options?: BuildIndexOptions
+  options?: BuildIndexOptions,
+  log: PipelineLogFn = noopLogger
 ): Promise<BuildIndexResult> {
   // Determine date (default = yesterday UTC at 00:00)
   const targetDate = options?.date ?? getYesterdayUTC();
@@ -33,6 +35,8 @@ export async function buildDailyIndexJob(
   dateStart.setUTCHours(0, 0, 0, 0);
   const dateEnd = new Date(dateStart);
   dateEnd.setUTCDate(dateEnd.getUTCDate() + 1);
+
+  log("info", `Starting build index for ${dateStart.toISOString().slice(0, 10)}`);
 
   const jobRun = await prisma.jobRun.create({
     data: {
@@ -61,6 +65,8 @@ export async function buildDailyIndexJob(
       },
     });
 
+    log("info", `Found ${snapshots.length} snapshots for date range`);
+
     // Group by (city, district, bedrooms, propertyType)
     const groups = new Map<string, { prices: number[]; city: string; district: string | null; bedrooms: number | null; propertyType: PropertyType }>();
 
@@ -82,6 +88,7 @@ export async function buildDailyIndexJob(
     }
 
     // Upsert into RentalIndexDaily
+    log("info", `Computing stats for ${groups.size} groups...`);
     let indexRows = 0;
 
     for (const group of groups.values()) {
@@ -125,16 +132,20 @@ export async function buildDailyIndexJob(
         },
       });
       indexRows++;
+      log("debug", `Group: ${group.city} / ${group.district ?? "all"} / ${group.bedrooms ?? "any"} bed / ${group.propertyType} → median $${Math.round(median)}, count ${count}`);
     }
 
     const endTime = Date.now();
+    const durationMs = endTime - startTime;
+
+    log("info", `Build index finished in ${(durationMs / 1000).toFixed(1)}s — ${indexRows} index rows upserted`);
 
     await prisma.jobRun.update({
       where: { id: jobRun.id },
       data: {
         status: "SUCCESS",
         endedAt: new Date(),
-        durationMs: endTime - startTime,
+        durationMs,
         indexRowsCount: indexRows,
       },
     });
@@ -142,6 +153,7 @@ export async function buildDailyIndexJob(
     return { jobRunId: jobRun.id, indexRows };
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
+    log("error", `Build index job failed: ${msg}`);
     await prisma.jobRun.update({
       where: { id: jobRun.id },
       data: {

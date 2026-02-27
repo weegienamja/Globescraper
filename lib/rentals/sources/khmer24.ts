@@ -13,6 +13,8 @@ import { parsePriceMonthlyUsd, parseBedsBathsSize, parseDistrict } from "../pars
 import { DISCOVER_MAX_PAGES, DISCOVER_MAX_URLS } from "../config";
 import type { PropertyType } from "@prisma/client";
 
+import type { PipelineLogFn } from "../pipelineLogger";
+
 /* ── Category URLs for condos / apartments ───────────────── */
 
 const CATEGORY_URLS = [
@@ -49,7 +51,7 @@ export interface ScrapedListing {
  * Discover listing URLs from Khmer24 category index pages.
  * Respects DISCOVER_MAX_PAGES and DISCOVER_MAX_URLS caps.
  */
-export async function discoverKhmer24(): Promise<DiscoveredUrl[]> {
+export async function discoverKhmer24(_log?: PipelineLogFn): Promise<DiscoveredUrl[]> {
   const urls: DiscoveredUrl[] = [];
   let pagesVisited = 0;
 

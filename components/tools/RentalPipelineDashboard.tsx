@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { JobRunsTable } from "./JobRunsTable";
 import { HeatmapPreviewCard } from "./HeatmapPreviewCard";
 import { ListingsTable } from "./ListingsTable";
+import { LiveLogViewer, type LogEntry } from "./LiveLogViewer";
 
 /* ── Types ───────────────────────────────────────────────── */
 
@@ -79,6 +80,10 @@ export function RentalPipelineDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [runningJob, setRunningJob] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [logConnected, setLogConnected] = useState(false);
+  const [showLogs, setShowLogs] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
 
   const fetchSummary = useCallback(async () => {
     try {
@@ -111,21 +116,115 @@ export function RentalPipelineDashboard() {
     label: string,
     params?: string
   ) => {
+    // Map old endpoint names to the streaming job param
+    const jobMap: Record<string, string> = {
+      discover: "discover",
+      "process-queue": "process-queue",
+      "build-index": "build-index",
+    };
+    const jobName = jobMap[endpoint] ?? endpoint;
+
     setRunningJob(label);
+    setShowLogs(true);
+    setLogConnected(true);
+
+    // Add a separator for this run
+    setLogs((prev) => [
+      ...prev,
+      {
+        timestamp: new Date().toISOString(),
+        level: "info" as const,
+        stage: "system",
+        message: `━━━ ${label} started ━━━`,
+      },
+    ]);
+
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     try {
-      const url = `/api/tools/rentals/${endpoint}${params ? `?${params}` : ""}`;
-      const res = await fetch(url, { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-      setToast({ message: `${label} completed successfully`, type: "success" });
-      await fetchSummary();
+      const qs = new URLSearchParams({ job: jobName });
+      if (params) {
+        // Parse existing params (e.g. "source=REALESTATE_KH")
+        const extra = new URLSearchParams(params);
+        extra.forEach((v, k) => qs.set(k, v));
+      }
+
+      const res = await fetch(`/api/tools/rentals/run?${qs}`, {
+        method: "POST",
+        signal: controller.signal,
+      });
+
+      if (!res.ok || !res.body) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let currentEvent = "message";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (line.startsWith("event: ")) {
+            currentEvent = line.slice(7).trim();
+          } else if (line.startsWith("data: ")) {
+            try {
+              const parsed = JSON.parse(line.slice(6));
+              if (currentEvent === "log") {
+                setLogs((prev) => [...prev, parsed as LogEntry]);
+              } else if (currentEvent === "complete") {
+                setLogs((prev) => [
+                  ...prev,
+                  {
+                    timestamp: new Date().toISOString(),
+                    level: "info" as const,
+                    stage: "system",
+                    message: `━━━ ${label} completed successfully ━━━`,
+                  },
+                ]);
+                setToast({
+                  message: `${label} completed successfully`,
+                  type: "success",
+                });
+                await fetchSummary();
+              } else if (currentEvent === "error") {
+                throw new Error(parsed.error || "Unknown error");
+              }
+            } catch (e) {
+              if (currentEvent === "error") throw e;
+            }
+            currentEvent = "message";
+          }
+        }
+      }
     } catch (err) {
+      if ((err as Error).name === "AbortError") return;
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      setLogs((prev) => [
+        ...prev,
+        {
+          timestamp: new Date().toISOString(),
+          level: "error" as const,
+          stage: "system",
+          message: `${label} failed: ${msg}`,
+        },
+      ]);
       setToast({
-        message: `${label} failed: ${err instanceof Error ? err.message : "Unknown error"}`,
+        message: `${label} failed: ${msg}`,
         type: "error",
       });
     } finally {
       setRunningJob(null);
+      setLogConnected(false);
+      abortRef.current = null;
     }
   };
 
@@ -247,7 +346,48 @@ export function RentalPipelineDashboard() {
             </svg>
             {runningJob === "Build Daily Index" ? "Running..." : "Build Daily Index"}
           </button>
+
+          {/* Log toggle */}
+          <button
+            style={{
+              ...styles.actionBtn,
+              background: showLogs ? "#334155" : "#1e293b",
+              borderColor: showLogs ? "#818cf8" : "#334155",
+              marginLeft: "auto",
+            }}
+            onClick={() => setShowLogs((v) => !v)}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+              <line x1="16" y1="13" x2="8" y2="13" />
+              <line x1="16" y1="17" x2="8" y2="17" />
+              <polyline points="10 9 9 9 8 9" />
+            </svg>
+            {showLogs ? "Hide Logs" : "Show Logs"}
+            {logs.length > 0 && (
+              <span style={{
+                fontSize: "11px",
+                background: logConnected ? "rgba(74,222,128,0.2)" : "rgba(148,163,184,0.2)",
+                color: logConnected ? "#4ade80" : "#94a3b8",
+                padding: "1px 7px",
+                borderRadius: "8px",
+                marginLeft: "2px",
+              }}>
+                {logs.length}
+              </span>
+            )}
+          </button>
         </div>
+
+        {/* Live Log Viewer */}
+        {showLogs && (
+          <LiveLogViewer
+            logs={logs}
+            isConnected={logConnected}
+            onClear={() => setLogs([])}
+          />
+        )}
 
         {/* Stats Cards */}
         <div style={styles.statsRow}>

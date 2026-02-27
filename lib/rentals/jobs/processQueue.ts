@@ -13,6 +13,7 @@ import { scrapeListingKhmer24 } from "../sources/khmer24";
 import { scrapeListingRealestateKh } from "../sources/realestate-kh";
 import { computeFingerprint } from "../fingerprint";
 import { politeDelay } from "../http";
+import { type PipelineLogFn, noopLogger } from "../pipelineLogger";
 
 export interface ProcessQueueOptions {
   maxItems?: number;
@@ -32,9 +33,11 @@ export interface ProcessQueueResult {
  */
 export async function processQueueJob(
   source: RentalSource,
-  options?: ProcessQueueOptions
+  options?: ProcessQueueOptions,
+  log: PipelineLogFn = noopLogger
 ): Promise<ProcessQueueResult> {
   const maxItems = options?.maxItems ?? PROCESS_QUEUE_MAX;
+  log("info", `Starting process queue for ${source} (max ${maxItems} items)`);
 
   // Create JobRun
   const jobRun = await prisma.jobRun.create({
@@ -54,6 +57,7 @@ export async function processQueueJob(
 
   try {
     if (!isSourceEnabled(source)) {
+      log("warn", `Source ${source} is disabled in config — aborting`);
       await prisma.jobRun.update({
         where: { id: jobRun.id },
         data: {
@@ -76,16 +80,19 @@ export async function processQueueJob(
       take: maxItems,
     });
 
+    log("info", `Found ${items.length} pending items in queue`);
     const startTime = Date.now();
 
     for (const item of items) {
       processed++;
+      log("info", `[${processed}/${items.length}] Scraping: ${item.canonicalUrl}`);
 
       try {
         // Scrape the listing
-        const scraped = await scrapeForSource(source, item.canonicalUrl);
+        const scraped = await scrapeForSource(source, item.canonicalUrl, log);
 
         if (!scraped) {
+          log("warn", `[${processed}/${items.length}] ✗ Filtered out (not condo/apartment or empty)`);
           // Mark as RETRY if under 3 attempts; DONE otherwise
           await prisma.scrapeQueue.update({
             where: { id: item.id },
@@ -101,6 +108,17 @@ export async function processQueueJob(
         }
 
         const now = new Date();
+        const imageCount = scraped.imageUrls.length;
+        const priceStr = scraped.priceMonthlyUsd ? `$${scraped.priceMonthlyUsd}/mo` : "no price";
+        log("info", `[${processed}/${items.length}] → ${scraped.title}`, {
+          type: scraped.propertyType,
+          district: scraped.district,
+          price: priceStr,
+          beds: scraped.bedrooms,
+          baths: scraped.bathrooms,
+          images: imageCount,
+        });
+
         const imageUrlsJson = scraped.imageUrls.length > 0
           ? JSON.stringify(scraped.imageUrls)
           : null;
@@ -148,6 +166,7 @@ export async function processQueueJob(
           });
           listingId = existing.id;
           updated++;
+          log("info", `[${processed}/${items.length}] ✓ Updated existing listing`);
         } else {
           // Insert new listing
           const newListing = await prisma.rentalListing.create({
@@ -175,6 +194,7 @@ export async function processQueueJob(
           });
           listingId = newListing.id;
           inserted++;
+          log("info", `[${processed}/${items.length}] ✓ Inserted new listing`);
         }
 
         // Create snapshot
@@ -202,6 +222,7 @@ export async function processQueueJob(
         });
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : String(err);
+        log("error", `[${processed}/${items.length}] ✗ Failed: ${errMsg}`);
         await prisma.scrapeQueue.update({
           where: { id: item.id },
           data: {
@@ -217,13 +238,16 @@ export async function processQueueJob(
     }
 
     const endTime = Date.now();
+    const durationMs = endTime - startTime;
+
+    log("info", `Process queue finished in ${(durationMs / 1000).toFixed(1)}s — ${processed} processed, ${inserted} inserted, ${updated} updated, ${snapshots} snapshots, ${failed} failed`);
 
     await prisma.jobRun.update({
       where: { id: jobRun.id },
       data: {
         status: failed === processed && processed > 0 ? "FAILED" : "SUCCESS",
         endedAt: new Date(),
-        durationMs: endTime - startTime,
+        durationMs,
         processedCount: processed,
         insertedCount: inserted,
         updatedCount: updated,
@@ -234,6 +258,7 @@ export async function processQueueJob(
     return { jobRunId: jobRun.id, processed, inserted, updated, snapshots, failed };
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
+    log("error", `Process queue job failed: ${msg}`);
     await prisma.jobRun.update({
       where: { id: jobRun.id },
       data: {
@@ -248,13 +273,14 @@ export async function processQueueJob(
 }
 
 /* ── Helper: dispatch to correct adapter ─────────────────── */
+import type { PipelineLogFn as _LogFn } from "../pipelineLogger";
 
-async function scrapeForSource(source: RentalSource, url: string) {
+async function scrapeForSource(source: RentalSource, url: string, log?: _LogFn) {
   switch (source) {
     case "KHMER24":
       return scrapeListingKhmer24(url);
     case "REALESTATE_KH":
-      return scrapeListingRealestateKh(url);
+      return scrapeListingRealestateKh(url, log);
     default:
       return null;
   }
