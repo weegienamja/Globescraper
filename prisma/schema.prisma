@@ -748,3 +748,22 @@ model EmailLog {
   @@index([status])
   @@index([createdAt])
 }
+
+// ─── Title Generation Log ───────────────────────────────────
+
+model TitleGenerationLog {
+  id              String   @id @default(uuid())
+  createdAt       DateTime @default(now())
+  cityFocus       String   @db.VarChar(50)
+  audienceFocus   String   @db.VarChar(20)
+  selectedTopic   String   @db.VarChar(100)
+  generatedTitle  String   @db.VarChar(300)
+  primaryKeyword  String   @db.VarChar(200)
+  modelUsed       String   @db.VarChar(100)
+  tokenUsage      Int?
+  titleLength     Int?
+  accepted        Boolean  @default(true)
+
+  @@index([cityFocus, audienceFocus, createdAt])
+  @@index([createdAt])
+}
