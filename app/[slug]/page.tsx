@@ -8,6 +8,7 @@ import { getPostsMeta, getHtmlForPost } from "@/lib/content";
 import { getHeroImage } from "@/lib/contentImages";
 import { getPublishedAiPost, getPublishedAiPosts } from "@/lib/published-posts";
 import { ArticleJsonLd, BreadcrumbJsonLd } from "@/components/JsonLd";
+import AdminPostToolbar from "@/components/admin/AdminPostToolbar";
 
 /**
  * Strip the first image that appears immediately after the H1 heading
@@ -146,6 +147,7 @@ export default async function PostPage({ params }: { params: { slug: string } })
 
       <div className="post-layout">
         <div className="post-layout__main">
+          <AdminPostToolbar slug={slug} isAiPost={isAi} />
           <Image
             src={heroSrc}
             alt={title}

@@ -1,13 +1,33 @@
 import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getPostsMeta } from "@/lib/content";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
+/** Unified card shape that works for both AI and static posts. */
+type UnifiedPost = {
+  key: string;
+  href: string;
+  title: string;
+  kind: "ai" | "static";
+  city?: string;
+  topic?: string;
+  author?: string;
+  status: string;
+  confidence?: string;
+  seoScore: number | null;
+  revisionNumber?: number;
+  date: Date;
+  sourceCount?: number;
+  imageCount?: number;
+};
+
 export default async function AdminBlogPage() {
   await requireAdmin();
 
-  const posts = await prisma.generatedArticleDraft.findMany({
+  /* ── AI-generated posts from the database ── */
+  const aiPosts = await prisma.generatedArticleDraft.findMany({
     where: { status: "PUBLISHED" },
     orderBy: { updatedAt: "desc" },
     select: {
@@ -28,6 +48,44 @@ export default async function AdminBlogPage() {
     },
   });
 
+  /* ── Static posts from content/posts.json ── */
+  const staticPosts = getPostsMeta();
+
+  /* ── Merge into a unified list, deduplicated by slug, newest first ── */
+  const aiSlugs = new Set(aiPosts.map((p) => p.slug));
+
+  const unified: UnifiedPost[] = [
+    ...aiPosts.map((p) => ({
+      key: p.id,
+      href: `/admin/blog/${p.id}`,
+      title: p.title,
+      kind: "ai" as const,
+      city: p.city,
+      topic: p.topic,
+      status: p.status,
+      confidence: p.confidence,
+      seoScore: p.lastSeoScore,
+      revisionNumber: p.revisionNumber,
+      date: p.publishedAt || p.createdAt,
+      sourceCount: p._count.sources,
+      imageCount: p._count.images,
+    })),
+    ...staticPosts
+      .filter((p) => !aiSlugs.has(p.slug))
+      .map((p) => ({
+        key: `static-${p.slug}`,
+        href: `/${p.slug}`,
+        title: p.title.replace(" | GlobeScraper", ""),
+        kind: "static" as const,
+        author: p.author,
+        status: "PUBLISHED",
+        seoScore: null,
+        date: new Date(p.modifiedDate || p.date),
+      })),
+  ];
+
+  unified.sort((a, b) => b.date.getTime() - a.date.getTime());
+
   const fmtDate = (d: Date | null) =>
     d
       ? new Date(d).toLocaleDateString("en-GB", {
@@ -40,7 +98,7 @@ export default async function AdminBlogPage() {
   return (
     <div className="cgen">
       <div className="cgen__header">
-        <h1 className="cgen__title">Published Blog Posts</h1>
+        <h1 className="cgen__title">All Blog Posts</h1>
         <div className="cgen__nav">
           <Link href="/admin" className="cgen__back-link">
             Back to Admin
@@ -54,7 +112,7 @@ export default async function AdminBlogPage() {
         </div>
       </div>
 
-      {posts.length === 0 ? (
+      {unified.length === 0 ? (
         <div className="cgen__empty">
           <p className="cgen__empty-title">No published posts</p>
           <p className="cgen__empty-text">
@@ -63,27 +121,33 @@ export default async function AdminBlogPage() {
         </div>
       ) : (
         <div className="cgen__drafts-grid">
-          {posts.map((post) => (
+          {unified.map((post) => (
             <Link
-              key={post.id}
-              href={`/admin/blog/${post.id}`}
+              key={post.key}
+              href={post.href}
               className="cgen__draft-card"
+              {...(post.kind === "static" ? { target: "_blank" } : {})}
             >
               <div className="cgen__draft-card-header">
                 <span className="cgen__badge cgen__badge--published">
                   PUBLISHED
                 </span>
-                {post.lastSeoScore !== null && (
+                {post.kind === "static" && (
+                  <span className="cgen__badge cgen__badge--static">
+                    STATIC
+                  </span>
+                )}
+                {post.kind === "ai" && post.seoScore !== null && (
                   <span
                     className={`cgen__badge ${
-                      post.lastSeoScore >= 80
+                      post.seoScore >= 80
                         ? "cgen__badge--published"
-                        : post.lastSeoScore >= 50
+                        : post.seoScore >= 50
                         ? "cgen__badge--low"
                         : "cgen__badge--error"
                     }`}
                   >
-                    SEO: {post.lastSeoScore}
+                    SEO: {post.seoScore}
                   </span>
                 )}
                 {post.confidence === "LOW" && (
@@ -92,15 +156,23 @@ export default async function AdminBlogPage() {
               </div>
               <h3 className="cgen__draft-card-title">{post.title}</h3>
               <div className="cgen__draft-card-meta">
-                <span>{post.city}</span>
-                <span>{post.topic}</span>
-                <span>Rev {post.revisionNumber}</span>
+                {post.city && <span>{post.city}</span>}
+                {post.topic && <span>{post.topic}</span>}
+                {post.author && <span>By {post.author}</span>}
+                {post.revisionNumber !== undefined && (
+                  <span>Rev {post.revisionNumber}</span>
+                )}
               </div>
               <div className="cgen__draft-card-footer">
-                <span>Published: {fmtDate(post.publishedAt || post.createdAt)}</span>
-                <span>
-                  {post._count.sources} sources, {post._count.images} images
-                </span>
+                <span>{post.kind === "ai" ? "Published" : "Updated"}: {fmtDate(post.date)}</span>
+                {post.kind === "ai" && (
+                  <span>
+                    {post.sourceCount} sources, {post.imageCount} images
+                  </span>
+                )}
+                {post.kind === "static" && (
+                  <span>Static HTML post</span>
+                )}
               </div>
             </Link>
           ))}
