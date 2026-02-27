@@ -583,6 +583,20 @@ img {
   padding: 4px 24px;
 }
 
+/* Mobile: push logo left, larger logo without growing the bar */
+@media (max-width: 767px) {
+  .header__container {
+    padding: 0 10px;
+  }
+  .header__left {
+    gap: 6px;
+  }
+  .header__logo {
+    width: 52px;
+    height: 52px;
+  }
+}
+
 .header__left {
   display: flex;
   align-items: center;
