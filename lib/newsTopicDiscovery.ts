@@ -3,7 +3,7 @@
  *
  * Uses a multi-strategy approach:
  * 1. RSS feeds from reputable local and international publishers
- * 2. Google Custom Search JSON API (if configured) for recent Cambodia news
+ * 2. Serper.dev Google Search API (if configured) for recent Cambodia news
  * 3. Gemini to analyze and curate the raw discoveries into blog topic candidates
  *
  * Never scrapes Google HTML directly.
@@ -148,45 +148,38 @@ async function fetchRssFeeds(): Promise<RawDiscoveryItem[]> {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Search API (Google CSE)                                             */
+/*  Search API (Serper.dev)                                             */
 /* ------------------------------------------------------------------ */
 
 /**
- * Search for recent Cambodia news using Google Custom Search JSON API.
+ * Search for recent Cambodia news using Serper.dev (Google Search API).
  * Falls back gracefully if not configured.
  */
-async function searchViaGoogleCSE(
+async function searchViaSerper(
   queries: string[]
 ): Promise<RawDiscoveryItem[]> {
-  const apiKey = process.env.GOOGLE_CSE_API_KEY;
-  const cseId = process.env.GOOGLE_CSE_ID;
-  if (!apiKey || !cseId) return [];
+  const apiKey = process.env.SERPER_API_KEY;
+  if (!apiKey) return [];
 
   const results: RawDiscoveryItem[] = [];
   const seenUrls = new Set<string>();
 
-  // Calculate date range: last 30 days
-  const now = new Date();
-  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-  const dateRestrict = "d30";
-
   for (const query of queries.slice(0, 4)) {
     try {
-      const params = new URLSearchParams({
-        key: apiKey,
-        cx: cseId,
-        q: query,
-        num: "10",
-        dateRestrict,
-        sort: "date",
-      });
-
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), DISCOVERY_TIMEOUT_MS);
 
       const response = await fetch(
-        `https://www.googleapis.com/customsearch/v1?${params}`,
-        { signal: controller.signal }
+        "https://google.serper.dev/search",
+        {
+          method: "POST",
+          signal: controller.signal,
+          headers: {
+            "X-API-KEY": apiKey,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ q: query, num: 10, tbs: "qdr:m" }),
+        }
       );
 
       clearTimeout(timeout);
@@ -194,7 +187,7 @@ async function searchViaGoogleCSE(
       if (!response.ok) continue;
       const data = await response.json();
 
-      for (const item of data.items || []) {
+      for (const item of data.organic || []) {
         const url = item.link;
         if (!url || seenUrls.has(url)) continue;
         if (isBlockedDomain(url)) continue;
@@ -205,8 +198,8 @@ async function searchViaGoogleCSE(
           title: item.title || "",
           url,
           snippet: item.snippet || undefined,
-          publisher: trusted?.publisher || item.displayLink || "Unknown",
-          publishedAt: item.pagemap?.metatags?.[0]?.["article:published_time"],
+          publisher: trusted?.publisher || new URL(url).hostname || "Unknown",
+          publishedAt: item.date || undefined,
           source: "search_api",
         });
       }
@@ -440,7 +433,7 @@ export async function discoverNewsTopics(
   // 2. Fetch from multiple sources in parallel
   const [rssItems, searchItems] = await Promise.all([
     fetchRssFeeds(),
-    searchViaGoogleCSE(queries),
+    searchViaSerper(queries),
   ]);
 
   // 3. Merge and deduplicate
@@ -504,7 +497,7 @@ const RefinedTitleSchema = z.object({
  * 1. Extract keywords from the title
  * 2. If too generic, refine via Gemini
  * 3. Search RSS feeds filtered by keywords
- * 4. Search via Google CSE if available
+ * 4. Search via Serper.dev if available
  * 5. Curate into topic cards via Gemini
  */
 export async function discoverNewsTopicsFromTitle(
@@ -561,7 +554,7 @@ Return JSON only:
   // Fetch from multiple sources in parallel
   const [rssItems, searchItems] = await Promise.all([
     fetchRssFeedsFiltered(queryTerms),
-    searchViaGoogleCSE(searchQueries),
+    searchViaSerper(searchQueries),
   ]);
 
   // Merge and deduplicate

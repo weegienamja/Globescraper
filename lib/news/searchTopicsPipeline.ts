@@ -450,7 +450,7 @@ export function buildSearchQueryPack({
 }
 
 /* ================================================================== */
-/*  CSE fetch — executes a batch of queries against Google CSE          */
+/*  Search — executes a batch of queries against Serper.dev              */
 /* ================================================================== */
 
 interface SearchGroupResult {
@@ -461,7 +461,7 @@ interface SearchGroupResult {
 }
 
 /**
- * Execute a batch of Google CSE queries.
+ * Execute a batch of Serper.dev search queries.
  * Deduplicates against seenCanonical (mutated in-place).
  * No date restriction — relevance-sorted for maximum result coverage.
  */
@@ -472,15 +472,14 @@ async function executeSearchGroup(
   seenCanonical: Set<string>,
   startResultId: number
 ): Promise<SearchGroupResult> {
-  const apiKey = process.env.GOOGLE_CSE_API_KEY;
-  const cseId = process.env.GOOGLE_CSE_ID;
+  const apiKey = process.env.SERPER_API_KEY;
   const rejections = emptyRejections();
   const queryStats: QueryStats[] = [];
   const results: SearchResult[] = [];
   let resultId = startResultId;
 
-  if (!apiKey || !cseId) {
-    console.warn("[SearchTopics] Google CSE not configured");
+  if (!apiKey) {
+    console.warn("[SearchTopics] Serper API not configured");
     return { results, queryStats, rejections, nextResultId: resultId };
   }
 
@@ -491,25 +490,26 @@ async function executeSearchGroup(
     const domainsForQuery: string[] = [];
 
     try {
-      const params = new URLSearchParams({
-        key: apiKey,
-        cx: cseId,
-        q: query,
-        num: "10",
-      });
-
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), SEARCH_TIMEOUT_MS);
 
       const response = await fetch(
-        `https://www.googleapis.com/customsearch/v1?${params}`,
-        { signal: controller.signal }
+        "https://google.serper.dev/search",
+        {
+          method: "POST",
+          signal: controller.signal,
+          headers: {
+            "X-API-KEY": apiKey,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ q: query, num: 10 }),
+        }
       );
 
       clearTimeout(timeout);
 
       if (!response.ok) {
-        console.warn(`[SearchTopics] CSE "${query}" HTTP ${response.status}`);
+        console.warn(`[SearchTopics] Serper "${query}" HTTP ${response.status}`);
         queryStats.push({
           query,
           group: groupName,
@@ -522,7 +522,7 @@ async function executeSearchGroup(
       }
 
       const data = await response.json();
-      const items = data.items || [];
+      const items = data.organic || [];
       rawCount = items.length;
 
       for (const item of items) {
@@ -1047,6 +1047,34 @@ export async function runSearchTopicsPipeline(
   selectedGapTopic?: string,
   primaryKeywordPhrase?: string
 ): Promise<PipelineResult> {
+  // 0. Fail fast if Serper API is not configured
+  if (!process.env.SERPER_API_KEY) {
+    console.error("[SearchTopics] SERPER_API_KEY not set");
+    const emptyLog: PipelineLog = {
+      seedTitle,
+      cityFocus,
+      audienceFocus,
+      selectedGapTopic: selectedGapTopic || null,
+      queryPack: { base: [], authority: [], broad: [], titleHint: [] },
+      queryList: [],
+      queryStats: [],
+      groupsExecuted: [],
+      usableResultCount: 0,
+      rejections: emptyRejections(),
+      fallbackRoundsUsed: 0,
+      totalTokenUsage: 0,
+      topicsCount: 0,
+    };
+    return {
+      topics: [],
+      log: emptyLog,
+      diagnostics: {
+        warning:
+          "Serper search API is not configured. An admin must set the SERPER_API_KEY environment variable.",
+      },
+    };
+  }
+
   const currentYear = new Date().getFullYear();
   let totalTokens = 0;
   const topic = selectedGapTopic || inferTopicFromTitle(seedTitle);

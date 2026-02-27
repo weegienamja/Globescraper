@@ -753,7 +753,8 @@ export default function ContentGeneratorClient() {
         {newsSearchWarning && (
           <div className="cgen__alert cgen__alert--warning">
             <strong>Warning:</strong> {newsSearchWarning}
-            {newsTopics.length === 0 && (
+            {newsTopics.length === 0 &&
+              !newsSearchWarning.includes("not configured") && (
               <button
                 className="btn btn--secondary btn--sm"
                 onClick={handleBroadenSearch}

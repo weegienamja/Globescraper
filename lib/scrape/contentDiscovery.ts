@@ -1,9 +1,9 @@
 /**
  * Auto-discover competitor articles for a given topic and keyword.
  *
- * Uses Google Custom Search JSON API when configured (GOOGLE_CSE_API_KEY +
- * GOOGLE_CSE_ID env vars). Falls back to constructing likely competitor URLs
- * from known Cambodia/expat content sites.
+ * Uses Serper.dev Google Search API when configured (SERPER_API_KEY env var).
+ * Falls back to constructing likely competitor URLs from known
+ * Cambodia/expat content sites.
  *
  * Also gathers all existing GlobeScraper content (static + AI) so the
  * generator can produce unique articles that don't overlap.
@@ -41,14 +41,14 @@ const COMPETITOR_DOMAINS = [
 export interface DiscoveredCompetitor {
   url: string;
   title: string | null;
-  source: "google_cse" | "heuristic" | "manual";
+  source: "serper" | "heuristic" | "manual";
 }
 
 /**
  * Discover competitor article URLs for a topic.
  *
  * Strategy:
- * 1. If GOOGLE_CSE_API_KEY and GOOGLE_CSE_ID are set, query Google Custom Search
+ * 1. If SERPER_API_KEY is set, query Serper.dev
  *    for the top organic results (excludes our own domain).
  * 2. Otherwise, build heuristic URLs from known competitor domains.
  * 3. Merge with any manually provided URLs.
@@ -73,26 +73,25 @@ export async function discoverCompetitors(
     }
   }
 
-  // Try Google Custom Search API
-  const cseKey = process.env.GOOGLE_CSE_API_KEY;
-  const cseId = process.env.GOOGLE_CSE_ID;
+  // Try Serper.dev search
+  const serperKey = process.env.SERPER_API_KEY;
 
-  if (cseKey && cseId) {
+  if (serperKey) {
     try {
       const query = targetKeyword
         ? `${targetKeyword} ${city} Cambodia`
         : `${city} Cambodia ${topic} guide`;
 
-      const cseResults = await searchGoogleCSE(query, cseKey, cseId);
-      for (const r of cseResults) {
+      const searchResults = await searchSerper(query, serperKey);
+      for (const r of searchResults) {
         if (results.length >= 5) break;
         if (!seenUrls.has(r.url) && !isOwnSite(r.url)) {
           seenUrls.add(r.url);
-          results.push({ url: r.url, title: r.title, source: "google_cse" });
+          results.push({ url: r.url, title: r.title, source: "serper" });
         }
       }
     } catch (err) {
-      console.error("[CompetitorDiscovery] Google CSE failed, falling back to heuristics:", err);
+      console.error("[CompetitorDiscovery] Serper search failed, falling back to heuristics:", err);
     }
   }
 
@@ -112,33 +111,32 @@ export async function discoverCompetitors(
 }
 
 /**
- * Query Google Custom Search JSON API.
+ * Query Serper.dev Google Search API.
  */
-async function searchGoogleCSE(
+async function searchSerper(
   query: string,
-  apiKey: string,
-  cseId: string
+  apiKey: string
 ): Promise<Array<{ url: string; title: string }>> {
-  const params = new URLSearchParams({
-    key: apiKey,
-    cx: cseId,
-    q: query,
-    num: "8",
-    // Exclude our own domain
-    siteSearch: "globescraper.com",
-    siteSearchFilter: "e", // exclude
+  const response = await fetch("https://google.serper.dev/search", {
+    method: "POST",
+    signal: AbortSignal.timeout(8000),
+    headers: {
+      "X-API-KEY": apiKey,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      q: `${query} -site:globescraper.com`,
+      num: 8,
+    }),
   });
-
-  const url = `https://www.googleapis.com/customsearch/v1?${params}`;
-  const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`Google CSE error (${response.status}): ${text.slice(0, 200)}`);
+    throw new Error(`Serper error (${response.status}): ${text.slice(0, 200)}`);
   }
 
   const data = await response.json();
-  const items = data.items || [];
+  const items = data.organic || [];
 
   return items.map((item: { link: string; title: string }) => ({
     url: item.link,
