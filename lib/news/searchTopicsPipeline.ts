@@ -1185,9 +1185,14 @@ export async function runSearchTopicsPipeline(
     `[SearchTopics] Done: ${topics.length} topics, ${totalTokens} tokens`
   );
 
-  // 8. Attach low-source warning if applicable
+  // 8. Attach diagnostics if needed
   const result: PipelineResult = { topics, log };
-  if (lowSources) {
+  if (topics.length === 0) {
+    result.diagnostics = {
+      warning:
+        "Search found sources but Gemini could not generate valid topics. Try a different title or broader audience.",
+    };
+  } else if (lowSources) {
     result.diagnostics = {
       warning:
         "Low source count. Topics may be less well-grounded. Try a broader city or audience.",
