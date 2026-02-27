@@ -1,0 +1,79 @@
+name: Rental Data Pipeline
+
+on:
+  schedule:
+    # Discover new listings every 6 hours
+    - cron: "0 */6 * * *"
+    # Process queue every hour
+    - cron: "15 * * * *"
+    # Build daily index at 01:15 UTC
+    - cron: "15 1 * * *"
+  workflow_dispatch:
+    inputs:
+      job:
+        description: "Which job to run"
+        required: true
+        type: choice
+        options:
+          - discover
+          - process-queue
+          - build-index
+          - all
+
+jobs:
+  # ── Discover ──────────────────────────────────────────────
+  discover:
+    if: >
+      github.event_name == 'workflow_dispatch' && (github.event.inputs.job == 'discover' || github.event.inputs.job == 'all')
+      || github.event_name == 'schedule' && github.event.schedule == '0 */6 * * *'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npx tsx scripts/rentals_discover.ts
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+  # ── Process Queue ─────────────────────────────────────────
+  process-queue:
+    if: >
+      github.event_name == 'workflow_dispatch' && (github.event.inputs.job == 'process-queue' || github.event.inputs.job == 'all')
+      || github.event_name == 'schedule' && github.event.schedule == '15 * * * *'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npx tsx scripts/rentals_process_queue.ts
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+  # ── Build Index ───────────────────────────────────────────
+  build-index:
+    if: >
+      github.event_name == 'workflow_dispatch' && (github.event.inputs.job == 'build-index' || github.event.inputs.job == 'all')
+      || github.event_name == 'schedule' && github.event.schedule == '15 1 * * *'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npx tsx scripts/rentals_build_index.ts
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}

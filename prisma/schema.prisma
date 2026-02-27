@@ -749,6 +749,134 @@ model EmailLog {
   @@index([createdAt])
 }
 
+// ─── Rental Data Pipeline ───────────────────────────────────
+
+enum RentalSource {
+  KHMER24
+  REALESTATE_KH
+}
+
+enum JobType {
+  DISCOVER
+  PROCESS_QUEUE
+  BUILD_INDEX
+}
+
+enum JobStatus {
+  SUCCESS
+  FAILED
+}
+
+enum QueueStatus {
+  PENDING
+  DONE
+  RETRY
+}
+
+enum PropertyType {
+  CONDO
+  APARTMENT
+  OTHER
+}
+
+model RentalListing {
+  id                 String       @id @default(cuid())
+  source             RentalSource
+  sourceListingId    String?      @db.VarChar(191)
+  canonicalUrl       String       @unique @db.VarChar(2000)
+  title              String       @db.VarChar(500)
+  description        String?      @db.Text
+  city               String       @default("Phnom Penh") @db.VarChar(100)
+  district           String?      @db.VarChar(200)
+  propertyType       PropertyType
+  bedrooms           Int?
+  bathrooms          Int?
+  sizeSqm            Float?
+  priceOriginal      String?      @db.VarChar(200)
+  priceMonthlyUsd    Float?
+  currency           String?      @db.VarChar(20)
+  imageUrlsJson      String?      @db.Text
+  postedAt           DateTime?
+  firstSeenAt        DateTime     @default(now())
+  lastSeenAt         DateTime
+  isActive           Boolean      @default(true)
+  contentFingerprint String?      @db.VarChar(64)
+
+  snapshots          RentalSnapshot[]
+
+  @@unique([source, sourceListingId])
+  @@index([source, sourceListingId])
+}
+
+model RentalSnapshot {
+  id              String       @id @default(cuid())
+  listingId       String
+  scrapedAt       DateTime     @default(now())
+  city            String       @db.VarChar(100)
+  district        String?      @db.VarChar(200)
+  bedrooms        Int?
+  propertyType    PropertyType
+  priceMonthlyUsd Float?
+  postedAt        DateTime?
+
+  listing         RentalListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@index([listingId, scrapedAt])
+  @@index([scrapedAt])
+}
+
+model RentalIndexDaily {
+  id             String       @id @default(cuid())
+  date           DateTime
+  city           String       @db.VarChar(100)
+  district       String?      @db.VarChar(200)
+  bedrooms       Int?
+  propertyType   PropertyType
+  listingCount   Int
+  medianPriceUsd Float?
+  meanPriceUsd   Float?
+  p25PriceUsd    Float?
+  p75PriceUsd    Float?
+  updatedAt      DateTime     @default(now()) @updatedAt
+
+  @@unique([date, city, district, bedrooms, propertyType])
+}
+
+model ScrapeQueue {
+  id              String       @id @default(cuid())
+  source          RentalSource
+  canonicalUrl    String       @db.VarChar(2000)
+  sourceListingId String?      @db.VarChar(191)
+  status          QueueStatus  @default(PENDING)
+  priority        Int          @default(0)
+  attempts        Int          @default(0)
+  lastError       String?      @db.Text
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @default(now()) @updatedAt
+
+  @@unique([source, canonicalUrl])
+}
+
+model JobRun {
+  id              String        @id @default(cuid())
+  jobType         JobType
+  source          RentalSource?
+  status          JobStatus
+  startedAt       DateTime      @default(now())
+  endedAt         DateTime?
+  durationMs      Int?
+  discoveredCount Int           @default(0)
+  processedCount  Int           @default(0)
+  insertedCount   Int           @default(0)
+  updatedCount    Int           @default(0)
+  snapshotCount   Int           @default(0)
+  indexRowsCount  Int           @default(0)
+  errorMessage    String?       @db.Text
+
+  @@index([jobType])
+  @@index([startedAt])
+}
+
 // ─── Title Generation Log ───────────────────────────────────
 
 model TitleGenerationLog {

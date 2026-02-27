@@ -51,7 +51,7 @@ export async function middleware(req: NextRequest) {
 
   // ── Auth cookie guard ──────────────────────────────────────
   const pathname = req.nextUrl.pathname;
-  const protectedPaths = ["/admin", "/dashboard", "/create-profile"];
+  const protectedPaths = ["/admin", "/dashboard", "/create-profile", "/tools"];
   // /community and /meetups root pages show invite content for logged-out users;
   // all sub-routes (edit-profile, [userId], new, [id]) remain protected.
   const publicExactPages = ["/community", "/meetups"];
@@ -80,6 +80,7 @@ export const config = {
     "/admin/:path*",
     "/dashboard/:path*",
     "/create-profile/:path*",
+    "/tools/:path*",
     "/community",
     "/community/:path*",
     "/meetups",
