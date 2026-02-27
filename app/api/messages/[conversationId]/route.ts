@@ -190,5 +190,76 @@ export async function POST(
     data: { lastReadAt: new Date() },
   });
 
+  // Auto-calculate reply time hint (fire-and-forget, don't block response)
+  updateReplyTimeHint(userId, conversationId).catch(() => {});
+
   return NextResponse.json({ message, conversationId }, { status: 201 });
+}
+
+/**
+ * Compute the user's median reply time across recent conversations and
+ * update their profile.replyTimeHint automatically.
+ */
+async function updateReplyTimeHint(userId: string, currentConversationId: string) {
+  // Get conversations the user participates in
+  const participations = await prisma.conversationParticipant.findMany({
+    where: { userId },
+    select: { conversationId: true },
+    take: 20,
+  });
+
+  const convIds = participations.map((p) => p.conversationId);
+  if (convIds.length === 0) return;
+
+  // For each conversation, find pairs where someone else sent a message
+  // and then the user replied — measure the gap.
+  const replyDeltas: number[] = [];
+
+  for (const convId of convIds) {
+    // Get last 30 messages in this conversation (enough to find reply patterns)
+    const messages = await prisma.message.findMany({
+      where: { conversationId: convId, deletedAt: null },
+      orderBy: { createdAt: "asc" },
+      take: 30,
+      select: { senderId: true, createdAt: true },
+    });
+
+    // Walk through messages and find reply gaps
+    for (let i = 1; i < messages.length; i++) {
+      const prev = messages[i - 1];
+      const curr = messages[i];
+      // Current message is from this user, previous was from someone else
+      if (curr.senderId === userId && prev.senderId !== userId) {
+        const deltaMs = curr.createdAt.getTime() - prev.createdAt.getTime();
+        // Only count reasonable gaps (< 7 days)
+        if (deltaMs > 0 && deltaMs < 7 * 24 * 60 * 60 * 1000) {
+          replyDeltas.push(deltaMs);
+        }
+      }
+    }
+
+    // Cap total samples
+    if (replyDeltas.length >= 50) break;
+  }
+
+  if (replyDeltas.length < 3) return; // Not enough data yet
+
+  // Compute median
+  replyDeltas.sort((a, b) => a - b);
+  const median = replyDeltas[Math.floor(replyDeltas.length / 2)];
+
+  const ONE_HOUR = 60 * 60 * 1000;
+  const FEW_HOURS = 4 * ONE_HOUR;
+  const ONE_DAY = 24 * ONE_HOUR;
+
+  let hint: "WITHIN_HOUR" | "WITHIN_FEW_HOURS" | "WITHIN_DAY" | "NOT_ACTIVE";
+  if (median <= ONE_HOUR) hint = "WITHIN_HOUR";
+  else if (median <= FEW_HOURS) hint = "WITHIN_FEW_HOURS";
+  else if (median <= ONE_DAY) hint = "WITHIN_DAY";
+  else hint = "NOT_ACTIVE";
+
+  await prisma.profile.updateMany({
+    where: { userId },
+    data: { replyTimeHint: hint },
+  });
 }

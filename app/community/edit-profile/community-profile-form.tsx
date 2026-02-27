@@ -15,7 +15,6 @@ import {
   COMMUNITY_COUNTRIES,
   RELOCATION_STAGES,
   LOOKING_FOR_OPTIONS,
-  REPLY_TIME_OPTIONS,
   CERTIFICATION_OPTIONS,
   SUGGESTED_INTERESTS,
 } from "@/lib/validations/community";
@@ -79,7 +78,6 @@ type ProfileData = {
   galleryImages: GalleryImage[];
   relocationStage: string;
   lookingFor: string | null;
-  replyTimeHint: string | null;
   certifications: string[];
   languagesTeaching: string[];
   interests: string[];
@@ -120,7 +118,6 @@ export function CommunityProfileForm({
   // New fields
   const [relocationStage, setRelocationStage] = useState(initial?.relocationStage ?? "PLANNING");
   const [lookingFor, setLookingFor] = useState<string | null>(initial?.lookingFor ?? null);
-  const [replyTimeHint, setReplyTimeHint] = useState<string | null>(initial?.replyTimeHint ?? null);
   const [certifications, setCertifications] = useState<string[]>(initial?.certifications ?? []);
   const [customCert, setCustomCert] = useState("");
   const [languagesTeaching, setLanguagesTeaching] = useState<string[]>(initial?.languagesTeaching ?? []);
@@ -262,7 +259,6 @@ export function CommunityProfileForm({
       meetupExploring,
       relocationStage,
       lookingFor: lookingFor || null,
-      replyTimeHint: replyTimeHint || null,
       certifications,
       languagesTeaching,
       interests,
@@ -410,19 +406,6 @@ export function CommunityProfileForm({
           <span className="form__hint">Where are you on your relocation journey?</span>
         </label>
 
-        <label className="form__label">
-          Reply Time
-          <select
-            value={replyTimeHint ?? ""}
-            onChange={(e) => setReplyTimeHint(e.target.value || null)}
-            className="form__input"
-          >
-            <option value="">Not specified</option>
-            {REPLY_TIME_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
-        </label>
       </fieldset>
 
       {/* Section 3: Experience */}

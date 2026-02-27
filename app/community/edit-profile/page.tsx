@@ -63,7 +63,6 @@ export default async function EditCommunityProfilePage() {
         galleryImages: profile.images.map((img) => ({ id: img.id, url: img.url, caption: img.caption ?? "" })),
         relocationStage: profile.relocationStage ?? "PLANNING",
         lookingFor: profile.lookingFor ?? null,
-        replyTimeHint: profile.replyTimeHint ?? null,
         certifications: safeJsonArray(profile.certifications),
         languagesTeaching: safeJsonArray(profile.languagesTeaching),
         interests: safeJsonArray(profile.interests),

@@ -127,10 +127,6 @@ export const communityProfileSchema = z.object({
     ])
     .nullable()
     .optional(),
-  replyTimeHint: z
-    .enum(["WITHIN_HOUR", "WITHIN_FEW_HOURS", "WITHIN_DAY", "NOT_ACTIVE"])
-    .nullable()
-    .optional(),
   certifications: z.array(z.string().max(100)).max(10).optional(),
   languagesTeaching: z.array(z.string().max(100)).max(10).optional(),
   interests: z.array(z.string().max(100)).max(20).optional(),
