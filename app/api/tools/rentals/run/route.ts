@@ -24,7 +24,7 @@ const VALID_SOURCES = new Set<string>(["KHMER24", "REALESTATE_KH"]);
 const VALID_JOBS = new Set<string>(["discover", "process-queue", "build-index"]);
 
 /** Allow longer execution for streaming jobs on Vercel */
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 export async function POST(req: NextRequest) {
   const guard = await requireAdminApi();
