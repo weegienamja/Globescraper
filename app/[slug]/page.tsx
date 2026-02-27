@@ -9,6 +9,7 @@ import { getHeroImage } from "@/lib/contentImages";
 import { getPublishedAiPost, getPublishedAiPosts } from "@/lib/published-posts";
 import { ArticleJsonLd, BreadcrumbJsonLd } from "@/components/JsonLd";
 import AdminPostToolbar from "@/components/admin/AdminPostToolbar";
+import AdminHeroEditorGate from "@/components/admin/AdminHeroEditorGate";
 
 /**
  * Strip the first image that appears immediately after the H1 heading
@@ -167,6 +168,7 @@ export default async function PostPage({ params }: { params: { slug: string } })
         {/* Desktop sidebar */}
         <div className="post-layout__sidebar">
           <RecommendedPosts posts={topRecommended} />
+          <AdminHeroEditorGate slug={slug} isAiPost={isAi} heroSrc={heroSrc} />
         </div>
       </div>
 

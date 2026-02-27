@@ -6497,6 +6497,128 @@ body.menu-open {
   opacity: 0.85;
 }
 
+/* ── Admin Hero Image Editor (sidebar widget) ───────────── */
+
+.admin-hero-editor {
+  background: var(--bg-surface);
+  border: 1px solid var(--primary);
+  border-radius: var(--radius);
+  padding: 0.75rem;
+  margin-top: 1.25rem;
+}
+
+.admin-hero-editor__heading {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--primary);
+  margin: 0 0 0.5rem;
+}
+
+.admin-hero-editor__preview {
+  border-radius: 6px;
+  overflow: hidden;
+  margin-bottom: 0.6rem;
+  aspect-ratio: 16 / 9;
+  background: var(--bg-elevated);
+}
+
+.admin-hero-editor__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.admin-hero-editor__btn {
+  display: block;
+  width: 100%;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.4rem 0.65rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  text-align: center;
+  transition: background 0.15s, border-color 0.15s;
+}
+.admin-hero-editor__btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.admin-hero-editor__btn--regen {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+  margin-bottom: 0.5rem;
+}
+.admin-hero-editor__btn--regen:hover:not(:disabled) {
+  opacity: 0.88;
+}
+
+.admin-hero-editor__btn--save {
+  background: #16a34a;
+  color: #fff;
+  border-color: #16a34a;
+  flex-shrink: 0;
+}
+.admin-hero-editor__btn--save:hover:not(:disabled) {
+  background: #15803d;
+}
+
+.admin-hero-editor__url-group {
+  display: flex;
+  gap: 0.35rem;
+  margin-top: 0.1rem;
+}
+
+.admin-hero-editor__input {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.7rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.15s;
+}
+.admin-hero-editor__input:focus {
+  border-color: var(--primary);
+}
+.admin-hero-editor__input::placeholder {
+  color: var(--text-muted);
+}
+
+.admin-hero-editor__url-group .admin-hero-editor__btn--save {
+  width: auto;
+  white-space: nowrap;
+}
+
+.admin-hero-editor__msg {
+  font-size: 0.68rem;
+  margin: 0.4rem 0 0;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+}
+.admin-hero-editor__msg--ok {
+  background: rgba(34, 197, 94, 0.15);
+  color: #16a34a;
+}
+[data-theme="dark"] .admin-hero-editor__msg--ok {
+  color: #86efac;
+}
+.admin-hero-editor__msg--err {
+  background: rgba(239, 68, 68, 0.15);
+  color: #dc2626;
+}
+[data-theme="dark"] .admin-hero-editor__msg--err {
+  color: #fca5a5;
+}
+
 /* ══════════════════════════════════════════════════════════════
    Redesigned Email System (em-* prefix)
    ══════════════════════════════════════════════════════════ */
