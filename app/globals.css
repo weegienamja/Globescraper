@@ -623,21 +623,6 @@ img {
   font-family: inherit;
 }
 
-/* Mobile: larger logo, pushed left, bar stays same height */
-@media (max-width: 767px) {
-  .header__container {
-    padding: 0 6px;
-  }
-  .header__left {
-    gap: 4px;
-  }
-  .header__logo {
-    width: 56px;
-    height: 56px;
-    margin: -4px 0;
-  }
-}
-
 /* Desktop nav — hidden on mobile, absolutely centered */
 .header__nav {
   display: none;
