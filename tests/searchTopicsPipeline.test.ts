@@ -2,7 +2,10 @@ import { describe, it, expect } from "vitest";
 import {
   canonicalizeUrl,
   scoreSearchResult,
-  buildFallbackQueries,
+  buildSearchQueryPack,
+  extractTitleKeywords,
+  inferTopicFromTitle,
+  buildFallbackRound,
 } from "../lib/news/searchTopicsPipeline";
 
 /* ------------------------------------------------------------------ */
@@ -62,7 +65,6 @@ describe("canonicalizeUrl", () => {
 
   it("handles http (not https)", () => {
     const result = canonicalizeUrl("http://www.example.com/");
-    // Should strip www and trailing slash; protocol stays http
     expect(result).toContain("example.com");
     expect(result).not.toContain("www.");
     expect(result).not.toMatch(/\/$/);
@@ -136,7 +138,6 @@ describe("scoreSearchResult", () => {
       },
       "Phnom Penh"
     );
-    // Should still have points from trusted domain + title relevance
     expect(score).toBeGreaterThanOrEqual(0);
   });
 
@@ -214,73 +215,273 @@ describe("scoreSearchResult", () => {
 });
 
 /* ------------------------------------------------------------------ */
-/*  buildFallbackQueries                                                */
+/*  extractTitleKeywords                                                */
 /* ------------------------------------------------------------------ */
 
-describe("buildFallbackQueries", () => {
-  it("returns queries that do not duplicate originals", () => {
-    const original = ["Phnom Penh entry requirements 2026"];
-    const fallback = buildFallbackQueries(
-      "A 2026 Guide to Entry Requirements for Teachers in Phnom Penh",
-      "Phnom Penh",
-      "teachers",
-      original
+describe("extractTitleKeywords", () => {
+  it("strips noise words like guide, essential, tips", () => {
+    const kws = extractTitleKeywords(
+      "Essential Guide to Living in Phnom Penh"
     );
-    const lowerOriginal = new Set(original.map((q) => q.toLowerCase()));
-    for (const q of fallback) {
-      expect(lowerOriginal.has(q.toLowerCase())).toBe(false);
+    expect(kws).not.toContain("essential");
+    expect(kws).not.toContain("guide");
+    expect(kws).not.toContain("living");
+    expect(kws).not.toContain("phnom");
+    expect(kws).not.toContain("penh");
+  });
+
+  it("strips years", () => {
+    const kws = extractTitleKeywords("2026 Visa Requirements for Cambodia");
+    expect(kws.join(" ")).not.toContain("2026");
+  });
+
+  it("returns at most 3 keywords", () => {
+    const kws = extractTitleKeywords(
+      "Visa Entry Immigration Border Requirements for Arriving in Cambodia"
+    );
+    expect(kws.length).toBeLessThanOrEqual(3);
+  });
+
+  it("returns meaningful words from typical title", () => {
+    const kws = extractTitleKeywords(
+      "Avoiding Taxi Scams at Phnom Penh Airport"
+    );
+    expect(kws.length).toBeGreaterThan(0);
+    const joined = kws.join(" ");
+    // Should keep meaningful words like "avoiding", "taxi", "scams", "airport"
+    expect(joined).toMatch(/taxi|scam|airport|avoiding/i);
+  });
+
+  it("returns empty array for all-noise title", () => {
+    const kws = extractTitleKeywords("The Essential Guide to Cambodia");
+    // "essential", "guide", "cambodia" all filtered
+    expect(kws.length).toBe(0);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  inferTopicFromTitle                                                 */
+/* ------------------------------------------------------------------ */
+
+describe("inferTopicFromTitle", () => {
+  it("infers visa from visa-related title", () => {
+    expect(inferTopicFromTitle("Cambodia E-Visa Guide 2026")).toBe("visa");
+  });
+
+  it("infers scams from scam-related title", () => {
+    expect(inferTopicFromTitle("Common Scams in Phnom Penh")).toBe("scams");
+  });
+
+  it("infers teaching from TEFL title", () => {
+    expect(inferTopicFromTitle("TEFL Jobs in Cambodia")).toBe("teaching");
+  });
+
+  it("infers renting from housing title", () => {
+    expect(inferTopicFromTitle("Renting an Apartment in Phnom Penh")).toBe(
+      "renting"
+    );
+  });
+
+  it("falls back to travel for unrecognized title", () => {
+    expect(inferTopicFromTitle("Random Thoughts About Life")).toBe("travel");
+  });
+
+  it("matches multi-word keywords like cost of living", () => {
+    expect(
+      inferTopicFromTitle("Cost of Living in Phnom Penh 2026")
+    ).toBe("cost of living");
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  buildSearchQueryPack                                                */
+/* ------------------------------------------------------------------ */
+
+describe("buildSearchQueryPack", () => {
+  it("returns base, authority, broad, and titleHint groups", () => {
+    const pack = buildSearchQueryPack({
+      cityFocus: "Phnom Penh",
+      audienceFocus: "teachers",
+      selectedGapTopic: "visa",
+      primaryKeywordPhrase: "visa Cambodia Phnom Penh",
+      currentYear: 2026,
+      titleHint: "Visa Requirements for Teachers in Phnom Penh 2026",
+    });
+
+    expect(pack.strategy.base.length).toBeGreaterThanOrEqual(2);
+    expect(pack.strategy.authority.length).toBeGreaterThanOrEqual(1);
+    expect(pack.strategy.broad.length).toBeGreaterThanOrEqual(1);
+    expect(pack.queries.length).toBe(
+      pack.strategy.base.length +
+        pack.strategy.authority.length +
+        pack.strategy.broad.length +
+        pack.strategy.titleHint.length
+    );
+  });
+
+  it("base queries include keyword and city", () => {
+    const pack = buildSearchQueryPack({
+      cityFocus: "Phnom Penh",
+      audienceFocus: "both",
+      selectedGapTopic: "scams",
+      primaryKeywordPhrase: "tourist scams Phnom Penh",
+      currentYear: 2026,
+    });
+
+    const baseJoined = pack.strategy.base.join(" ").toLowerCase();
+    expect(baseJoined).toContain("phnom penh");
+    expect(baseJoined).toContain("scams");
+  });
+
+  it("authority queries use topic-specific templates", () => {
+    const pack = buildSearchQueryPack({
+      cityFocus: "Phnom Penh",
+      audienceFocus: "travellers",
+      selectedGapTopic: "safety",
+      currentYear: 2026,
+    });
+
+    const authJoined = pack.strategy.authority.join(" ").toLowerCase();
+    expect(authJoined).toContain("fcdo");
+  });
+
+  it("broad queries ignore audience", () => {
+    const pack = buildSearchQueryPack({
+      cityFocus: "Siem Reap",
+      audienceFocus: "teachers",
+      selectedGapTopic: "renting",
+      currentYear: 2026,
+    });
+
+    const broadJoined = pack.strategy.broad.join(" ").toLowerCase();
+    expect(broadJoined).toContain("foreigners");
+    expect(broadJoined).not.toContain("teachers");
+  });
+
+  it("titleHint query is derived from title keywords, not full title", () => {
+    const pack = buildSearchQueryPack({
+      cityFocus: "Phnom Penh",
+      audienceFocus: "both",
+      selectedGapTopic: "visa",
+      currentYear: 2026,
+      titleHint: "Essential 2026 Visa Requirements for Teachers in Phnom Penh",
+    });
+
+    // titleHint should not be the full title
+    if (pack.strategy.titleHint.length > 0) {
+      const hint = pack.strategy.titleHint[0];
+      expect(hint.length).toBeLessThan(
+        "Essential 2026 Visa Requirements for Teachers in Phnom Penh".length
+      );
+      // Should not contain noise words
+      expect(hint.toLowerCase()).not.toContain("essential");
     }
   });
 
-  it("includes audience-specific queries for teachers", () => {
-    const fallback = buildFallbackQueries(
-      "Teaching English in Cambodia",
-      "Phnom Penh",
-      "teachers",
-      []
-    );
-    const joined = fallback.join(" ").toLowerCase();
-    expect(joined).toContain("teacher");
+  it("skips titleHint for all-noise titles", () => {
+    const pack = buildSearchQueryPack({
+      cityFocus: "Cambodia wide",
+      audienceFocus: "both",
+      selectedGapTopic: "travel",
+      currentYear: 2026,
+      titleHint: "The Essential Guide to Cambodia",
+    });
+
+    expect(pack.strategy.titleHint.length).toBe(0);
   });
 
-  it("includes audience-specific queries for travellers", () => {
-    const fallback = buildFallbackQueries(
-      "Travelling to Cambodia",
+  it("works without selectedGapTopic by inferring from title", () => {
+    const pack = buildSearchQueryPack({
+      cityFocus: "Phnom Penh",
+      audienceFocus: "teachers",
+      currentYear: 2026,
+      titleHint: "TEFL Jobs in Phnom Penh",
+    });
+
+    // Should infer "teaching" topic
+    const allJoined = pack.queries.join(" ").toLowerCase();
+    expect(allJoined).toContain("teaching");
+  });
+
+  it("adds extra base query when city is not Cambodia", () => {
+    const packCity = buildSearchQueryPack({
+      cityFocus: "Phnom Penh",
+      audienceFocus: "both",
+      selectedGapTopic: "visa",
+      currentYear: 2026,
+    });
+    const packWide = buildSearchQueryPack({
+      cityFocus: "Cambodia wide",
+      audienceFocus: "both",
+      selectedGapTopic: "visa",
+      currentYear: 2026,
+    });
+
+    // City-specific pack should have an extra "topic Cambodia city" base query
+    expect(packCity.strategy.base.length).toBe(packWide.strategy.base.length + 1);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/*  buildFallbackRound                                                  */
+/* ------------------------------------------------------------------ */
+
+describe("buildFallbackRound", () => {
+  it("round 1 replaces teachers with expats", () => {
+    const queries = buildFallbackRound(1, "visa", "Phnom Penh", "teachers", []);
+    const joined = queries.join(" ").toLowerCase();
+    expect(joined).toContain("expats");
+    expect(joined).not.toContain("teachers");
+  });
+
+  it("round 1 replaces travellers with visitors", () => {
+    const queries = buildFallbackRound(
+      1,
+      "scams",
       "Siem Reap",
       "travellers",
       []
     );
-    const joined = fallback.join(" ").toLowerCase();
-    expect(joined).toContain("visa");
+    const joined = queries.join(" ").toLowerCase();
+    expect(joined).toContain("visitors");
+    expect(joined).not.toContain("travellers");
   });
 
-  it("includes authoritative-source queries", () => {
-    const fallback = buildFallbackQueries(
-      "Any topic",
-      "Cambodia wide",
-      "both",
-      []
-    );
-    const joined = fallback.join(" ").toLowerCase();
-    expect(joined).toContain("gov.kh");
-    expect(joined).toContain("embassy");
-  });
-
-  it("strips years from seed title words for broader queries", () => {
-    const fallback = buildFallbackQueries(
-      "A 2026 Guide to Entry Requirements",
+  it("round 2 strips adjectives from topic", () => {
+    const queries = buildFallbackRound(
+      2,
+      "essential safety",
       "Phnom Penh",
       "both",
       []
     );
-    // None of the fallback queries should contain 2026
-    // (the point is to broaden the search)
-    const yearQueries = fallback.filter((q) => q.includes("2026"));
-    // It's acceptable if some contain the year via authority queries,
-    // but broader title-derived queries should not
-    const titleDerived = fallback.slice(0, 2);
-    for (const q of titleDerived) {
-      expect(q).not.toContain("2026");
+    const joined = queries.join(" ").toLowerCase();
+    expect(joined).not.toContain("essential");
+    expect(joined).toContain("safety");
+  });
+
+  it("round 3 uses generic Cambodia queries without city", () => {
+    const queries = buildFallbackRound(3, "visa", "Phnom Penh", "both", []);
+    const joined = queries.join(" ").toLowerCase();
+    expect(joined).toContain("cambodia");
+    // Should not reference specific city in generic fallback
+    for (const q of queries) {
+      expect(q.toLowerCase()).not.toContain("phnom penh");
+    }
+  });
+
+  it("deduplicates against existing queries", () => {
+    const existing = ["visa Phnom Penh expats"];
+    const queries = buildFallbackRound(
+      1,
+      "visa",
+      "Phnom Penh",
+      "teachers",
+      existing
+    );
+    const lowerExisting = new Set(existing.map((q) => q.toLowerCase()));
+    for (const q of queries) {
+      expect(lowerExisting.has(q.toLowerCase())).toBe(false);
     }
   });
 });

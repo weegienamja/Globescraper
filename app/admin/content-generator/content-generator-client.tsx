@@ -125,6 +125,11 @@ export default function ContentGeneratorClient() {
   const [newsError, setNewsError] = useState("");
   const [newsResult, setNewsResult] = useState<NewsGenResult | null>(null);
   const [newsSearchError, setNewsSearchError] = useState("");
+  const [newsSearchWarning, setNewsSearchWarning] = useState("");
+
+  /* ── Stable backend inputs from Generate Title ── */
+  const [selectedGapTopic, setSelectedGapTopic] = useState("");
+  const [primaryKeywordPhrase, setPrimaryKeywordPhrase] = useState("");
 
   /* ── Generated Title state ── */
   const [generatedTitle, setGeneratedTitle] = useState("");
@@ -153,6 +158,8 @@ export default function ContentGeneratorClient() {
 
       setGeneratedTitle((data.title as string) || "");
       setTitleKeywords((data.keywords as string[]) || []);
+      setSelectedGapTopic((data.selectedTopic as string) || "");
+      setPrimaryKeywordPhrase((data.primaryKeywordPhrase as string) || "");
       setTitleGenStatus("Based on your existing posts and current Cambodia interest.");
       setTitleGenState("done");
     } catch (err) {
@@ -162,9 +169,12 @@ export default function ContentGeneratorClient() {
   }
 
   /* ── News: search topics ── */
-  async function handleNewsSearch() {
+  async function handleNewsSearch(overrides?: { audienceFocus?: string }) {
+    const effectiveAudience = overrides?.audienceFocus || newsAudienceFocus;
+
     setNewsSearchState("searching");
     setNewsSearchError("");
+    setNewsSearchWarning("");
     setNewsTopics([]);
     setSelectedTopicId(null);
     setNewsGenState("idle");
@@ -177,32 +187,45 @@ export default function ContentGeneratorClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           cityFocus: newsCityFocus,
-          audienceFocus: newsAudienceFocus,
+          audienceFocus: effectiveAudience,
           ...(generatedTitle.trim() ? { seedTitle: generatedTitle.trim() } : {}),
+          ...(selectedGapTopic ? { selectedGapTopic } : {}),
+          ...(primaryKeywordPhrase ? { primaryKeywordPhrase } : {}),
         }),
       });
 
       const data = await safeJson(res);
       if (!res.ok) throw new Error((data.error as string) || "Search failed.");
 
-      setNewsTopics((data.topics as NewsTopic[]) || []);
+      const topics = (data.topics as NewsTopic[]) || [];
+      setNewsTopics(topics);
       setNewsSearchState("done");
 
-      if (((data.topics as unknown[]) || []).length === 0) {
-        const errorCode = data.errorCode as string | undefined;
-        const defaultMsg = "No topics found. Try adjusting filters or try again later.";
-        if (errorCode === "NO_SOURCES") {
-          setNewsSearchError(
-            "No usable sources returned from search. Try again, or pick a less niche title."
-          );
+      // Handle diagnostics (warnings)
+      const diagnostics = data.diagnostics as { warning?: string } | undefined;
+      if (diagnostics?.warning) {
+        if (topics.length === 0) {
+          // No topics at all — show as warning (yellow)
+          setNewsSearchWarning(diagnostics.warning);
         } else {
-          setNewsSearchError((data.message as string) || defaultMsg);
+          // Topics returned but low quality — show as info warning
+          setNewsSearchWarning(diagnostics.warning);
         }
+      } else if (topics.length === 0) {
+        setNewsSearchError(
+          (data.message as string) || "No topics found. Try adjusting filters or try again later."
+        );
       }
     } catch (err) {
       setNewsSearchState("error");
       setNewsSearchError(err instanceof Error ? err.message : "An unexpected error occurred.");
     }
+  }
+
+  /* ── News: broaden search (switch to "both" audience) ── */
+  function handleBroadenSearch() {
+    setNewsAudienceFocus("both");
+    handleNewsSearch({ audienceFocus: "both" });
   }
 
   /* ── News: generate draft ── */
@@ -699,7 +722,7 @@ export default function ContentGeneratorClient() {
           <div className="cgen__actions">
             <button
               className="btn btn--primary"
-              onClick={handleNewsSearch}
+              onClick={() => handleNewsSearch()}
               disabled={newsSearchState === "searching" || newsGenState === "generating"}
             >
               {newsSearchState === "searching" ? "Searching..." : "Search Topics"}
@@ -724,6 +747,22 @@ export default function ContentGeneratorClient() {
           <div className="cgen__news-loading">
             <div className="cgen__news-spinner" />
             <span>Discovering timely Cambodia topics...</span>
+          </div>
+        )}
+
+        {newsSearchWarning && (
+          <div className="cgen__alert cgen__alert--warning">
+            <strong>Warning:</strong> {newsSearchWarning}
+            {newsTopics.length === 0 && (
+              <button
+                className="btn btn--secondary btn--sm"
+                onClick={handleBroadenSearch}
+                disabled={newsSearchState === "searching"}
+                style={{ marginLeft: "0.75rem" }}
+              >
+                Broaden search
+              </button>
+            )}
           </div>
         )}
 

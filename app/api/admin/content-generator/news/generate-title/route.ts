@@ -483,11 +483,13 @@ export async function POST(req: NextRequest) {
       constraintFailureReason,
     });
 
-    // 11. Return result
+    // 11. Return result (include stable inputs for the search pipeline)
     return NextResponse.json({
       title: finalPayload.title,
       why: finalPayload.why,
       keywords: finalPayload.keywords,
+      selectedTopic,
+      primaryKeywordPhrase: primaryKeywordDisplay,
     });
   } catch (error) {
     console.error("[Generate Title] Error:", error);

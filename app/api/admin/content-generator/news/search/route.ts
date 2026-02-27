@@ -51,34 +51,34 @@ export async function POST(req: NextRequest) {
       typeof body.seedTitle === "string" && body.seedTitle.trim().length > 0
         ? body.seedTitle.trim()
         : undefined;
+    const selectedGapTopic: string | undefined =
+      typeof body.selectedGapTopic === "string" && body.selectedGapTopic.trim().length > 0
+        ? body.selectedGapTopic.trim()
+        : undefined;
+    const primaryKeywordPhrase: string | undefined =
+      typeof body.primaryKeywordPhrase === "string" && body.primaryKeywordPhrase.trim().length > 0
+        ? body.primaryKeywordPhrase.trim()
+        : undefined;
 
     // 5. Discover topics
     if (seedTitle) {
-      // ── 2-stage pipeline: queries → search → grounded topics ──
+      // ── Stable pipeline: deterministic queries → search → grounded topics ──
       const result = await runSearchTopicsPipeline(
         seedTitle,
         cityFocus,
-        audienceFocus
+        audienceFocus,
+        selectedGapTopic,
+        primaryKeywordPhrase
       );
 
       console.log("[News Search] Pipeline log:", JSON.stringify(result.log));
 
-      if (result.error) {
-        return NextResponse.json(
-          {
-            topics: [],
-            message: result.error,
-            pipelineLog: result.log,
-            errorCode: result.log.usableResultCount === 0 ? "NO_SOURCES" : "LOW_SOURCES",
-          },
-          { status: 200 }
-        );
-      }
-
+      // Always return 200 — diagnostics convey warnings, catch block handles real errors
       const ranked = scoreAndRankTopics(result.topics).slice(0, 10);
       return NextResponse.json({
         topics: ranked,
         pipelineLog: result.log,
+        ...(result.diagnostics ? { diagnostics: result.diagnostics } : {}),
       });
     }
 

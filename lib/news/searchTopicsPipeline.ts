@@ -1,11 +1,10 @@
 /**
- * 2-stage Search Topics pipeline for the Cambodia News Blog Generator.
+ * Search Topics pipeline for the Cambodia News Blog Generator.
  *
- * Stage A: generateSearchQueries – Gemini returns search queries only
- * Stage B: generateTopicVariations – Gemini returns topics grounded in fetched results
- *
- * Between stages: scored result normalization, fallback query expansion,
- * and structured logging for debuggability.
+ * Stable query generation from backend inputs (no LLM for queries).
+ * Priority-ordered search with early stopping.
+ * Multi-round fallback with graceful degradation.
+ * Gemini used only for Stage B: topic variation generation.
  */
 
 import {
@@ -21,9 +20,9 @@ import type {
   AudienceFit,
 } from "@/lib/newsTopicTypes";
 
-/* ------------------------------------------------------------------ */
+/* ================================================================== */
 /*  Public types                                                        */
-/* ------------------------------------------------------------------ */
+/* ================================================================== */
 
 export interface SearchResult {
   id: string;
@@ -39,6 +38,7 @@ export interface SearchResult {
 
 export interface QueryStats {
   query: string;
+  group: string;
   rawCount: number;
   normalizedCount: number;
   keptCount: number;
@@ -53,22 +53,45 @@ export interface RejectionCounts {
   ownDomain: number;
 }
 
+export interface QueryPack {
+  /** Flattened queries in priority order: base → authority → broad → titleHint */
+  queries: string[];
+  strategy: {
+    base: string[];
+    authority: string[];
+    broad: string[];
+    titleHint: string[];
+  };
+}
+
 export interface PipelineLog {
   seedTitle: string;
   cityFocus: string;
   audienceFocus: string;
+  selectedGapTopic: string | null;
+  queryPack: QueryPack["strategy"];
   queryList: string[];
   queryStats: QueryStats[];
+  groupsExecuted: string[];
   usableResultCount: number;
   rejections: RejectionCounts;
-  fallbackUsed: boolean;
+  fallbackRoundsUsed: number;
   totalTokenUsage: number;
   topicsCount: number;
 }
 
-/* ------------------------------------------------------------------ */
+export interface PipelineResult {
+  topics: NewsTopic[];
+  log: PipelineLog;
+  /** Soft warnings (low/no sources). Technical failures throw instead. */
+  diagnostics?: {
+    warning?: string;
+  };
+}
+
+/* ================================================================== */
 /*  Constants                                                           */
-/* ------------------------------------------------------------------ */
+/* ================================================================== */
 
 const MIN_SOURCES = 6;
 const TARGET_SOURCES = 15;
@@ -78,7 +101,6 @@ const VALID_AUDIENCE = new Set<string>(["TRAVELLERS", "TEACHERS"]);
 
 /**
  * High-trust domains that get a scoring boost.
- * Government, embassies, aviation authorities, major news outlets.
  */
 const HIGH_TRUST_DOMAINS = new Set([
   "gov.kh", "gov.uk", "gov.au", "gov.sg", "state.gov",
@@ -91,7 +113,7 @@ const HIGH_TRUST_DOMAINS = new Set([
 ]);
 
 /**
- * Tracking query parameters to strip during URL canonicalization.
+ * Tracking query parameters stripped during URL canonicalization.
  */
 const TRACKING_PARAMS = new Set([
   "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content",
@@ -99,16 +121,117 @@ const TRACKING_PARAMS = new Set([
   "ref", "ref_src", "ref_url",
 ]);
 
-/* ------------------------------------------------------------------ */
-/*  Helpers                                                             */
-/* ------------------------------------------------------------------ */
+/* ================================================================== */
+/*  Authority query templates by gap topic                              */
+/* ================================================================== */
 
-/** Strip em dashes from any string. */
+const AUTHORITY_QUERIES_MAP: Record<string, (city: string, yr: number) => string[]> = {
+  safety: (city, yr) => [
+    "FCDO Cambodia travel advice",
+    "US State Department Cambodia travel advisory",
+  ],
+  scams: (city, yr) => [
+    "FCDO Cambodia travel advice scams",
+    "Cambodia tourist scams police warning",
+  ],
+  visa: (city, yr) => [
+    "Cambodia e-visa official gov.kh",
+    `Cambodia visa requirements ${yr}`,
+  ],
+  entry: (city, yr) => [
+    "Cambodia entry requirements official",
+    `Cambodia immigration rules ${yr}`,
+  ],
+  healthcare: (city, yr) => [
+    `hospitals ${city} international clinic foreigners`,
+    `healthcare Cambodia expats ${yr}`,
+  ],
+  renting: (city, yr) => [
+    `renting apartment ${city} foreigners deposit`,
+    `${city} rental contract tips`,
+  ],
+  transport: (city, yr) => [
+    `${city} transport options foreigners`,
+    `PassApp Grab ${city} ride hailing`,
+  ],
+  airport: (city, yr) => [
+    "Phnom Penh International Airport PNH arrivals guide",
+    `Cambodia airports ${yr}`,
+  ],
+  flight: (city, yr) => [
+    `flights to ${city} airlines routes`,
+    `Cambodia airport airlines ${yr}`,
+  ],
+  SIM: (city, yr) => [
+    `SIM card Cambodia tourist prepaid ${yr}`,
+    "Cellcard Smart Metfone Cambodia prepaid",
+  ],
+  banking: (city, yr) => [
+    "ATM Cambodia foreigners fees withdrawals",
+    `banking ${city} expats accounts`,
+  ],
+  "cost of living": (city, yr) => [
+    `cost of living ${city} ${yr} expats`,
+    `monthly budget ${city} foreigners`,
+  ],
+  teaching: (city, yr) => [
+    `TEFL jobs Cambodia ${yr} salary`,
+    `teaching English ${city} requirements`,
+  ],
+  food: (city, yr) => [
+    `street food ${city} safe hygiene`,
+    `best restaurants ${city} foreigners`,
+  ],
+  coworking: (city, yr) => [
+    `coworking spaces ${city} ${yr}`,
+    `digital nomad ${city} remote work`,
+  ],
+};
+
+/* ================================================================== */
+/*  Noise words filtered from title keyword extraction                  */
+/* ================================================================== */
+
+const TITLE_NOISE_WORDS = new Set([
+  "a", "an", "the", "in", "of", "to", "for", "and", "or", "is", "are",
+  "your", "our", "this", "that", "its", "be", "was", "were", "been",
+  "guide", "guides", "essential", "complete", "ultimate", "best",
+  "top", "tips", "things", "know", "need", "how", "what", "why", "when",
+  "living", "visiting", "moving", "traveling", "travelling", "about",
+  "new", "every", "all", "most", "should", "will", "can", "must",
+  "cambodia", "phnom", "penh", "siem", "reap",
+]);
+
+/* ================================================================== */
+/*  Keyword → topic inference table                                     */
+/* ================================================================== */
+
+const TOPIC_KEYWORDS: [string, string[]][] = [
+  ["visa", ["visa", "e-visa", "evisa"]],
+  ["entry", ["entry", "immigration", "border", "arriving"]],
+  ["scams", ["scam", "fraud", "con artist", "rip-off", "ripoff"]],
+  ["safety", ["safety", "safe", "danger", "crime", "security"]],
+  ["healthcare", ["health", "hospital", "clinic", "medical", "doctor"]],
+  ["renting", ["rent", "apartment", "housing", "landlord", "flat"]],
+  ["transport", ["transport", "tuk tuk", "tuktuk", "taxi", "bus", "getting around"]],
+  ["airport", ["airport", "terminal", "arrivals", "landing"]],
+  ["flight", ["flight", "airline", "flying", "cheap flights"]],
+  ["SIM", ["sim card", "sim", "mobile phone", "phone plan", "data plan"]],
+  ["banking", ["bank", "atm", "money", "currency", "exchange"]],
+  ["cost of living", ["cost of living", "budget", "expense", "afford", "cheap"]],
+  ["teaching", ["teach", "tefl", "english teacher", "esl", "tesol"]],
+  ["food", ["food", "restaurant", "eating", "cuisine", "street food"]],
+  ["coworking", ["coworking", "co-working", "digital nomad", "remote work", "freelance"]],
+];
+
+/* ================================================================== */
+/*  Helpers                                                             */
+/* ================================================================== */
+
 function cleanStr(s: string): string {
   return s.replace(/\u2014/g, ", ").replace(/\u2013/g, ", ");
 }
 
-/** Check if a string contains em dash. */
 function hasEmDash(s: string): boolean {
   return s.includes("\u2014") || s.includes("\u2013");
 }
@@ -120,27 +243,21 @@ function hasEmDash(s: string): boolean {
 export function canonicalizeUrl(raw: string): string {
   try {
     const u = new URL(raw);
-    // Strip tracking params
     for (const key of [...u.searchParams.keys()]) {
       if (TRACKING_PARAMS.has(key.toLowerCase())) {
         u.searchParams.delete(key);
       }
     }
-    // Rebuild: lowercase host, strip www, strip trailing slash
     let out = u.origin.replace(/^https?:\/\/www\./, "https://") + u.pathname;
     if (out.endsWith("/")) out = out.slice(0, -1);
     const qs = u.searchParams.toString();
     if (qs) out += `?${qs}`;
     return out;
   } catch {
-    // If URL parsing fails, do minimal cleanup
     return raw.replace(/\/$/, "").replace(/^https?:\/\/www\./, "https://");
   }
 }
 
-/**
- * Extract hostname from a URL (without www prefix).
- */
 function extractHostname(url: string): string {
   try {
     return new URL(url).hostname.replace(/^www\./, "");
@@ -149,9 +266,6 @@ function extractHostname(url: string): string {
   }
 }
 
-/**
- * Check if a hostname matches any domain in a set (exact or subdomain).
- */
 function matchesDomainSet(hostname: string, domainSet: Set<string>): boolean {
   if (domainSet.has(hostname)) return true;
   for (const d of domainSet) {
@@ -201,12 +315,12 @@ export function scoreSearchResult(
     }
   }
 
-  // -2: our own domain (exclude from research)
+  // -2: our own domain
   if (hostname === "globescraper.com" || hostname.endsWith(".globescraper.com")) {
     score -= 2;
   }
 
-  // -1: title looks like forum spam (very short, all caps, lots of punctuation)
+  // -1: spam-like title
   if (result.title.length < 10 || /^[A-Z\s!?]{10,}$/.test(result.title)) {
     score -= 1;
   }
@@ -214,181 +328,161 @@ export function scoreSearchResult(
   return score;
 }
 
-/* ------------------------------------------------------------------ */
-/*  Stage A: Generate Search Queries                                    */
-/* ------------------------------------------------------------------ */
+function emptyRejections(): RejectionCounts {
+  return { missingUrl: 0, missingTitle: 0, blockedDomain: 0, duplicateUrl: 0, ownDomain: 0 };
+}
 
-interface QueriesResult {
-  queries: string[];
-  tokenUsage: number;
+function mergeRejections(a: RejectionCounts, b: RejectionCounts): RejectionCounts {
+  return {
+    missingUrl: a.missingUrl + b.missingUrl,
+    missingTitle: a.missingTitle + b.missingTitle,
+    blockedDomain: a.blockedDomain + b.blockedDomain,
+    duplicateUrl: a.duplicateUrl + b.duplicateUrl,
+    ownDomain: a.ownDomain + b.ownDomain,
+  };
+}
+
+/* ================================================================== */
+/*  Title keyword extraction + topic inference                          */
+/* ================================================================== */
+
+/**
+ * Extract 1-3 meaningful keywords from a title for a supplementary query.
+ * Strips noise words, years, city names, and generic terms.
+ * Exported for unit testing.
+ */
+export function extractTitleKeywords(title: string): string[] {
+  const words = title
+    .replace(/\b\d{4}\b/g, "")
+    .replace(/[^\w\s'-]/g, " ")
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((w) => w.length > 2 && !TITLE_NOISE_WORDS.has(w));
+  return [...new Set(words)].slice(0, 3);
 }
 
 /**
- * Ask Gemini to produce 4-6 specific Google search queries
- * derived from the seedTitle, cityFocus, and audienceFocus.
+ * Infer the most likely gap topic from a title via keyword matching.
+ * Falls back to "travel" if nothing matches.
+ * Exported for unit testing.
  */
-export async function generateSearchQueries(
-  seedTitle: string,
-  cityFocus: CityFocus,
-  audienceFocus: AudienceFocus,
-  currentYear: number
-): Promise<QueriesResult> {
-  validateGeminiKey();
+export function inferTopicFromTitle(title: string): string {
+  const lower = title.toLowerCase();
+  for (const [topic, keywords] of TOPIC_KEYWORDS) {
+    for (const kw of keywords) {
+      if (lower.includes(kw)) return topic;
+    }
+  }
+  return "travel";
+}
 
+/* ================================================================== */
+/*  Deterministic query pack builder (no LLM)                           */
+/* ================================================================== */
+
+/**
+ * Build a search query pack from stable backend inputs.
+ * The title is a weak optional hint — queries are driven by
+ * selectedGapTopic + primaryKeywordPhrase.
+ * Exported for unit testing.
+ */
+export function buildSearchQueryPack({
+  cityFocus,
+  audienceFocus,
+  selectedGapTopic,
+  primaryKeywordPhrase,
+  currentYear,
+  titleHint,
+}: {
+  cityFocus: CityFocus;
+  audienceFocus: AudienceFocus;
+  selectedGapTopic?: string;
+  primaryKeywordPhrase?: string;
+  currentYear: number;
+  titleHint?: string;
+}): QueryPack {
   const city = cityFocus === "Cambodia wide" ? "Cambodia" : cityFocus;
+  const topic = selectedGapTopic || inferTopicFromTitle(titleHint || "");
+  const keyword = primaryKeywordPhrase || topic;
+  const audienceLabel =
+    audienceFocus === "teachers"
+      ? "teachers"
+      : audienceFocus === "travellers"
+        ? "travellers"
+        : "expats";
 
-  const prompt = `You are a research assistant for GlobeScraper, a website about Cambodia travel and teaching English.
-
-TASK: Generate Google search queries to research the topic below.
-
-SEED TITLE: "${seedTitle}"
-CITY FOCUS: ${cityFocus}
-AUDIENCE: ${audienceFocus === "both" ? "travellers and English teachers" : audienceFocus}
-CURRENT YEAR: ${currentYear}
-
-RULES:
-1. Return 4 to 6 search queries.
-2. At least 2 queries MUST include the term "${city}".
-3. ${seedTitle.includes(String(currentYear)) ? `At least 1 query MUST include "${currentYear}".` : "Include the year if relevant to the topic."}
-4. Queries must be specific. Too vague examples: "Cambodia tips", "travel advice".
-5. Do NOT use em dashes (— or –) anywhere.
-6. Each query should target a different angle or sub-topic.
-
-Return ONLY this JSON (no markdown fences, no commentary):
-{
-  "queries": ["query 1", "query 2", "query 3", "query 4"]
-}`;
-
-  const response = await callGemini(prompt);
-  const parsed = parseGeminiJson(response.text);
-  let queries: string[] = Array.isArray(parsed.queries)
-    ? parsed.queries.map(String).filter((q: string) => q.length > 3)
-    : [];
-
-  // Validate
-  const failures = validateQueries(queries, city, seedTitle, currentYear);
-
-  if (failures.length > 0 && queries.length > 0) {
-    // Retry once with fix prompt
-    const fixPrompt = `The previous query generation had these problems:
-${failures.map((f) => `- ${f}`).join("\n")}
-
-Original queries: ${JSON.stringify(queries)}
-
-Fix the queries and return valid JSON:
-{
-  "queries": ["query 1", "query 2", "query 3", "query 4"]
-}
-
-RULES: 4-6 queries, at least 2 must include "${city}", ${seedTitle.includes(String(currentYear)) ? `at least 1 must include "${currentYear}",` : ""} no em dashes, be specific.
-
-Return ONLY the JSON.`;
-
-    const retryResponse = await callGemini(fixPrompt);
-    const retryParsed = parseGeminiJson(retryResponse.text);
-    const retryQueries: string[] = Array.isArray(retryParsed.queries)
-      ? retryParsed.queries.map(String).filter((q: string) => q.length > 3)
-      : [];
-
-    const retryFailures = validateQueries(
-      retryQueries,
-      city,
-      seedTitle,
-      currentYear
-    );
-
-    if (retryFailures.length === 0 && retryQueries.length >= 4) {
-      queries = retryQueries;
-    }
-
-    return {
-      queries: queries.slice(0, 6),
-      tokenUsage:
-        (response.tokenCount ?? 0) + (retryResponse.tokenCount ?? 0),
-    };
+  // ── Base queries (2-3): topic + keyword + city ──
+  const base: string[] = [
+    `${keyword} ${city} ${currentYear}`,
+    `${topic} ${city} ${audienceLabel}`,
+  ];
+  if (city !== "Cambodia") {
+    base.push(`${topic} Cambodia ${city}`);
   }
 
-  return { queries: queries.slice(0, 6), tokenUsage: response.tokenCount ?? 0 };
-}
+  // ── Authority queries (1-2): stable authoritative sources ──
+  const authorityFn = AUTHORITY_QUERIES_MAP[topic];
+  const authority: string[] = authorityFn
+    ? authorityFn(city, currentYear)
+    : [`${topic} Cambodia official`, `Cambodia ${topic} advice ${currentYear}`];
 
-function validateQueries(
-  queries: string[],
-  city: string,
-  seedTitle: string,
-  currentYear: number
-): string[] {
-  const failures: string[] = [];
-  if (queries.length < 4 || queries.length > 6) {
-    failures.push(`Expected 4-6 queries, got ${queries.length}.`);
-  }
-  const cityLower = city.toLowerCase();
-  const cityCount = queries.filter((q) =>
-    q.toLowerCase().includes(cityLower)
-  ).length;
-  if (cityCount < 2) {
-    failures.push(
-      `At least 2 queries must include "${city}". Found ${cityCount}.`
-    );
-  }
-  if (seedTitle.includes(String(currentYear))) {
-    const yearCount = queries.filter((q) =>
-      q.includes(String(currentYear))
-    ).length;
-    if (yearCount < 1) {
-      failures.push(
-        `Seed title contains ${currentYear} but no query includes it.`
-      );
+  // ── Broad queries (1-2): ignore audience ──
+  const broad: string[] = [
+    `${city} ${topic} tips`,
+    `${topic} Cambodia foreigners`,
+  ];
+
+  // ── Title hint (0-1): low priority, only if it adds value ──
+  const titleHintQueries: string[] = [];
+  if (titleHint) {
+    const keywords = extractTitleKeywords(titleHint);
+    if (keywords.length > 0) {
+      titleHintQueries.push(`${keywords.join(" ")} ${city}`);
     }
   }
-  for (const q of queries) {
-    if (hasEmDash(q)) {
-      failures.push(`Query "${q}" contains an em dash.`);
-    }
-  }
-  return failures;
+
+  const queries = [...base, ...authority, ...broad, ...titleHintQueries];
+
+  return {
+    queries,
+    strategy: { base, authority, broad, titleHint: titleHintQueries },
+  };
 }
 
-/* ------------------------------------------------------------------ */
-/*  Search step (code, not Gemini)                                      */
-/* ------------------------------------------------------------------ */
+/* ================================================================== */
+/*  CSE fetch — executes a batch of queries against Google CSE          */
+/* ================================================================== */
 
-interface RawSearchData {
+interface SearchGroupResult {
   results: SearchResult[];
   queryStats: QueryStats[];
   rejections: RejectionCounts;
+  nextResultId: number;
 }
 
 /**
- * Execute web searches for each query via Google CSE.
- * Normalizes defensively (keeps results even without snippet).
- * Scores and ranks results, keeping top TARGET_SOURCES.
+ * Execute a batch of Google CSE queries.
+ * Deduplicates against seenCanonical (mutated in-place).
+ * No date restriction — relevance-sorted for maximum result coverage.
  */
-export async function executeSearchQueries(
+async function executeSearchGroup(
   queries: string[],
-  cityFocus: CityFocus | string
-): Promise<RawSearchData> {
+  groupName: string,
+  cityFocus: string,
+  seenCanonical: Set<string>,
+  startResultId: number
+): Promise<SearchGroupResult> {
   const apiKey = process.env.GOOGLE_CSE_API_KEY;
   const cseId = process.env.GOOGLE_CSE_ID;
-
-  const rejections: RejectionCounts = {
-    missingUrl: 0,
-    missingTitle: 0,
-    blockedDomain: 0,
-    duplicateUrl: 0,
-    ownDomain: 0,
-  };
+  const rejections = emptyRejections();
   const queryStats: QueryStats[] = [];
+  const results: SearchResult[] = [];
+  let resultId = startResultId;
 
   if (!apiKey || !cseId) {
-    console.warn(
-      "[SearchTopics] Google CSE not configured (GOOGLE_CSE_API_KEY / GOOGLE_CSE_ID missing)"
-    );
-    return { results: [], queryStats, rejections };
+    console.warn("[SearchTopics] Google CSE not configured");
+    return { results, queryStats, rejections, nextResultId: resultId };
   }
-
-  const seenCanonical = new Set<string>();
-  const allResults: SearchResult[] = [];
-  let resultId = 0;
 
   for (const query of queries) {
     let rawCount = 0;
@@ -402,15 +496,10 @@ export async function executeSearchQueries(
         cx: cseId,
         q: query,
         num: "10",
-        dateRestrict: "d30",
-        sort: "date",
       });
 
       const controller = new AbortController();
-      const timeout = setTimeout(
-        () => controller.abort(),
-        SEARCH_TIMEOUT_MS
-      );
+      const timeout = setTimeout(() => controller.abort(), SEARCH_TIMEOUT_MS);
 
       const response = await fetch(
         `https://www.googleapis.com/customsearch/v1?${params}`,
@@ -420,11 +509,10 @@ export async function executeSearchQueries(
       clearTimeout(timeout);
 
       if (!response.ok) {
-        console.warn(
-          `[SearchTopics] CSE query "${query}" returned HTTP ${response.status}`
-        );
+        console.warn(`[SearchTopics] CSE "${query}" HTTP ${response.status}`);
         queryStats.push({
           query,
+          group: groupName,
           rawCount: 0,
           normalizedCount: 0,
           keptCount: 0,
@@ -432,6 +520,7 @@ export async function executeSearchQueries(
         });
         continue;
       }
+
       const data = await response.json();
       const items = data.items || [];
       rawCount = items.length;
@@ -462,13 +551,13 @@ export async function executeSearchQueries(
           continue;
         }
 
-        // Blocked domain
+        // Blocked domain (social media, forums)
         if (isBlockedDomain(url)) {
           rejections.blockedDomain++;
           continue;
         }
 
-        // Skip our own domain — we don't want to cite ourselves
+        // Skip our own domain
         if (hostname === "globescraper.com" || hostname.endsWith(".globescraper.com")) {
           rejections.ownDomain++;
           continue;
@@ -498,15 +587,16 @@ export async function executeSearchQueries(
         };
 
         result.score = scoreSearchResult(result, cityFocus);
-        allResults.push(result);
+        results.push(result);
         keptCount++;
       }
     } catch (err) {
-      console.warn(`[SearchTopics] CSE query "${query}" failed:`, err);
+      console.warn(`[SearchTopics] CSE "${query}" failed:`, err);
     }
 
     queryStats.push({
       query,
+      group: groupName,
       rawCount,
       normalizedCount,
       keptCount,
@@ -514,69 +604,142 @@ export async function executeSearchQueries(
     });
   }
 
-  // Sort by score descending, keep top TARGET_SOURCES
-  allResults.sort((a, b) => b.score - a.score);
-  const kept = allResults.slice(0, TARGET_SOURCES);
-
-  return { results: kept, queryStats, rejections };
+  return { results, queryStats, rejections, nextResultId: resultId };
 }
 
-/* ------------------------------------------------------------------ */
-/*  Fallback query expansion                                            */
-/* ------------------------------------------------------------------ */
+/* ================================================================== */
+/*  Priority-ordered search execution with early stopping               */
+/* ================================================================== */
+
+interface RawSearchData {
+  results: SearchResult[];
+  queryStats: QueryStats[];
+  rejections: RejectionCounts;
+  groupsExecuted: string[];
+}
 
 /**
- * Generate fallback queries when the initial search yields too few results.
- * These are code-generated (no Gemini call), broader but still specific.
- * Exported for unit testing.
+ * Execute query pack groups in priority order:
+ *   base → authority → broad → titleHint
+ * Stops early once usable results >= MIN_SOURCES.
  */
-export function buildFallbackQueries(
-  seedTitle: string,
-  cityFocus: CityFocus,
-  audienceFocus: AudienceFocus,
-  originalQueries: string[]
-): string[] {
-  const city = cityFocus === "Cambodia wide" ? "Cambodia" : cityFocus;
-  const titleWords = seedTitle
-    .replace(/\b\d{4}\b/g, "") // strip years
-    .replace(/[^\w\s]/g, " ")
-    .split(/\s+/)
-    .filter((w) => w.length > 3)
-    .slice(0, 4);
+export async function executeSearchWithPriority(
+  queryPack: QueryPack,
+  cityFocus: CityFocus
+): Promise<RawSearchData> {
+  const seenCanonical = new Set<string>();
+  let allResults: SearchResult[] = [];
+  let allQueryStats: QueryStats[] = [];
+  let totalRejections = emptyRejections();
+  let resultId = 0;
+  const groupsExecuted: string[] = [];
 
-  const fallback: string[] = [];
+  const groups: { name: string; queries: string[] }[] = [
+    { name: "base", queries: queryPack.strategy.base },
+    { name: "authority", queries: queryPack.strategy.authority },
+    { name: "broad", queries: queryPack.strategy.broad },
+    { name: "titleHint", queries: queryPack.strategy.titleHint },
+  ];
 
-  // a) Broader topic queries without year constraint
-  if (titleWords.length >= 2) {
-    fallback.push(`${city} ${titleWords.join(" ")}`);
-    fallback.push(`Cambodia ${titleWords.slice(0, 3).join(" ")}`);
+  for (const group of groups) {
+    if (group.queries.length === 0) continue;
+
+    const { results, queryStats, rejections, nextResultId } =
+      await executeSearchGroup(
+        group.queries,
+        group.name,
+        cityFocus,
+        seenCanonical,
+        resultId
+      );
+
+    allResults.push(...results);
+    allQueryStats.push(...queryStats);
+    totalRejections = mergeRejections(totalRejections, rejections);
+    resultId = nextResultId;
+    groupsExecuted.push(group.name);
+
+    // Early stopping: enough usable sources
+    if (allResults.length >= MIN_SOURCES) {
+      console.log(
+        `[SearchTopics] Early stop after "${group.name}": ${allResults.length} results`
+      );
+      break;
+    }
   }
 
-  // b) Audience-specific queries
-  if (audienceFocus === "teachers" || audienceFocus === "both") {
-    fallback.push(`${city} work permit requirements teacher`);
-    fallback.push(`Cambodia visa types for working as teacher`);
-    fallback.push(`Cambodia immigration rules entry requirements`);
-  }
-  if (audienceFocus === "travellers" || audienceFocus === "both") {
-    fallback.push(`${city} entry requirements visitors`);
-    fallback.push(`Cambodia e-visa vs ordinary visa`);
-    fallback.push(`Cambodia travel requirements tourists`);
-  }
+  // Sort by score descending, keep top TARGET_SOURCES
+  allResults.sort((a, b) => b.score - a.score);
+  allResults = allResults.slice(0, TARGET_SOURCES);
 
-  // c) Authoritative-source queries
-  fallback.push(`site:gov.kh entry requirements Cambodia`);
-  fallback.push(`Cambodia embassy visa requirements`);
-  fallback.push(`UK FCDO Cambodia entry requirements`);
-
-  // Dedupe against original queries (case-insensitive)
-  const originalLower = new Set(originalQueries.map((q) => q.toLowerCase()));
-  return fallback.filter((q) => !originalLower.has(q.toLowerCase()));
+  return {
+    results: allResults,
+    queryStats: allQueryStats,
+    rejections: totalRejections,
+    groupsExecuted,
+  };
 }
 
-/* ------------------------------------------------------------------ */
-/*  Stage B: Generate Topic Variations                                  */
-/* ------------------------------------------------------------------ */
+/* ================================================================== */
+/*  Fallback rounds (no title changes, no LLM)                         */
+/* ================================================================== */
+
+/**
+ * Build fallback queries for a given round, deduplicating against existing queries.
+ *
+ * Round 1: Replace audience-specific terms with broader ones, drop year.
+ * Round 2: Reduce to core topic words, remove adjectives.
+ * Round 3: Generic "Cambodia + topic" queries (no city).
+ *
+ * Exported for unit testing.
+ */
+export function buildFallbackRound(
+  round: 1 | 2 | 3,
+  topic: string,
+  city: string,
+  audienceFocus: AudienceFocus,
+  existingQueries: string[]
+): string[] {
+  const existing = new Set(existingQueries.map((q) => q.toLowerCase()));
+  let queries: string[] = [];
+
+  if (round === 1) {
+    // Broader audience terms, no year
+    const audience =
+      audienceFocus === "teachers"
+        ? "expats"
+        : audienceFocus === "travellers"
+          ? "visitors"
+          : "foreigners";
+    queries = [
+      `${topic} ${city} ${audience}`,
+      `${topic} Cambodia ${audience}`,
+      `${city} ${topic} information`,
+    ];
+  } else if (round === 2) {
+    // Core words only, strip adjectives
+    const core = topic
+      .replace(
+        /\b(essential|best|current|complete|ultimate|top|latest|new)\b/gi,
+        ""
+      )
+      .trim();
+    queries = [`${core} ${city}`, `${core} Cambodia guide`];
+  } else {
+    // Generic Cambodia + topic (no city)
+    queries = [
+      `Cambodia ${topic}`,
+      `Cambodia ${topic} tourists`,
+      `Cambodia ${topic} information`,
+    ];
+  }
+
+  return queries.filter((q) => !existing.has(q.toLowerCase()));
+}
+
+/* ================================================================== */
+/*  Stage B: Generate Topic Variations (Gemini)                         */
+/* ================================================================== */
 
 interface TopicsResult {
   topics: NewsTopic[];
@@ -605,7 +768,7 @@ export async function generateTopicVariations(
         ? "travellers to Cambodia"
         : "people interested in teaching English in Cambodia";
 
-  // Build result list for prompt — omit snippet if null (never emit "No snippet")
+  // Build result list for prompt — omit snippet if null
   const resultsList = results
     .map((r) => {
       const parts = [`[${r.id}] "${r.title}"`];
@@ -671,13 +834,24 @@ Return ONLY this JSON (no markdown fences, no commentary):
     throw new Error("Gemini did not return a valid topics array.");
   }
 
-  let topics = validateAndCleanTopics(parsed.topics, allowedUrls, city, seedTitle, currentYear);
+  let topics = validateAndCleanTopics(
+    parsed.topics,
+    allowedUrls,
+    city,
+    seedTitle,
+    currentYear
+  );
 
   // Check for validation failures that warrant a retry
-  const failures = validateTopicsStrict(topics, allowedUrls, city, seedTitle, currentYear);
+  const failures = validateTopicsStrict(
+    topics,
+    allowedUrls,
+    city,
+    seedTitle,
+    currentYear
+  );
 
   if (failures.length > 0) {
-    // Retry once with fix prompt
     const fixPrompt = `The previous topic generation had these problems:
 ${failures.map((f) => `- ${f}`).join("\n")}
 
@@ -713,14 +887,10 @@ Return ONLY the JSON.`;
   return { topics, tokenUsage: totalTokens };
 }
 
-/* ------------------------------------------------------------------ */
+/* ================================================================== */
 /*  Topic validation and cleaning                                       */
-/* ------------------------------------------------------------------ */
+/* ================================================================== */
 
-/**
- * Validate, clean, and normalize topics from Gemini.
- * Filters out sourceUrls not in allowedUrls.
- */
 function validateAndCleanTopics(
   rawTopics: unknown[],
   allowedUrls: string[],
@@ -731,44 +901,39 @@ function validateAndCleanTopics(
   const allowedSet = new Set(allowedUrls.map((u) => canonicalizeUrl(u)));
   const topics: NewsTopic[] = [];
 
-  for (const raw of rawTopics as any[]) {
+  for (const raw of rawTopics as Record<string, unknown>[]) {
     if (!raw.id || !raw.title || !raw.angle || !raw.whyItMatters) continue;
 
-    // Enforce audienceFit enum
     const audienceFit: AudienceFit[] = Array.isArray(raw.audienceFit)
-      ? raw.audienceFit.filter((a: string) => VALID_AUDIENCE.has(a))
+      ? (raw.audienceFit as string[]).filter((a) => VALID_AUDIENCE.has(a)) as AudienceFit[]
       : ["TRAVELLERS", "TEACHERS"];
     if (audienceFit.length === 0) audienceFit.push("TRAVELLERS", "TEACHERS");
 
-    // Clean strings
     const title = cleanStr(String(raw.title));
     const angle = cleanStr(String(raw.angle));
     const whyItMatters = cleanStr(String(raw.whyItMatters));
     const intent = cleanStr(String(raw.intent || "informational"));
 
-    // Filter sourceUrls to only allowed URLs (canonicalize for comparison)
     let sourceUrls: string[] = [];
     if (Array.isArray(raw.sourceUrls)) {
-      sourceUrls = raw.sourceUrls
+      sourceUrls = (raw.sourceUrls as string[])
         .map(String)
-        .filter((u: string) => {
-          const canon = canonicalizeUrl(u);
-          return allowedSet.has(canon);
-        })
+        .filter((u) => allowedSet.has(canonicalizeUrl(u)))
         .slice(0, 3);
     }
-    // Deduplicate
     sourceUrls = [...new Set(sourceUrls)];
 
-    // Validate searchQueries (3-6)
     const searchQueries: string[] = Array.isArray(raw.searchQueries)
-      ? raw.searchQueries.map(String).slice(0, 6)
+      ? (raw.searchQueries as string[]).map(String).slice(0, 6)
       : [];
 
-    // Validate outlineAngles (3-6)
     const outlineAngles: string[] = Array.isArray(raw.outlineAngles)
-      ? raw.outlineAngles.map(String).slice(0, 6)
+      ? (raw.outlineAngles as string[]).map(String).slice(0, 6)
       : [];
+
+    const suggestedKeywords = raw.suggestedKeywords as
+      | { target?: string; secondary?: string[] }
+      | undefined;
 
     topics.push({
       id: String(raw.id),
@@ -777,9 +942,9 @@ function validateAndCleanTopics(
       whyItMatters,
       audienceFit,
       suggestedKeywords: {
-        target: String(raw.suggestedKeywords?.target || raw.title),
-        secondary: Array.isArray(raw.suggestedKeywords?.secondary)
-          ? raw.suggestedKeywords.secondary.map(String)
+        target: String(suggestedKeywords?.target || raw.title),
+        secondary: Array.isArray(suggestedKeywords?.secondary)
+          ? suggestedKeywords!.secondary!.map(String)
           : [],
       },
       searchQueries,
@@ -794,10 +959,6 @@ function validateAndCleanTopics(
   return topics;
 }
 
-/**
- * Return a list of strict validation failures for the retry prompt.
- * If empty, topics pass validation.
- */
 function validateTopicsStrict(
   topics: NewsTopic[],
   allowedUrls: string[],
@@ -822,7 +983,6 @@ function validateTopicsStrict(
       failures.push(`Topic "${t.title}" does not include "${city}".`);
     }
 
-    // Check for wrong years
     if (seedTitle.includes(String(currentYear))) {
       const yearMatch = t.title.match(/\b(20\d{2})\b/);
       if (yearMatch && yearMatch[1] !== String(currentYear)) {
@@ -832,16 +992,12 @@ function validateTopicsStrict(
       }
     }
 
-    // Check audienceFit
     for (const af of t.audienceFit) {
       if (!VALID_AUDIENCE.has(af)) {
-        failures.push(
-          `Topic "${t.title}" has invalid audienceFit "${af}".`
-        );
+        failures.push(`Topic "${t.title}" has invalid audienceFit "${af}".`);
       }
     }
 
-    // Check sourceUrls
     const urls = t.sourceUrls || [];
     if (urls.length < 1 || urls.length > 3) {
       failures.push(
@@ -859,7 +1015,6 @@ function validateTopicsStrict(
       failures.push(`Topic "${t.title}" has duplicate sourceUrls.`);
     }
 
-    // Check em dashes
     for (const field of [t.title, t.angle, t.whyItMatters, t.intent]) {
       if (hasEmDash(field)) {
         failures.push(`Em dash found in topic "${t.title}".`);
@@ -871,175 +1026,173 @@ function validateTopicsStrict(
   return failures;
 }
 
-/* ------------------------------------------------------------------ */
+/* ================================================================== */
 /*  Full pipeline orchestrator                                          */
-/* ------------------------------------------------------------------ */
-
-export interface PipelineResult {
-  topics: NewsTopic[];
-  log: PipelineLog;
-  error?: string;
-}
+/* ================================================================== */
 
 /**
- * Run the full 2-stage Search Topics pipeline:
- * 1. Generate search queries from seed title
- * 2. Execute web searches (with fallback expansion if needed)
- * 3. Generate topic variations grounded in results
+ * Run the Search Topics pipeline:
+ * 1. Build deterministic query pack from stable inputs (no LLM)
+ * 2. Priority-ordered search with early stopping
+ * 3. Multi-round fallback if needed
+ * 4. Generate topic variations via Gemini (Stage B)
+ *
+ * Returns warnings instead of hard errors for "not enough sources".
+ * Only throws for actual technical failures (API errors, Gemini failures).
  */
 export async function runSearchTopicsPipeline(
   seedTitle: string,
   cityFocus: CityFocus,
-  audienceFocus: AudienceFocus
+  audienceFocus: AudienceFocus,
+  selectedGapTopic?: string,
+  primaryKeywordPhrase?: string
 ): Promise<PipelineResult> {
   const currentYear = new Date().getFullYear();
   let totalTokens = 0;
-  let fallbackUsed = false;
+  const topic = selectedGapTopic || inferTopicFromTitle(seedTitle);
+  const city = cityFocus === "Cambodia wide" ? "Cambodia" : cityFocus;
 
-  // Stage A: Generate search queries
-  console.log("[SearchTopics] Stage A: Generating search queries...");
-  const { queries, tokenUsage: queryTokens } = await generateSearchQueries(
-    seedTitle,
+  // 1. Build query pack (deterministic, no LLM)
+  console.log(
+    `[SearchTopics] Building query pack: topic="${topic}", keyword="${primaryKeywordPhrase || topic}"`
+  );
+  const queryPack = buildSearchQueryPack({
     cityFocus,
     audienceFocus,
-    currentYear
+    selectedGapTopic,
+    primaryKeywordPhrase,
+    currentYear,
+    titleHint: seedTitle,
+  });
+  const activeGroups = Object.entries(queryPack.strategy).filter(
+    ([, v]) => v.length > 0
+  ).length;
+  console.log(
+    `[SearchTopics] Query pack: ${queryPack.queries.length} queries across ${activeGroups} groups`
   );
-  totalTokens += queryTokens;
-  console.log(`[SearchTopics] Generated ${queries.length} queries:`, queries);
 
-  if (queries.length === 0) {
-    return {
-      topics: [],
-      log: {
-        seedTitle,
-        cityFocus,
-        audienceFocus,
-        queryList: [],
-        queryStats: [],
-        usableResultCount: 0,
-        rejections: { missingUrl: 0, missingTitle: 0, blockedDomain: 0, duplicateUrl: 0, ownDomain: 0 },
-        fallbackUsed: false,
-        totalTokenUsage: totalTokens,
-        topicsCount: 0,
-      },
-      error: "Failed to generate search queries. Try again.",
-    };
-  }
-
-  // Primary search pass
-  console.log("[SearchTopics] Primary search pass...");
-  let searchData = await executeSearchQueries(queries, cityFocus);
+  // 2. Priority-ordered search with early stopping
+  const searchData = await executeSearchWithPriority(queryPack, cityFocus);
   let allResults = searchData.results;
   let allQueryStats = searchData.queryStats;
   let allRejections = searchData.rejections;
+  let fallbackRoundsUsed = 0;
+  const allQueriesUsed = [...queryPack.queries];
+
   console.log(
-    `[SearchTopics] Primary pass: ${allResults.length} results. Rejections:`,
-    JSON.stringify(allRejections)
+    `[SearchTopics] Primary: ${allResults.length} results, groups: [${searchData.groupsExecuted.join(", ")}]`
   );
 
-  // Fallback query expansion if needed
+  // 3. Fallback rounds (no title changes, no LLM)
   if (allResults.length < MIN_SOURCES) {
-    fallbackUsed = true;
-    console.log(
-      `[SearchTopics] Only ${allResults.length} results (need ${MIN_SOURCES}). Running fallback search...`
-    );
-    const fallbackQueries = buildFallbackQueries(
-      seedTitle,
-      cityFocus,
-      audienceFocus,
-      queries
-    );
-    console.log(
-      `[SearchTopics] Fallback queries (${fallbackQueries.length}):`,
-      fallbackQueries.slice(0, 6)
+    const seenCanonical = new Set(
+      allResults.map((r) => canonicalizeUrl(r.url))
     );
 
-    if (fallbackQueries.length > 0) {
-      const fallbackData = await executeSearchQueries(
-        fallbackQueries.slice(0, 6),
-        cityFocus
+    for (let round = 1; round <= 3; round++) {
+      if (allResults.length >= MIN_SOURCES) break;
+
+      const fbQueries = buildFallbackRound(
+        round as 1 | 2 | 3,
+        topic,
+        city,
+        audienceFocus,
+        allQueriesUsed
       );
+      if (fbQueries.length === 0) continue;
 
-      // Merge, dedup by canonical URL
-      const seenCanonical = new Set(
-        allResults.map((r) => canonicalizeUrl(r.url))
-      );
-      for (const r of fallbackData.results) {
-        const canon = canonicalizeUrl(r.url);
-        if (!seenCanonical.has(canon)) {
-          allResults.push(r);
-          seenCanonical.add(canon);
-        }
-      }
-
-      // Merge stats
-      allQueryStats = [...allQueryStats, ...fallbackData.queryStats];
-      allRejections = {
-        missingUrl: allRejections.missingUrl + fallbackData.rejections.missingUrl,
-        missingTitle: allRejections.missingTitle + fallbackData.rejections.missingTitle,
-        blockedDomain: allRejections.blockedDomain + fallbackData.rejections.blockedDomain,
-        duplicateUrl: allRejections.duplicateUrl + fallbackData.rejections.duplicateUrl,
-        ownDomain: allRejections.ownDomain + fallbackData.rejections.ownDomain,
-      };
-
-      // Re-sort by score, cap at TARGET_SOURCES
-      allResults.sort((a, b) => b.score - a.score);
-      allResults = allResults.slice(0, TARGET_SOURCES);
-
+      fallbackRoundsUsed = round;
+      allQueriesUsed.push(...fbQueries);
       console.log(
-        `[SearchTopics] After fallback: ${allResults.length} total results.`
+        `[SearchTopics] Fallback round ${round}: ${fbQueries.join(", ")}`
       );
+
+      const { results, queryStats, rejections } = await executeSearchGroup(
+        fbQueries,
+        `fallback-${round}`,
+        cityFocus,
+        seenCanonical,
+        allResults.length
+      );
+
+      allResults.push(...results);
+      allQueryStats.push(...queryStats);
+      allRejections = mergeRejections(allRejections, rejections);
     }
+
+    // Re-sort and cap
+    allResults.sort((a, b) => b.score - a.score);
+    allResults = allResults.slice(0, TARGET_SOURCES);
+    console.log(
+      `[SearchTopics] After fallbacks: ${allResults.length} results`
+    );
   }
 
-  // Build the log
+  // 4. Build pipeline log
   const log: PipelineLog = {
     seedTitle,
     cityFocus,
     audienceFocus,
-    queryList: queries,
+    selectedGapTopic: selectedGapTopic || null,
+    queryPack: queryPack.strategy,
+    queryList: allQueriesUsed,
     queryStats: allQueryStats,
+    groupsExecuted: searchData.groupsExecuted,
     usableResultCount: allResults.length,
     rejections: allRejections,
-    fallbackUsed,
+    fallbackRoundsUsed,
     totalTokenUsage: totalTokens,
     topicsCount: 0,
   };
 
+  // 5. Zero results → return warning (not error)
   if (allResults.length === 0) {
-    log.totalTokenUsage = totalTokens;
     return {
       topics: [],
       log,
-      error:
-        "No usable sources returned from search. Try again, or pick a less niche title.",
+      diagnostics: {
+        warning:
+          "No usable sources found. The topic may be too niche. Try a broader city or audience.",
+      },
     };
   }
 
-  // Even if below MIN_SOURCES, proceed with what we have (>0) rather than failing.
-  if (allResults.length < MIN_SOURCES) {
+  // 6. Proceed even with low results — attach warning if below threshold
+  const lowSources = allResults.length < MIN_SOURCES;
+  if (lowSources) {
     console.warn(
-      `[SearchTopics] Proceeding with ${allResults.length} results (below MIN_SOURCES=${MIN_SOURCES}).`
+      `[SearchTopics] Proceeding with ${allResults.length}/${MIN_SOURCES} results.`
     );
   }
 
-  // Stage B (Gemini): Generate topic variations grounded in results
+  // 7. Stage B: Generate topic variations (Gemini)
   console.log(
-    `[SearchTopics] Stage B: Generating topic variations from ${allResults.length} results...`
+    `[SearchTopics] Stage B: Generating topics from ${allResults.length} sources...`
   );
-  const { topics, tokenUsage: topicTokens } =
-    await generateTopicVariations(
-      seedTitle,
-      cityFocus,
-      audienceFocus,
-      currentYear,
-      allResults
-    );
-  totalTokens += topicTokens;
-  console.log(`[SearchTopics] Generated ${topics.length} topics.`);
 
+  const { topics, tokenUsage: topicTokens } = await generateTopicVariations(
+    seedTitle,
+    cityFocus,
+    audienceFocus,
+    currentYear,
+    allResults
+  );
+  totalTokens += topicTokens;
   log.totalTokenUsage = totalTokens;
   log.topicsCount = topics.length;
 
-  return { topics, log };
+  console.log(
+    `[SearchTopics] Done: ${topics.length} topics, ${totalTokens} tokens`
+  );
+
+  // 8. Attach low-source warning if applicable
+  const result: PipelineResult = { topics, log };
+  if (lowSources) {
+    result.diagnostics = {
+      warning:
+        "Low source count. Topics may be less well-grounded. Try a broader city or audience.",
+    };
+  }
+
+  return result;
 }
