@@ -27,6 +27,7 @@ import {
   type ImageSpec,
   type GeneratedImage,
 } from "@/lib/ai/imageGen";
+import { generateHybridImages } from "@/lib/ai/imageSearch";
 import type {
   NewsArticleData,
   AudienceFit,
@@ -935,7 +936,7 @@ Fix it and return ONLY valid JSON. No prose, no explanation, no markdown fences.
       try {
         const imageSpecs = buildNewsImageSpecs(topicTitle, finalMarkdown);
         const slugBase = articleData.slug.slice(0, 40);
-        const generatedImages = await generateAndUploadImages(imageSpecs, slugBase);
+        const generatedImages = await generateHybridImages(topicTitle, imageSpecs, slugBase);
 
         if (generatedImages.length > 0) {
           const hero = generatedImages.find((img) => img.kind === "HERO");

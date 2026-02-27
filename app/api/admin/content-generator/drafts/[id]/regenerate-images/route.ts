@@ -8,6 +8,7 @@ import {
   type ImageSpec,
   type GeneratedImage,
 } from "@/lib/ai/imageGen";
+import { generateHybridImages } from "@/lib/ai/imageSearch";
 
 export const maxDuration = 120;
 
@@ -34,8 +35,8 @@ export async function POST(
     const imageSpecs = buildDraftImageSpecs(draft.title, draft.topic, draft.markdown);
     const slugBase = draft.slug.slice(0, 40);
 
-    // Generate new images
-    const generatedImages = await generateAndUploadImages(imageSpecs, slugBase);
+    // Generate images — real photos for specific places, AI for generic topics
+    const generatedImages = await generateHybridImages(draft.title, imageSpecs, slugBase);
 
     if (generatedImages.length === 0) {
       return NextResponse.json(

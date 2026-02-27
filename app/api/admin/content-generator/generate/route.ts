@@ -16,6 +16,7 @@ import {
   injectImagesIntoMarkdown,
   extractHeadings,
 } from "@/lib/ai/imageGen";
+import { generateHybridImages } from "@/lib/ai/imageSearch";
 
 export const maxDuration = 120; // Allow up to 120 seconds for generation + images
 
@@ -233,7 +234,7 @@ export async function POST(req: NextRequest) {
         const sectionHeadings = extractHeadings(finalMarkdown);
         const imageSpecs = buildImageSpecs(city, topic, articleData.title, sectionHeadings);
         const slugBase = articleData.slug.slice(0, 40);
-        const generatedImages = await generateAndUploadImages(imageSpecs, slugBase);
+        const generatedImages = await generateHybridImages(articleData.title, imageSpecs, slugBase);
 
         if (generatedImages.length > 0) {
           const hero = generatedImages.find((img) => img.kind === "HERO");

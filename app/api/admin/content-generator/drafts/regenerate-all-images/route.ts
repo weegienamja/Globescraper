@@ -7,6 +7,7 @@ import {
   extractHeadings,
   type ImageSpec,
 } from "@/lib/ai/imageGen";
+import { generateHybridImages } from "@/lib/ai/imageSearch";
 
 export const maxDuration = 300;
 
@@ -45,7 +46,7 @@ export async function POST(req: NextRequest) {
       try {
         const imageSpecs = buildDraftImageSpecs(draft.title, draft.topic, draft.markdown);
         const slugBase = draft.slug.slice(0, 40);
-        const generatedImages = await generateAndUploadImages(imageSpecs, slugBase);
+        const generatedImages = await generateHybridImages(draft.title, imageSpecs, slugBase);
 
         if (generatedImages.length === 0) {
           results.push({ id: draft.id, slug: draft.slug, success: false, error: "No images generated" });
