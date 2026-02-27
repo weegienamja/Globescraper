@@ -231,6 +231,8 @@ export function RentalPipelineDashboard() {
       setLogConnected(false);
       setProgress(null);
       abortRef.current = null;
+      // Always refresh stats after a job finishes (success or failure)
+      await fetchSummary();
     }
   };
 
