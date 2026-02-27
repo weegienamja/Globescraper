@@ -1,45 +1,71 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
+import type { DistrictIndexRow } from "./InteractiveHeatmap";
+
+const InteractiveHeatmap = dynamic(
+  () => import("./InteractiveHeatmap").then((m) => m.InteractiveHeatmap),
+  {
+    ssr: false,
+    loading: () => (
+      <div style={{
+        height: 260,
+        background: "linear-gradient(135deg, #0f172a 0%, #1e293b 100%)",
+        borderRadius: 10,
+        border: "1px solid #334155",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}>
+        <p style={{ color: "#64748b", fontSize: 13 }}>Loading map…</p>
+      </div>
+    ),
+  }
+);
 
 /**
- * Heatmap Preview Card – placeholder shown on the rental pipeline dashboard.
- * Shows a static placeholder and color legend for future Mapbox/Leaflet integration.
+ * Heatmap Preview Card — shown on the rental pipeline dashboard.
+ * Fetches live listing data and renders a mini interactive map.
  */
 export function HeatmapPreviewCard() {
+  const [data, setData] = useState<DistrictIndexRow[] | null>(null);
+
+  useEffect(() => {
+    fetch("/api/tools/rentals/heatmap-data")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d) => setData(d))
+      .catch(() => setData([]));
+  }, []);
+
   return (
     <div style={styles.card}>
       <h2 style={styles.title}>Heatmap Preview</h2>
 
-      {/* Placeholder map area */}
-      <div style={styles.mapPlaceholder}>
-        <div style={styles.mapInner}>
-          <svg
-            width="48"
-            height="48"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="#475569"
-            strokeWidth="1.5"
-          >
+      {data === null ? (
+        <div style={styles.loadingBox}>
+          <p style={{ color: "#64748b", fontSize: 13, margin: 0 }}>Loading…</p>
+        </div>
+      ) : data.length === 0 ? (
+        <div style={styles.emptyBox}>
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="1.5">
             <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
             <circle cx="12" cy="10" r="3" />
           </svg>
-          <p style={styles.mapText}>
-            Map visualization coming soon
-          </p>
-          <p style={styles.mapSubtext}>
-            Phnom Penh district-level rental price heatmap
+          <p style={{ color: "#64748b", fontSize: 13, margin: "8px 0 0" }}>
+            No data yet — scrape some listings first
           </p>
         </div>
-      </div>
+      ) : (
+        <InteractiveHeatmap data={data} height={260} />
+      )}
 
       {/* Legend */}
       <div style={styles.legend}>
         <LegendItem color="#22c55e" label="< $300" />
         <LegendItem color="#f59e0b" label="$300 - $600" />
-        <LegendItem color="#f97316" label="$660 - $1000" />
+        <LegendItem color="#f97316" label="$600 - $1000" />
         <LegendItem color="#ef4444" label="> $1000" />
       </div>
 
@@ -82,36 +108,32 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: "16px",
     marginTop: 0,
   },
-  mapPlaceholder: {
+  loadingBox: {
+    height: "260px",
     background: "linear-gradient(135deg, #0f172a 0%, #1e293b 100%)",
     borderRadius: "10px",
     border: "1px solid #334155",
-    height: "260px",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: "16px",
-    position: "relative" as const,
-    overflow: "hidden",
   },
-  mapInner: {
-    textAlign: "center" as const,
-  },
-  mapText: {
-    color: "#64748b",
-    fontSize: "14px",
-    marginTop: "12px",
-    fontWeight: 500,
-  },
-  mapSubtext: {
-    color: "#475569",
-    fontSize: "12px",
-    marginTop: "4px",
+  emptyBox: {
+    height: "260px",
+    background: "linear-gradient(135deg, #0f172a 0%, #1e293b 100%)",
+    borderRadius: "10px",
+    border: "1px solid #334155",
+    display: "flex",
+    flexDirection: "column" as const,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: "16px",
   },
   legend: {
     display: "flex",
     flexDirection: "column" as const,
     gap: "8px",
+    marginTop: "16px",
     marginBottom: "16px",
   },
   legendItem: {

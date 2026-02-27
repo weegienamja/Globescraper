@@ -1,8 +1,18 @@
 import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 
-export const dynamic = "force-dynamic";
+const InteractiveHeatmap = dynamic(
+  () => import("@/components/tools/InteractiveHeatmap").then((m) => m.InteractiveHeatmap),
+  { ssr: false, loading: () => (
+    <div style={{ height: 450, background: "#0f172a", borderRadius: 10, border: "1px solid #334155", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <p style={{ color: "#64748b", fontSize: 14 }}>Loading map…</p>
+    </div>
+  )}
+);
+
+export const revalidate = 0; // force-dynamic equivalent
 
 export default async function HeatmapPage() {
   await requireAdmin();
@@ -15,6 +25,7 @@ export default async function HeatmapPage() {
 
   let indexData: {
     district: string | null;
+    city: string | null;
     bedrooms: number | null;
     propertyType: string;
     listingCount: number;
@@ -29,6 +40,7 @@ export default async function HeatmapPage() {
       orderBy: { medianPriceUsd: "desc" },
       select: {
         district: true,
+        city: true,
         bedrooms: true,
         propertyType: true,
         listingCount: true,
@@ -38,6 +50,52 @@ export default async function HeatmapPage() {
       },
     });
   }
+
+  // If no index data, fall back to aggregating directly from listings
+  let fallbackData: typeof indexData = [];
+  if (indexData.length === 0) {
+    const listings = await prisma.rentalListing.findMany({
+      where: { isActive: true },
+      select: {
+        district: true,
+        city: true,
+        bedrooms: true,
+        propertyType: true,
+        priceMonthlyUsd: true,
+      },
+    });
+
+    // Group by district + propertyType + bedrooms
+    const groups = new Map<string, { district: string | null; city: string | null; bedrooms: number | null; propertyType: string; prices: number[] }>();
+    for (const l of listings) {
+      const key = `${l.district}|${l.propertyType}|${l.bedrooms}`;
+      if (!groups.has(key)) {
+        groups.set(key, { district: l.district, city: l.city, bedrooms: l.bedrooms, propertyType: l.propertyType || "Unknown", prices: [] });
+      }
+      if (l.priceMonthlyUsd !== null) groups.get(key)!.prices.push(l.priceMonthlyUsd);
+    }
+
+    for (const g of groups.values()) {
+      const sorted = g.prices.sort((a, b) => a - b);
+      const median = sorted.length > 0 ? sorted[Math.floor(sorted.length / 2)] : null;
+      const p25 = sorted.length >= 4 ? sorted[Math.floor(sorted.length * 0.25)] : null;
+      const p75 = sorted.length >= 4 ? sorted[Math.floor(sorted.length * 0.75)] : null;
+      fallbackData.push({
+        district: g.district,
+        city: g.city,
+        bedrooms: g.bedrooms,
+        propertyType: g.propertyType,
+        listingCount: sorted.length,
+        medianPriceUsd: median,
+        p25PriceUsd: p25,
+        p75PriceUsd: p75,
+      });
+    }
+    fallbackData.sort((a, b) => (b.medianPriceUsd ?? 0) - (a.medianPriceUsd ?? 0));
+  }
+
+  const displayData = indexData.length > 0 ? indexData : fallbackData;
+  const isFromIndex = indexData.length > 0;
 
   const formatPrice = (v: number | null) =>
     v !== null ? `$${Math.round(v).toLocaleString()}` : "—";
@@ -51,26 +109,31 @@ export default async function HeatmapPage() {
           </Link>
           <h1 style={pageStyles.heading}>Rental Heatmap</h1>
           <p style={pageStyles.subtitle}>
-            District-level rental price analysis for Phnom Penh.
+            District-level rental price analysis for Cambodia.
           </p>
         </div>
 
-        {/* Static Map Placeholder */}
+        {/* Interactive Map */}
         <div style={pageStyles.mapCard}>
-          <h2 style={pageStyles.sectionTitle}>Map View</h2>
-          <div style={pageStyles.mapPlaceholder}>
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="1.5">
-              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-              <circle cx="12" cy="10" r="3" />
-            </svg>
-            <p style={pageStyles.placeholderText}>
-              {/* TODO: Integrate Mapbox or Leaflet for interactive heatmap visualization */}
-              Interactive map coming soon. Integrate Mapbox GL JS or Leaflet with district polygons.
-            </p>
-          </div>
+          <h2 style={pageStyles.sectionTitle}>
+            Map View
+            {!isFromIndex && displayData.length > 0 && (
+              <span style={{
+                fontSize: "12px",
+                color: "#f59e0b",
+                fontWeight: 400,
+                background: "rgba(245,158,11,0.1)",
+                padding: "3px 8px",
+                borderRadius: "6px",
+              }}>
+                Live from listings (no index built yet)
+              </span>
+            )}
+          </h2>
+          <InteractiveHeatmap data={displayData} height={450} />
 
           {/* Legend */}
-          <div style={pageStyles.legend}>
+          <div style={{ ...pageStyles.legend, marginTop: "16px" }}>
             {[
               { color: "#22c55e", label: "< $300/mo" },
               { color: "#f59e0b", label: "$300 – $600/mo" },
@@ -89,7 +152,7 @@ export default async function HeatmapPage() {
         <div style={pageStyles.tableCard}>
           <h2 style={pageStyles.sectionTitle}>
             Price Index by District
-            {latestEntry && (
+            {latestEntry && isFromIndex && (
               <span style={pageStyles.dateTag}>
                 {new Date(latestEntry.date).toLocaleDateString("en-US", {
                   month: "long",
@@ -98,11 +161,20 @@ export default async function HeatmapPage() {
                 })}
               </span>
             )}
+            {!isFromIndex && displayData.length > 0 && (
+              <span style={{
+                ...pageStyles.dateTag,
+                background: "rgba(245,158,11,0.15)",
+                color: "#f59e0b",
+              }}>
+                Live from listings
+              </span>
+            )}
           </h2>
 
-          {indexData.length === 0 ? (
+          {displayData.length === 0 ? (
             <div style={pageStyles.empty}>
-              No index data available yet. Run the &ldquo;Build Daily Index&rdquo; job from the pipeline dashboard.
+              No data available yet. Run &ldquo;Discover&rdquo; and &ldquo;Process Queue&rdquo; from the pipeline dashboard.
             </div>
           ) : (
             <div style={{ overflowX: "auto" }}>
@@ -119,7 +191,7 @@ export default async function HeatmapPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {indexData.map((row, i) => (
+                  {displayData.map((row, i) => (
                     <tr key={i} style={pageStyles.tr}>
                       <td style={{ ...pageStyles.td, color: "#e2e8f0", fontWeight: 500 }}>
                         {row.district || "Unknown"}
@@ -187,6 +259,7 @@ const pageStyles: Record<string, React.CSSProperties> = {
     display: "flex",
     alignItems: "center",
     gap: "12px",
+    flexWrap: "wrap" as const,
   },
   dateTag: {
     fontSize: "13px",
@@ -195,24 +268,6 @@ const pageStyles: Record<string, React.CSSProperties> = {
     background: "#1e293b",
     padding: "4px 10px",
     borderRadius: "6px",
-  },
-  mapPlaceholder: {
-    background: "linear-gradient(135deg, #0f172a 0%, #1e293b 100%)",
-    borderRadius: "10px",
-    border: "1px solid #334155",
-    height: "300px",
-    display: "flex",
-    flexDirection: "column" as const,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: "16px",
-  },
-  placeholderText: {
-    color: "#64748b",
-    fontSize: "14px",
-    textAlign: "center" as const,
-    marginTop: "12px",
-    maxWidth: "400px",
   },
   legend: { display: "flex", gap: "24px", flexWrap: "wrap" as const },
   legendItem: { display: "flex", alignItems: "center", gap: "8px" },
