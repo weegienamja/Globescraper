@@ -583,21 +583,6 @@ img {
   padding: 4px 24px;
 }
 
-/* Mobile: push logo left, larger logo without growing the bar */
-@media (max-width: 767px) {
-  .header__container {
-    padding: 0 6px;
-  }
-  .header__left {
-    gap: 4px;
-  }
-  .header__logo {
-    width: 72px;
-    height: 72px;
-    margin: -8px 0;
-  }
-}
-
 .header__left {
   display: flex;
   align-items: center;
@@ -636,6 +621,21 @@ img {
   color: var(--link);
   letter-spacing: -0.01em;
   font-family: inherit;
+}
+
+/* Mobile: larger logo, pushed left, bar stays same height */
+@media (max-width: 767px) {
+  .header__container {
+    padding: 0 6px;
+  }
+  .header__left {
+    gap: 4px;
+  }
+  .header__logo {
+    width: 72px;
+    height: 72px;
+    margin: -8px 0;
+  }
 }
 
 /* Desktop nav — hidden on mobile, absolutely centered */
