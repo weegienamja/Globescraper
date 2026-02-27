@@ -103,9 +103,19 @@ export async function POST(req: NextRequest) {
                 log
               );
               break;
-            case "build-index":
-              result = await buildDailyIndexJob(undefined, log);
+            case "build-index": {
+              /* Build for today AND yesterday so freshly-scraped data appears */
+              const now = new Date();
+              const todayUTC = new Date(
+                Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+              );
+              log("info", `Building index for today (${todayUTC.toISOString().slice(0, 10)}) …`);
+              const todayResult = await buildDailyIndexJob({ date: todayUTC }, log);
+              log("info", "Building index for yesterday …");
+              const yesterdayResult = await buildDailyIndexJob(undefined, log);
+              result = { today: todayResult, yesterday: yesterdayResult };
               break;
+            }
           }
           send("complete", result);
         } catch (err) {
