@@ -40,68 +40,68 @@ const LOOKBACK_N = 3;
 /*  Topic → primary-keyword mapping                                     */
 /* ------------------------------------------------------------------ */
 
-export const KEYWORD_MAP: Record<GapTopic, string[]> = {
+export const KEYWORD_MAP: Record<GapTopic, string[][]> = {
   transport: [
-    "PassApp Phnom Penh",
-    "Grab Phnom Penh",
-    "Phnom Penh tuk tuk",
+    ["PassApp", "Phnom Penh"],
+    ["Grab", "Phnom Penh"],
+    ["tuk tuk", "Phnom Penh"],
   ],
   airport: [
-    "Phnom Penh airport",
-    "PNH airport",
-    "Phnom Penh international airport",
+    ["airport", "Phnom Penh"],
+    ["PNH", "airport"],
+    ["international airport", "Phnom Penh"],
   ],
   scams: [
-    "Phnom Penh scams",
-    "tourist scams Phnom Penh",
+    ["scams", "Phnom Penh"],
+    ["tourist scams", "Phnom Penh"],
   ],
   visa: [
-    "Cambodia visa Phnom Penh",
-    "Phnom Penh e-visa",
+    ["visa", "Cambodia", "Phnom Penh"],
+    ["e-visa", "Phnom Penh"],
   ],
   entry: [
-    "entering Cambodia via Phnom Penh",
-    "Phnom Penh entry requirements",
+    ["entering Cambodia", "Phnom Penh"],
+    ["entry requirements", "Phnom Penh"],
   ],
   flight: [
-    "flights to Phnom Penh",
-    "cheap flights Phnom Penh",
+    ["flights", "Phnom Penh"],
+    ["cheap flights", "Phnom Penh"],
   ],
   SIM: [
-    "SIM card Phnom Penh",
-    "Cambodia SIM card",
+    ["SIM card", "Phnom Penh"],
+    ["SIM card", "Cambodia"],
   ],
   banking: [
-    "ATM Cambodia",
-    "Phnom Penh banking",
+    ["ATM", "Cambodia"],
+    ["banking", "Phnom Penh"],
   ],
   renting: [
-    "renting apartment Phnom Penh",
-    "Phnom Penh housing",
+    ["renting", "apartment", "Phnom Penh"],
+    ["housing", "Phnom Penh"],
   ],
   "cost of living": [
-    "cost of living Phnom Penh",
-    "Phnom Penh budget",
+    ["cost of living", "Phnom Penh"],
+    ["budget", "Phnom Penh"],
   ],
   healthcare: [
-    "Phnom Penh hospital",
-    "healthcare in Cambodia",
+    ["hospital", "Phnom Penh"],
+    ["healthcare", "Cambodia"],
   ],
   teaching: [
-    "teaching English Phnom Penh",
-    "TEFL jobs Cambodia",
+    ["teaching English", "Phnom Penh"],
+    ["TEFL jobs", "Cambodia"],
   ],
   food: [
-    "Phnom Penh street food",
-    "best restaurants Phnom Penh",
+    ["street food", "Phnom Penh"],
+    ["best restaurants", "Phnom Penh"],
   ],
   safety: [
-    "Phnom Penh safety tips",
-    "is Phnom Penh safe",
+    ["safety tips", "Phnom Penh"],
+    ["is Phnom Penh safe"],
   ],
   coworking: [
-    "coworking spaces Phnom Penh",
-    "digital nomad Phnom Penh",
+    ["coworking spaces", "Phnom Penh"],
+    ["digital nomad", "Phnom Penh"],
   ],
 };
 
@@ -113,14 +113,13 @@ export const KEYWORD_MAP: Record<GapTopic, string[]> = {
  * Swap "Phnom Penh" portions of a keyword for the actual city focus.
  * For "Cambodia wide" we leave as-is (most keywords already reference Cambodia).
  */
-function localiseKeyword(keyword: string, cityFocus: CityFocus): string {
-  if (cityFocus === "Phnom Penh") return keyword;
+function localiseTerm(term: string, cityFocus: CityFocus): string {
+  if (cityFocus === "Phnom Penh") return term;
   if (cityFocus === "Cambodia wide") {
-    // Keep Cambodia-level keywords as-is; replace city-specific ones
-    return keyword.replace(/Phnom Penh/gi, "Cambodia");
+    return term.replace(/Phnom Penh/gi, "Cambodia");
   }
-  // Siem Reap
-  return keyword.replace(/Phnom Penh/gi, cityFocus);
+  // Siem Reap, etc.
+  return term.replace(/Phnom Penh/gi, cityFocus);
 }
 
 /* ------------------------------------------------------------------ */
@@ -129,7 +128,7 @@ function localiseKeyword(keyword: string, cityFocus: CityFocus): string {
 
 export interface GapTopicResult {
   selectedTopic: GapTopic;
-  primaryKeyword: string;
+  primaryKeywordTerms: string[];
 }
 
 /**
@@ -167,10 +166,10 @@ export async function getNextGapTopic({
   // Pick randomly from the available pool (deterministic-enough: avoids recent repeats)
   const selectedTopic = pool[Math.floor(Math.random() * pool.length)];
 
-  // Pick a random primary keyword for the topic, localised to the city
-  const keywords = KEYWORD_MAP[selectedTopic];
-  const rawKeyword = keywords[Math.floor(Math.random() * keywords.length)];
-  const primaryKeyword = localiseKeyword(rawKeyword, cityFocus);
+  // Pick a random keyword term set for the topic, localised to the city
+  const keywordSets = KEYWORD_MAP[selectedTopic];
+  const rawTerms = keywordSets[Math.floor(Math.random() * keywordSets.length)];
+  const primaryKeywordTerms = rawTerms.map((t) => localiseTerm(t, cityFocus));
 
-  return { selectedTopic, primaryKeyword };
+  return { selectedTopic, primaryKeywordTerms };
 }

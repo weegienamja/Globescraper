@@ -108,8 +108,8 @@ async function getAllExistingTitles(): Promise<string[]> {
 /*  Main check                                                          */
 /* ------------------------------------------------------------------ */
 
-const JACCARD_THRESHOLD = 0.75;
-const BIGRAM_THRESHOLD = 0.7;
+const JACCARD_THRESHOLD = 0.85;
+const BIGRAM_THRESHOLD = 0.8;
 
 /**
  * Check a candidate title against all existing titles.

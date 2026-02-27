@@ -164,20 +164,22 @@ interface ValidationResult {
 function validateTitle(
   title: string,
   cityFocus: CityFocus,
-  primaryKeyword: string,
+  primaryKeywordTerms: string[],
   currentYear: number
 ): ValidationResult {
   const reasons: string[] = [];
   const city = cityFocus === "Cambodia wide" ? "Cambodia" : cityFocus;
 
-  if (title.length > 80) {
-    reasons.push(`Too long (${title.length} chars, max 80)`);
+  if (title.length > 100) {
+    reasons.push(`Too long (${title.length} chars, max 100)`);
   }
   if (!title.toLowerCase().includes(city.toLowerCase())) {
     reasons.push(`Missing city "${city}"`);
   }
-  if (!title.toLowerCase().includes(primaryKeyword.toLowerCase())) {
-    reasons.push(`Missing primary keyword "${primaryKeyword}"`);
+  for (const term of primaryKeywordTerms) {
+    if (!title.toLowerCase().includes(term.toLowerCase())) {
+      reasons.push(`Missing keyword term "${term}"`);
+    }
   }
   if (title.includes(EM_DASH)) {
     reasons.push("Contains em dash");
@@ -198,19 +200,20 @@ function validateTitle(
 async function fixTitle(
   title: string,
   cityFocus: CityFocus,
-  primaryKeyword: string,
+  primaryKeywordTerms: string[],
   currentYear: number
 ): Promise<{ payload: TitlePayload; fixTokens: number }> {
   const city = cityFocus === "Cambodia wide" ? "Cambodia" : cityFocus;
+  const termsStr = primaryKeywordTerms.map((t) => `"${t}"`).join(", ");
 
   const fixPrompt = `Fix this blog title to satisfy ALL constraints. Return JSON only with keys: title, why, keywords.
 
 Current title: "${title}"
 
 Constraints:
-- Maximum 80 characters
+- Maximum 100 characters (prefer 70-85)
 - Must include "${city}" in the title
-- Must include "${primaryKeyword}" verbatim in the title
+- Must include all of these keyword terms (they do not need to be one phrase): ${termsStr}
 - No em dashes
 - Only use year ${currentYear} if a year is present
 - 3-5 items in why array, 3-5 items in keywords array
@@ -233,7 +236,7 @@ function buildTitlePrompt(
   cityFocus: CityFocus,
   audienceFocus: AudienceFocus,
   selectedTopic: string,
-  primaryKeyword: string,
+  primaryKeywordTerms: string[],
   avoidTitles: string[]
 ): string {
   const city = cityFocus === "Cambodia wide" ? "Cambodia" : cityFocus;
@@ -249,26 +252,28 @@ function buildTitlePrompt(
       ? `\nDo NOT closely match any of these existing titles:\n${avoidTitles.map((t) => `- ${t}`).join("\n")}\n`
       : "";
 
+  const termsStr = primaryKeywordTerms.map((t) => `"${t}"`).join(", ");
+
   return `TODAY'S DATE: ${todaysDate}
 CURRENT YEAR: ${currentYear}
 CITY_FOCUS: ${cityFocus}
 AUDIENCE_FOCUS: ${audienceFocus}
 SELECTED_GAP_TOPIC: ${selectedTopic}
-PRIMARY_KEYWORD_PHRASE: ${primaryKeyword}
+REQUIRED_KEYWORD_TERMS: ${termsStr}
 
 Generate ONE blog title for GlobeScraper about "${selectedTopic}" in ${city} for ${audienceLabel}.
 
 RULES:
 1. Title MUST include "${city}" by name.
-2. Title MUST include "${primaryKeyword}" verbatim.
-3. Title MUST be <= 80 characters. This is a hard limit.
+2. Title MUST include all of these keyword terms: ${termsStr}. They do NOT need to appear as one exact phrase; arrange them naturally.
+3. Title MUST be <= 100 characters (hard limit). Preferred range is 70-85 characters.
 4. If the topic is time-sensitive, use ${currentYear} only. NEVER use a past year.
 5. Do NOT use em dashes anywhere.
 6. Title should match ${audienceLabel} intent.
 7. Vary format: "How to", "Guide to", a question, or "X Things..." style.
 ${avoidSection}
 Return a single JSON object with these keys only:
-- "title": the blog title (string, <= 80 chars)
+- "title": the blog title (string, <= 100 chars)
 - "why": array of 3-5 reasons this title was chosen
 - "keywords": array of 3-5 SEO keywords
 
@@ -288,6 +293,8 @@ async function logTitleGeneration(params: {
   modelUsed: string;
   tokenUsage: number | null;
   titleLength: number;
+  accepted: boolean;
+  constraintFailureReason?: string;
 }): Promise<void> {
   try {
     await prisma.titleGenerationLog.create({
@@ -300,6 +307,8 @@ async function logTitleGeneration(params: {
         modelUsed: params.modelUsed,
         tokenUsage: params.tokenUsage,
         titleLength: params.titleLength,
+        accepted: params.accepted,
+        constraintFailureReason: params.constraintFailureReason ?? null,
       },
     });
   } catch (err) {
@@ -338,7 +347,7 @@ export async function POST(req: NextRequest) {
       : "both";
 
     // 4. Backend-controlled topic + keyword selection
-    const { selectedTopic, primaryKeyword } = await getNextGapTopic({
+    const { selectedTopic, primaryKeywordTerms } = await getNextGapTopic({
       cityFocus,
       audienceFocus,
     });
@@ -351,7 +360,10 @@ export async function POST(req: NextRequest) {
       day: "numeric",
     });
 
-    console.log("[Generate Title] Topic:", selectedTopic, "| Keyword:", primaryKeyword, "| City:", cityFocus);
+    // For logging, join terms into a readable string
+    const primaryKeywordDisplay = primaryKeywordTerms.join(" + ");
+
+    console.log("[Generate Title] Topic:", selectedTopic, "| Keywords:", primaryKeywordDisplay, "| City:", cityFocus);
 
     // 5. Get existing titles for anti-duplication
     const { closestTitles: avoidTitles } = await checkTitleSimilarity("");
@@ -364,7 +376,7 @@ export async function POST(req: NextRequest) {
       cityFocus,
       audienceFocus,
       selectedTopic,
-      primaryKeyword,
+      primaryKeywordTerms,
       avoidTitles.slice(0, 10)
     );
 
@@ -376,30 +388,36 @@ export async function POST(req: NextRequest) {
     totalTokens += repairTokens;
 
     let finalPayload = payload;
+    let accepted = true;
+    let constraintFailureReason: string | undefined;
 
     // 8. Validate hard constraints
-    const validation = validateTitle(finalPayload.title, cityFocus, primaryKeyword, currentYear);
+    const validation = validateTitle(finalPayload.title, cityFocus, primaryKeywordTerms, currentYear);
     if (!validation.valid) {
       console.warn("[Generate Title] Validation failed:", validation.reasons.join(", "), "| Attempting fix...");
+      constraintFailureReason = validation.reasons.join("; ");
       try {
         const { payload: fixedPayload, fixTokens } = await fixTitle(
           finalPayload.title,
           cityFocus,
-          primaryKeyword,
+          primaryKeywordTerms,
           currentYear
         );
         totalTokens += fixTokens;
 
         // Re-validate the fix
-        const reValidation = validateTitle(fixedPayload.title, cityFocus, primaryKeyword, currentYear);
+        const reValidation = validateTitle(fixedPayload.title, cityFocus, primaryKeywordTerms, currentYear);
         if (reValidation.valid) {
           finalPayload = fixedPayload;
+          constraintFailureReason = undefined; // fix succeeded
         } else {
           console.warn("[Generate Title] Fix attempt still fails validation:", reValidation.reasons.join(", "));
-          // Use original anyway — some constraints may be soft in practice
+          constraintFailureReason = reValidation.reasons.join("; ");
+          accepted = false; // constraint fix retry failed, using original anyway
         }
       } catch (fixErr) {
         console.warn("[Generate Title] Fix call failed:", fixErr);
+        accepted = false; // fix call itself failed
       }
     }
 
@@ -415,7 +433,7 @@ export async function POST(req: NextRequest) {
         cityFocus,
         audienceFocus,
         selectedTopic,
-        primaryKeyword,
+        primaryKeywordTerms,
         similarity.closestTitles.slice(0, 10)
       );
 
@@ -425,7 +443,16 @@ export async function POST(req: NextRequest) {
       const { payload: retryPayload, repairTokens: retryRepair } = await parseWithRetry(retryResp.text);
       totalTokens += retryRepair;
 
-      // Accept the retry regardless of similarity (only one extra attempt)
+      // Check if retry is still a duplicate
+      const retrySimilarity = await checkTitleSimilarity(retryPayload.title);
+      if (retrySimilarity.isDuplicate) {
+        console.warn("[Generate Title] Retry still duplicate, using anyway");
+        accepted = false;
+        constraintFailureReason = constraintFailureReason
+          ? `${constraintFailureReason}; similarity retry failed`
+          : "similarity retry failed";
+      }
+
       finalPayload = retryPayload;
     }
 
@@ -435,10 +462,11 @@ export async function POST(req: NextRequest) {
       JSON.stringify({
         model: MODEL,
         topic: selectedTopic,
-        keyword: primaryKeyword,
+        keywords: primaryKeywordDisplay,
         tokens: totalTokens,
         titleLength: finalPayload.title.length,
         title: finalPayload.title,
+        accepted,
       })
     );
 
@@ -447,10 +475,12 @@ export async function POST(req: NextRequest) {
       audienceFocus,
       selectedTopic,
       generatedTitle: finalPayload.title,
-      primaryKeyword,
+      primaryKeyword: primaryKeywordDisplay,
       modelUsed: MODEL,
       tokenUsage: totalTokens,
       titleLength: finalPayload.title.length,
+      accepted,
+      constraintFailureReason,
     });
 
     // 11. Return result
