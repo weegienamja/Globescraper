@@ -17,6 +17,7 @@ import { requireAdminApi } from "@/lib/rentals/api-guard";
 import { discoverListingsJob } from "@/lib/rentals/jobs/discover";
 import { processQueueJob } from "@/lib/rentals/jobs/processQueue";
 import { buildDailyIndexJob } from "@/lib/rentals/jobs/buildIndex";
+import { prisma } from "@/lib/prisma";
 import { RentalSource } from "@prisma/client";
 import type { PipelineLogFn, PipelineLogEntry, PipelineProgressFn, PipelineProgressEntry } from "@/lib/rentals/pipelineLogger";
 
@@ -51,6 +52,9 @@ export async function POST(req: NextRequest) {
 
   const stream = new ReadableStream({
     start(controller) {
+      /** Collected log entries for persistence */
+      const collectedLogs: PipelineLogEntry[] = [];
+
       /** Send an SSE-formatted event */
       const send = (event: string, data: unknown) => {
         try {
@@ -64,7 +68,7 @@ export async function POST(req: NextRequest) {
         }
       };
 
-      /** Create a log function scoped to a stage */
+      /** Create a log function scoped to a stage — also collects entries */
       const makeLog = (stage: string): PipelineLogFn => (level, message, meta) => {
         const entry: PipelineLogEntry = {
           timestamp: new Date().toISOString(),
@@ -73,6 +77,7 @@ export async function POST(req: NextRequest) {
           message,
           meta,
         };
+        collectedLogs.push(entry);
         send("log", entry);
       };
 
@@ -89,27 +94,53 @@ export async function POST(req: NextRequest) {
         send("progress", { phase: p.phase, percent: overall, label: p.label });
       };
 
+      /** Save collected logs to one or more JobRun records */
+      const persistLogs = async (jobRunIds: string[]) => {
+        if (jobRunIds.length === 0 || collectedLogs.length === 0) return;
+        try {
+          // Keep only the last 2000 entries to avoid huge JSON
+          const trimmed = collectedLogs.slice(-2000);
+          await Promise.all(
+            jobRunIds.map((id) =>
+              prisma.jobRun.update({
+                where: { id },
+                data: { logEntries: trimmed as unknown as any },
+              })
+            )
+          );
+        } catch {
+          /* best-effort — don't fail the job if log persistence fails */
+        }
+      };
+
       /** Run the appropriate job */
       (async () => {
+        const jobRunIds: string[] = [];
         try {
           let result: unknown;
           switch (job) {
-            case "discover":
-              result = await discoverListingsJob(
+            case "discover": {
+              const r = await discoverListingsJob(
                 source as RentalSource,
                 undefined,
                 makeLog("discover"),
                 makeProgress()
               );
+              jobRunIds.push(r.jobRunId);
+              result = r;
               break;
-            case "process-queue":
-              result = await processQueueJob(
+            }
+            case "process-queue": {
+              const r = await processQueueJob(
                 source as RentalSource,
                 undefined,
                 makeLog("process"),
                 makeProgress()
               );
+              jobRunIds.push(r.jobRunId);
+              result = r;
               break;
+            }
             case "build-index": {
               const log = makeLog("index");
               const progress = makeProgress();
@@ -120,8 +151,10 @@ export async function POST(req: NextRequest) {
               );
               log("info", `Building index for today (${todayUTC.toISOString().slice(0, 10)}) …`);
               const todayResult = await buildDailyIndexJob({ date: todayUTC }, log, progress);
+              jobRunIds.push(todayResult.jobRunId);
               log("info", "Building index for yesterday …");
               const yesterdayResult = await buildDailyIndexJob(undefined, log, progress);
+              jobRunIds.push(yesterdayResult.jobRunId);
               result = { today: todayResult, yesterday: yesterdayResult };
               break;
             }
@@ -139,6 +172,7 @@ export async function POST(req: NextRequest) {
                 discoverLog,
                 discoverProgress
               );
+              jobRunIds.push(discoverResult.jobRunId);
 
               // Phase 2: Process Queue (15-85%)
               const processLog = makeLog("process");
@@ -150,6 +184,7 @@ export async function POST(req: NextRequest) {
                 processLog,
                 processProgress
               );
+              jobRunIds.push(processResult.jobRunId);
 
               // Phase 3: Build Index (85-100%)
               const indexLog = makeLog("index");
@@ -161,8 +196,10 @@ export async function POST(req: NextRequest) {
               );
               indexLog("info", `Building index for today (${todayUTC.toISOString().slice(0, 10)}) …`);
               const todayResult = await buildDailyIndexJob({ date: todayUTC }, indexLog, indexProgress);
+              jobRunIds.push(todayResult.jobRunId);
               indexLog("info", "Building index for yesterday …");
               const yesterdayResult = await buildDailyIndexJob(undefined, indexLog, indexProgress);
+              jobRunIds.push(yesterdayResult.jobRunId);
 
               result = {
                 discover: discoverResult,
@@ -172,10 +209,12 @@ export async function POST(req: NextRequest) {
               break;
             }
           }
+          await persistLogs(jobRunIds);
           send("complete", result);
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           send("error", { error: msg });
+          await persistLogs(jobRunIds);
         } finally {
           controller.close();
         }

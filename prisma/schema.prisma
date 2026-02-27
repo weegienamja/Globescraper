@@ -872,6 +872,7 @@ model JobRun {
   snapshotCount   Int           @default(0)
   indexRowsCount  Int           @default(0)
   errorMessage    String?       @db.Text
+  logEntries      Json?
 
   @@index([jobType])
   @@index([startedAt])

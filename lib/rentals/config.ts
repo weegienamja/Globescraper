@@ -20,16 +20,16 @@ export function isSourceEnabled(source: RentalSource): boolean {
 /* ── Caps ────────────────────────────────────────────────── */
 
 /** Max category/index pages fetched per discover run */
-export const DISCOVER_MAX_PAGES = 20;
+export const DISCOVER_MAX_PAGES = parseInt(process.env.RENTALS_MAX_PAGES ?? "20", 10);
 
 /** Max listing URLs enqueued per discover run */
-export const DISCOVER_MAX_URLS = 500;
+export const DISCOVER_MAX_URLS = parseInt(process.env.RENTALS_MAX_URLS ?? "500", 10);
 
 /** Max listing detail pages processed per process-queue run */
-export const PROCESS_QUEUE_MAX = 50;
+export const PROCESS_QUEUE_MAX = parseInt(process.env.RENTALS_MAX_PROCESS ?? "50", 10);
 
 /** How many listings to scrape in parallel within a batch */
-export const PROCESS_QUEUE_CONCURRENCY = 5;
+export const PROCESS_QUEUE_CONCURRENCY = parseInt(process.env.RENTALS_CONCURRENCY ?? "5", 10);
 
 /** HTTP concurrency limit for outbound requests */
 export const CONCURRENCY_LIMIT = 6;
