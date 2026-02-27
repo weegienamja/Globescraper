@@ -50,7 +50,7 @@ export function buildImageSpecs(
   // HERO image
   specs.push({
     kind: "HERO",
-    prompt: `${base} Wide landscape shot of a ${city} street scene or landmark relevant to daily life and ${topic.toLowerCase()}. Focus on architecture, streets, and atmosphere. ${style} ${emDashNote}`,
+    prompt: `${base} Wide landscape shot of a ${city} scene directly relevant to the article title: "${title}". Focus on architecture, streets, and atmosphere. ${style} ${emDashNote}`,
     altText: `${city} scene related to ${topic.toLowerCase()}`,
     width: 1344,
     height: 768,
@@ -59,7 +59,7 @@ export function buildImageSpecs(
   // OG image (standard social sharing dimensions)
   specs.push({
     kind: "OG",
-    prompt: `${base} Cinematic wide shot for social media preview about ${topic.toLowerCase()}. Vibrant but realistic colors. ${style} ${emDashNote}`,
+    prompt: `${base} Cinematic wide shot for social media preview. The article is about: "${title}". Vibrant but realistic colors. ${style} ${emDashNote}`,
     altText: `${title} preview image`,
     width: 1200,
     height: 630,

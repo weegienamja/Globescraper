@@ -402,19 +402,19 @@ function buildNewsImageSpecs(
   // ── Derive topic-specific visual cues ──
   const topicCue = deriveVisualCue(topicLower);
 
-  // HERO image — unique per topic
+  // HERO image — driven by the actual article title for maximum relevance
   specs.push({
     kind: "HERO",
-    prompt: `Photorealistic travel documentary photograph of Cambodia. Wide landscape shot of ${topicCue.heroScene}. Relevant to: ${topicTitle}. Showing real places and daily life. ${style} ${noText}`,
+    prompt: `Photorealistic travel documentary photograph of Cambodia. Wide landscape shot of ${topicCue.heroScene}. The article title is: "${topicTitle}". The image must visually represent this specific title. Showing real places and daily life. ${style} ${noText}`,
     altText: stripEmDashes(`Cambodia scene related to ${topicTitle.toLowerCase()}`),
     width: 1344,
     height: 768,
   });
 
-  // OG image — unique per topic
+  // OG image — driven by the actual article title
   specs.push({
     kind: "OG",
-    prompt: `Photorealistic cinematic wide shot of Cambodia. ${topicCue.ogScene}. Relevant to: ${topicTitle}. Vibrant but realistic. ${style} ${noText}`,
+    prompt: `Photorealistic cinematic wide shot of Cambodia. ${topicCue.ogScene}. The article title is: "${topicTitle}". The image must visually represent this specific title. Vibrant but realistic. ${style} ${noText}`,
     altText: stripEmDashes(`${topicTitle} preview image`),
     width: 1200,
     height: 630,
@@ -513,7 +513,25 @@ function deriveVisualCue(topicLower: string): {
   fallbackInlines: Array<{ prompt: string; alt: string; caption: string }>;
 } {
   // Try to pick scene-appropriate visuals based on topic keywords
-  if (/visa|entry|border|passport|arrival/.test(topicLower)) {
+  if (/airport|terminal|kti|pnh|rep|aviation|runway/.test(topicLower)) {
+    return {
+      heroScene: "a modern Cambodian airport terminal building, planes on tarmac, passengers with luggage",
+      ogScene: "Aerial or exterior view of a Cambodian airport, modern terminal architecture",
+      fallbackInlines: [
+        SCENE_MAP.airport, SCENE_MAP.flight, SCENE_MAP.transport,
+      ],
+    };
+  }
+  if (/flight|airline|flying|route/.test(topicLower)) {
+    return {
+      heroScene: "planes at a Cambodian airport terminal, passengers boarding, bright modern interior",
+      ogScene: "Cambodian airport departure area with flight information boards",
+      fallbackInlines: [
+        SCENE_MAP.flight, SCENE_MAP.airport, SCENE_MAP.transport,
+      ],
+    };
+  }
+  if (/visa|entry|border|passport|arrival|immigration/.test(topicLower)) {
     return {
       heroScene: "a Cambodia border checkpoint or immigration hall with travellers",
       ogScene: "Travellers at a Cambodian airport or border, documentary feel",

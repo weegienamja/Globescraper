@@ -123,6 +123,7 @@ const SCENE_MAP: Record<string, { prompt: string; alt: string; caption: string }
   visa: { prompt: "Exterior of a Cambodian immigration office or border checkpoint, documentary style.", alt: "Cambodia immigration office", caption: "Visa and immigration in Cambodia" },
   border: { prompt: "Travellers queuing at a Cambodia-Thailand or Cambodia-Vietnam land border crossing.", alt: "Border crossing in Cambodia", caption: "A border checkpoint in Cambodia" },
   airport: { prompt: "Phnom Penh or Siem Reap airport terminal, passengers with luggage, bright and modern interior.", alt: "Cambodia airport terminal", caption: "Arriving at a Cambodia airport" },
+  flight: { prompt: "Aerial or terminal view of a Cambodian airport with planes on the tarmac.", alt: "Airport in Cambodia", caption: "Flying in and out of Cambodia" },
   transport: { prompt: "A tuk tuk driving through Phnom Penh traffic on a sunny day, passengers visible.", alt: "Tuk tuk ride in Cambodia", caption: "Getting around by tuk tuk" },
   cost: { prompt: "Fresh produce stall at a Cambodian wet market with handwritten price signs.", alt: "Market prices in Cambodia", caption: "Everyday prices at a local market" },
   rent: { prompt: "A modern apartment building exterior in Phnom Penh with balconies and tropical plants.", alt: "Apartments in Phnom Penh", caption: "Typical apartment building" },
@@ -219,7 +220,13 @@ function buildDraftImageSpecs(title: string, topic: string, markdown: string): I
 }
 
 function findBestScene(text: string): { heroDesc: string; ogDesc: string } {
-  if (/visa|entry|border|passport|e-visa/.test(text)) {
+  if (/airport|terminal|kti|pnh|rep|aviation|runway/.test(text)) {
+    return { heroDesc: "a modern Cambodian airport terminal building, planes on tarmac, passengers with luggage", ogDesc: "Aerial or exterior view of a Cambodian airport, modern terminal architecture" };
+  }
+  if (/flight|airline|flying|air route/.test(text)) {
+    return { heroDesc: "planes at a Cambodian airport terminal, passengers boarding, bright modern interior", ogDesc: "Airport departure board and terminal in Cambodia" };
+  }
+  if (/visa|entry|border|passport|e-visa|immigration/.test(text)) {
     return { heroDesc: "a Cambodia border checkpoint or immigration hall with travellers", ogDesc: "Travellers at a Cambodian airport or border, documentary feel" };
   }
   if (/cost|price|budget|salary|living/.test(text)) {
