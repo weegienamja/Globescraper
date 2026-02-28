@@ -12,6 +12,7 @@ export const postHeroImages: PostHeroMap = {
   "teaching-job-in-cambodia-2026": "/4.png",
   "what-to-pack-for-teaching-english-in-cambodia-2026": "/5.png",
   "cambodia-vs-usa-uk-south-africa-disposable-income-2026": "/6.png",
+  "best-tefl-courses-cambodia-2026": "/teaching%20in%20cambodia.png",
 };
 
 /**
