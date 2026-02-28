@@ -21,6 +21,7 @@ type BreadcrumbItem = {
 
 /**
  * WebSite JSON-LD — placed once in the root layout.
+ * Includes SiteNavigationElement for site structure signals.
  */
 export function WebSiteJsonLd({ url }: WebSiteJsonLdProps = {}) {
   const data = {
@@ -29,23 +30,37 @@ export function WebSiteJsonLd({ url }: WebSiteJsonLdProps = {}) {
     name: siteConfig.name,
     url: url ?? siteConfig.url,
     description: siteConfig.description,
+    inLanguage: "en-US",
     publisher: {
       "@type": "Organization",
       name: siteConfig.name,
       url: siteConfig.url,
       logo: {
         "@type": "ImageObject",
-        url: `${siteConfig.url}/logo.png`,
+        url: `${siteConfig.url}/main_logo.png`,
       },
       sameAs: [siteConfig.socials.instagram, siteConfig.socials.tiktok],
     },
   };
 
+  const nav = {
+    "@context": "https://schema.org",
+    "@type": "SiteNavigationElement",
+    name: siteConfig.navItems.map((n) => n.label),
+    url: siteConfig.navItems.map((n) => `${siteConfig.url}${n.href}`),
+  };
+
   return (
-    <script
-      type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }}
-    />
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(nav) }}
+      />
+    </>
   );
 }
 
@@ -84,7 +99,7 @@ export function ArticleJsonLd({
       url: siteConfig.url,
       logo: {
         "@type": "ImageObject",
-        url: `${siteConfig.url}/logo.png`,
+        url: `${siteConfig.url}/main_logo.png`,
       },
     },
   };
@@ -143,6 +158,39 @@ export function FAQJsonLd({ items }: { items: FAQItem[] }) {
         text: faq.answer,
       },
     })),
+  };
+
+  return (
+    <script
+      type="application/ld+json"
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }}
+    />
+  );
+}
+
+/**
+ * Organization JSON-LD — placed on the /about page.
+ * Provides Google with brand identity signals.
+ */
+export function OrganizationJsonLd() {
+  const data = {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: siteConfig.name,
+    url: siteConfig.url,
+    logo: {
+      "@type": "ImageObject",
+      url: `${siteConfig.url}/main_logo.png`,
+    },
+    description: siteConfig.description,
+    email: siteConfig.email,
+    sameAs: [siteConfig.socials.instagram, siteConfig.socials.tiktok],
+    foundingDate: "2024",
+    founder: {
+      "@type": "Person",
+      name: "Jamie",
+      url: `${siteConfig.url}/about`,
+    },
   };
 
   return (

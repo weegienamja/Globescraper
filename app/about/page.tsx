@@ -1,6 +1,6 @@
 import { HtmlContent } from "@/components/HtmlContent";
 import { getHtmlForPage, getPagesMeta } from "@/lib/content";
-import { BreadcrumbJsonLd } from "@/components/JsonLd";
+import { BreadcrumbJsonLd, OrganizationJsonLd } from "@/components/JsonLd";
 import type { Metadata } from "next";
 
 export function generateMetadata(): Metadata {
@@ -34,6 +34,7 @@ export default function Page() {
           { name: "About", href: "/about" },
         ]}
       />
+      <OrganizationJsonLd />
       <HtmlContent html={html} />
     </>
   );
