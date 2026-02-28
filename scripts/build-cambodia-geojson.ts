@@ -350,7 +350,7 @@ function main() {
       const name = SR_RENAME[rawName] || rawName;
       return {
         type: "Feature",
-        properties: { name, zone: "siem-reap" },
+        properties: { name, district: "Siem Reap", zone: "siem-reap" },
         geometry: f.geometry,
       };
     });

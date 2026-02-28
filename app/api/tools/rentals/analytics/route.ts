@@ -90,6 +90,17 @@ export async function GET(req: NextRequest) {
       .filter((v): v is number => v !== null);
     const volScore = volatilityScore(allMedians);
 
+    // Fetch distinct districts for this city (so client dropdown updates)
+    const districtRows = await prisma.rentalIndexDaily.findMany({
+      where: { city, district: { not: null } },
+      distinct: ["district"],
+      select: { district: true },
+      orderBy: { district: "asc" },
+    });
+    const availableDistricts = districtRows
+      .map((r) => r.district)
+      .filter((d): d is string => d !== null);
+
     const payload = {
       summary: {
         ...summary,
@@ -98,6 +109,7 @@ export async function GET(req: NextRequest) {
       trend,
       distribution,
       movers,
+      districts: availableDistricts,
       filters: { city, district, bedrooms, propertyType, range },
       meta: {
         rowCount: rows.length,

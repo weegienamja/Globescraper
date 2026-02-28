@@ -38,7 +38,18 @@ interface Props {
   height?: number;
   /** All trend data keyed by "YYYY-MM" for month slider */
   monthlySnapshots?: Record<string, DistrictIndexRow[]>;
+  /** City to center on — affects default bounds when no data features match */
+  city?: string;
 }
+
+/* ── City default bounds ─────────────────────────────────── */
+
+const CITY_BOUNDS: Record<string, L.LatLngBoundsExpression> = {
+  "Phnom Penh": [[11.48, 104.82], [11.65, 104.98]],
+  "Siem Reap": [[13.28, 103.80], [13.42, 103.92]],
+  "Sihanoukville": [[10.56, 103.46], [10.68, 103.58]],
+  "Kampot": [[10.55, 104.12], [10.66, 104.24]],
+};
 
 /* ── Colour helpers ──────────────────────────────────────── */
 
@@ -87,7 +98,7 @@ function polygonCentroid(coords: number[][][]): [number, number] {
 
 /* ── Component ───────────────────────────────────────────── */
 
-export function HistoricalHeatmap({ data, height = 450, monthlySnapshots }: Props) {
+export function HistoricalHeatmap({ data, height = 450, monthlySnapshots, city }: Props) {
   const mapRef = useRef<HTMLDivElement>(null);
   const leafletMap = useRef<L.Map | null>(null);
   const geoLayerRef = useRef<L.GeoJSON | null>(null);
@@ -299,6 +310,9 @@ export function HistoricalHeatmap({ data, height = 450, monthlySnapshots }: Prop
     if (dataFeatures.length > 0) {
       const dataGeo = L.geoJSON({ type: "FeatureCollection", features: dataFeatures } as GeoJSON.FeatureCollection);
       map.fitBounds(dataGeo.getBounds().pad(0.15));
+    } else if (city && CITY_BOUNDS[city]) {
+      // No data features matched — zoom to city default bounds
+      map.fitBounds(CITY_BOUNDS[city]);
     }
 
     return () => {
@@ -307,7 +321,7 @@ export function HistoricalHeatmap({ data, height = 450, monthlySnapshots }: Prop
         geoLayerRef.current = null;
       }
     };
-  }, [lookup, geoJson, metric, getColor, getMetricValue]);
+  }, [lookup, geoJson, metric, getColor, getMetricValue, city]);
 
   /* Cleanup on unmount */
   useEffect(
@@ -331,7 +345,7 @@ export function HistoricalHeatmap({ data, height = 450, monthlySnapshots }: Prop
   };
   const emptyText: React.CSSProperties = { color: "#64748b", fontSize: 14 };
 
-  if (activeData.length === 0) return <div style={emptyBoxStyle}><p style={emptyText}>No index data available.</p></div>;
+  if (activeData.length === 0) return <div style={emptyBoxStyle}><p style={emptyText}>No index data available{city ? ` for ${city}` : ""}. Run the daily index builder to populate data.</p></div>;
   if (geoError) return <div style={emptyBoxStyle}><p style={emptyText}>Failed to load map boundaries.</p></div>;
   if (!geoJson) return <div style={emptyBoxStyle}><p style={emptyText}>Loading map...</p></div>;
 

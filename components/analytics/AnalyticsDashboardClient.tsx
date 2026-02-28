@@ -114,6 +114,7 @@ interface AnalyticsPayload {
     volatility: number;
     listingCount: number;
   }[];
+  districts?: string[];
   filters: {
     city: string;
     district?: string;
@@ -136,9 +137,10 @@ type Range = "30d" | "90d" | "180d" | "365d";
 
 /* ── Component ───────────────────────────────────────────── */
 
-export function AnalyticsDashboardClient({ initialData, districts }: Props) {
+export function AnalyticsDashboardClient({ initialData, districts: initialDistricts }: Props) {
   const [data, setData] = useState<AnalyticsPayload | null>(initialData);
   const [loading, setLoading] = useState(false);
+  const [availableDistricts, setAvailableDistricts] = useState<string[]>(initialDistricts);
 
   // Filter state
   const [city, setCity] = useState("Phnom Penh");
@@ -146,6 +148,12 @@ export function AnalyticsDashboardClient({ initialData, districts }: Props) {
   const [bedrooms, setBedrooms] = useState<string>("");
   const [propertyType, setPropertyType] = useState<string>("");
   const [range, setRange] = useState<Range>("90d");
+
+  // Reset district filter when city changes
+  const handleCityChange = useCallback((newCity: string) => {
+    setCity(newCity);
+    setDistrict("");
+  }, []);
 
   // Sync filters to URL
   useEffect(() => {
@@ -180,6 +188,10 @@ export function AnalyticsDashboardClient({ initialData, districts }: Props) {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
       setData(json);
+      // Update district list from API response
+      if (json.districts) {
+        setAvailableDistricts(json.districts);
+      }
     } catch (e) {
       console.error("Analytics fetch failed:", e);
     } finally {
@@ -266,7 +278,7 @@ export function AnalyticsDashboardClient({ initialData, districts }: Props) {
         {/* ── Filters ─────────────────────────────────── */}
         <div style={{ display: "flex", flexWrap: "wrap", gap: 12, borderRadius: 12, border: "1px solid #1e293b", background: "rgba(15,23,42,0.4)", padding: 16 }}>
           <FilterGroup label="City">
-            <select value={city} onChange={(e) => setCity(e.target.value)} style={selectStyle}>
+            <select value={city} onChange={(e) => handleCityChange(e.target.value)} style={selectStyle}>
               <option>Phnom Penh</option>
               <option>Siem Reap</option>
               <option>Sihanoukville</option>
@@ -276,7 +288,7 @@ export function AnalyticsDashboardClient({ initialData, districts }: Props) {
           <FilterGroup label="District">
             <select value={district} onChange={(e) => setDistrict(e.target.value)} style={selectStyle}>
               <option value="">All Districts</option>
-              {districts.map((d) => <option key={d} value={d}>{d}</option>)}
+              {availableDistricts.map((d) => <option key={d} value={d}>{d}</option>)}
             </select>
           </FilterGroup>
           <FilterGroup label="Bedrooms">
@@ -348,7 +360,7 @@ export function AnalyticsDashboardClient({ initialData, districts }: Props) {
                   Median rental price by district, color-coded from green (lowest) to red (highest).
                   Hover over a district to see its median price and listing count.
                 </p>
-                <HistoricalHeatmap data={heatmapData} height={420} />
+                <HistoricalHeatmap data={heatmapData} height={420} city={city} />
               </div>
               {/* Distribution */}
               <div style={panelStyle}>
