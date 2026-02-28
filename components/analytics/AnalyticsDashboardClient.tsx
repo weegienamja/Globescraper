@@ -229,6 +229,13 @@ export function AnalyticsDashboardClient({ initialData, districts }: Props) {
     }));
   }, [data, city]);
 
+  // Compute data age in days (for staleness warning)
+  const dataAge = useMemo(() => {
+    if (!data?.meta.dateRange.to) return 0;
+    const lastDate = new Date(data.meta.dateRange.to + "T00:00:00Z");
+    return Math.floor((Date.now() - lastDate.getTime()) / 86400000);
+  }, [data]);
+
   return (
     <div style={{ minHeight: "100vh", background: "#020617" }}>
       <div style={{ maxWidth: 1600, margin: "0 auto", padding: "32px 16px", display: "flex", flexDirection: "column", gap: 24 }}>
@@ -241,6 +248,11 @@ export function AnalyticsDashboardClient({ initialData, districts }: Props) {
                 ? `${data.meta.dateRange.from} to ${data.meta.dateRange.to}`
                 : "Loading..."}{" "}
               | {data?.meta.rowCount ?? 0} index rows
+            </p>
+            <p style={{ marginTop: 6, fontSize: 12, color: "#475569", maxWidth: 700, lineHeight: 1.5 }}>
+              Aggregated rental intelligence derived from the RentalIndexDaily pipeline.
+              Statistics are computed from scraped listing snapshots, grouped by city, district,
+              bedrooms, and property type. Use the filters to drill into specific segments.
             </p>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -281,6 +293,9 @@ export function AnalyticsDashboardClient({ initialData, districts }: Props) {
               <option value="">All Types</option>
               <option value="CONDO">Condo</option>
               <option value="APARTMENT">Apartment</option>
+              <option value="SERVICED_APARTMENT">Serviced Apt</option>
+              <option value="PENTHOUSE">Penthouse</option>
+              <option value="OTHER">Other</option>
             </select>
           </FilterGroup>
           <FilterGroup label="Range">
@@ -301,19 +316,47 @@ export function AnalyticsDashboardClient({ initialData, districts }: Props) {
 
         {data && (
           <>
+            {/* ── Data freshness warning ─────────────── */}
+            {dataAge > 3 && (
+              <div style={warningBanner}>
+                ⚠️ Data may be stale — the most recent index data is from <strong>{data.meta.dateRange.to}</strong> ({dataAge} days ago).
+                Run <code style={{ fontSize: 11, background: "rgba(0,0,0,0.3)", padding: "2px 6px", borderRadius: 4 }}>npx tsx scripts/rentals_build_index.ts</code> to rebuild.
+              </div>
+            )}
+
             {/* ── KPI Cards ───────────────────────────── */}
-            <KpiCards summary={data.summary} />
+            <div>
+              <div style={sectionExplainer}>
+                <h2 style={{ ...sectionTitle, marginBottom: 4 }}>Key Metrics</h2>
+                <p style={explainerText}>
+                  Snapshot of the current rental market. <strong>Median Rent</strong> is the listing-weighted
+                  middle price across all active listings. <strong>1M %</strong> shows the month-over-month
+                  change. <strong>Volatility</strong> (0–100) measures price stability using the coefficient of
+                  variation — under 20 is stable, over 50 is high. <strong>Supply Pressure</strong> compares
+                  the last 2 weeks of listing counts and prices to the prior 2 weeks.
+                </p>
+              </div>
+              <KpiCards summary={data.summary} />
+            </div>
 
             {/* ── Main Grid ───────────────────────────── */}
             <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 24 }}>
               {/* Heatmap */}
               <div style={panelStyle}>
                 <h2 style={sectionTitle}>District Heatmap</h2>
+                <p style={explainerText}>
+                  Median rental price by district, color-coded from green (lowest) to red (highest).
+                  Hover over a district to see its median price and listing count.
+                </p>
                 <HistoricalHeatmap data={heatmapData} height={420} />
               </div>
               {/* Distribution */}
               <div style={panelStyle}>
                 <h2 style={sectionTitle}>Price Distribution</h2>
+                <p style={explainerText}>
+                  How listings are spread across price brackets on the most recent index date.
+                  Each bar shows the percentage of total listings falling in that range.
+                </p>
                 <DistributionChart data={data.distribution} />
               </div>
             </div>
@@ -322,10 +365,20 @@ export function AnalyticsDashboardClient({ initialData, districts }: Props) {
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
               <div style={panelStyle}>
                 <h2 style={sectionTitle}>Median Trend</h2>
+                <p style={explainerText}>
+                  Monthly median rental price with a 90-day moving average (dashed line).
+                  Switch between median, mean, P25, and P75 metrics using the buttons above the chart.
+                  Bars are color-coded: green (&lt;$300), blue ($300–600), amber ($600–1 k), red (&gt;$1 k).
+                </p>
                 <MedianTrendChart data={data.trend} />
               </div>
               <div style={panelStyle}>
                 <h2 style={sectionTitle}>Market Pressure</h2>
+                <p style={explainerText}>
+                  Overlays median price (blue line) and listing count (purple area) to reveal
+                  supply/demand dynamics. Rising count + falling price = oversupply;
+                  falling count + rising price = demand squeeze.
+                </p>
                 <MarketPressureChart data={data.trend} supplySignal={data.summary.supplySignal} />
               </div>
             </div>
@@ -333,6 +386,11 @@ export function AnalyticsDashboardClient({ initialData, districts }: Props) {
             {/* ── Top Movers ──────────────────────────── */}
             <div style={panelStyle}>
               <h2 style={sectionTitle}>Top Market Movers</h2>
+              <p style={explainerText}>
+                Districts ranked by the largest absolute 1-month price change. Click column
+                headers to re-sort. <strong>Vol.</strong> is the standard deviation of daily median
+                prices — higher values mean more price fluctuation in that district.
+              </p>
               <TopMoversTable data={data.movers} />
             </div>
           </>
@@ -406,6 +464,27 @@ const sectionTitle: React.CSSProperties = {
   textTransform: "uppercase",
   letterSpacing: "0.08em",
   color: "#94a3b8",
+};
+
+const explainerText: React.CSSProperties = {
+  margin: "0 0 12px 0",
+  fontSize: 12,
+  lineHeight: 1.6,
+  color: "#64748b",
+};
+
+const sectionExplainer: React.CSSProperties = {
+  marginBottom: 12,
+};
+
+const warningBanner: React.CSSProperties = {
+  borderRadius: 10,
+  border: "1px solid #92400e",
+  background: "rgba(146,64,14,0.12)",
+  padding: "12px 16px",
+  fontSize: 12,
+  lineHeight: 1.6,
+  color: "#fbbf24",
 };
 
 function FilterGroup({ label, children }: { label: string; children: React.ReactNode }) {

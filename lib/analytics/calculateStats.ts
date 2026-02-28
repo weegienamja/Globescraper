@@ -103,20 +103,17 @@ export interface TrendPoint {
 export function computeTrend(rows: IndexRow[]): TrendPoint[] {
   const dailyMap = new Map<
     number,
-    { medians: number[]; means: number[]; p25s: number[]; p75s: number[]; count: number; date: Date }
+    { rows: IndexRow[]; count: number; date: Date }
   >();
 
   for (const r of rows) {
     const key = r.date.getTime();
     if (!dailyMap.has(key)) {
-      dailyMap.set(key, { medians: [], means: [], p25s: [], p75s: [], count: 0, date: r.date });
+      dailyMap.set(key, { rows: [], count: 0, date: r.date });
     }
     const entry = dailyMap.get(key)!;
     entry.count += r.listingCount;
-    if (r.medianPriceUsd !== null) entry.medians.push(r.medianPriceUsd);
-    if (r.meanPriceUsd !== null) entry.means.push(r.meanPriceUsd);
-    if (r.p25PriceUsd !== null) entry.p25s.push(r.p25PriceUsd);
-    if (r.p75PriceUsd !== null) entry.p75s.push(r.p75PriceUsd);
+    entry.rows.push(r);
   }
 
   const sorted = Array.from(dailyMap.entries())
@@ -128,10 +125,11 @@ export function computeTrend(rows: IndexRow[]): TrendPoint[] {
 
   for (let i = 0; i < sorted.length; i++) {
     const d = sorted[i];
-    const median = d.medians.length > 0 ? arrayMedian(d.medians) : null;
-    const mean = d.means.length > 0 ? arrayMean(d.means) : null;
-    const p25 = d.p25s.length > 0 ? arrayMedian(d.p25s) : null;
-    const p75 = d.p75s.length > 0 ? arrayMedian(d.p75s) : null;
+    // Use weighted aggregation (consistent with computeKpi)
+    const median = weightedMedian(d.rows);
+    const mean = weightedMean(d.rows);
+    const p25 = weightedPercentile(d.rows, "p25PriceUsd");
+    const p75 = weightedPercentile(d.rows, "p75PriceUsd");
 
     if (median !== null) recentMedians.push(median);
     // Keep only last 90 values
@@ -317,6 +315,38 @@ export function weightedMedian(rows: IndexRow[]): number | null {
       // Weight by listing count
       for (let i = 0; i < Math.max(r.listingCount, 1); i++) {
         values.push(r.medianPriceUsd);
+      }
+    }
+  }
+  if (values.length === 0) return null;
+  values.sort((a, b) => a - b);
+  return values[Math.floor(values.length / 2)];
+}
+
+function weightedMean(rows: IndexRow[]): number | null {
+  let totalWeight = 0;
+  let weightedSum = 0;
+  for (const r of rows) {
+    if (r.meanPriceUsd !== null) {
+      const w = Math.max(r.listingCount, 1);
+      weightedSum += r.meanPriceUsd * w;
+      totalWeight += w;
+    }
+  }
+  if (totalWeight === 0) return null;
+  return Math.round((weightedSum / totalWeight) * 100) / 100;
+}
+
+function weightedPercentile(
+  rows: IndexRow[],
+  field: "p25PriceUsd" | "p75PriceUsd",
+): number | null {
+  const values: number[] = [];
+  for (const r of rows) {
+    const v = r[field];
+    if (v !== null) {
+      for (let i = 0; i < Math.max(r.listingCount, 1); i++) {
+        values.push(v);
       }
     }
   }
