@@ -223,8 +223,8 @@ export async function scrapeListingLongTermLettings(
       .text()
       .trim() || title;
 
-  const city = parseCity(locationText);
   const district = parseDistrict(locationText);
+  const city = parseCity(locationText, district);
 
   // Beds, baths, size
   const detailText = $(

@@ -215,8 +215,8 @@ export async function scrapeListingCamRealty(
       .trim() ||
     $('[class*="breadcrumb"]').text().trim();
 
-  const city = parseCity(locationText || title);
   const district = parseDistrict(locationText || title);
+  const city = parseCity(locationText || title, district);
 
   // Beds, baths, size — parse from detail fields + title
   const detailText = $(

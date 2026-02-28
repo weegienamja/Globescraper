@@ -286,7 +286,7 @@ export async function scrapeListingKhmer24(
     }
   }
 
-  const city = parseCity(locationText || title);
+  let city = parseCity(locationText || title);
   let district = parseDistrict(locationText);
   if (!district) {
     const titleMatch = title.match(/(?:in|at)\s+(.+?)(?:\s*[-|]|$)/i);
@@ -294,6 +294,8 @@ export async function scrapeListingKhmer24(
       district = parseDistrict(titleMatch[1].trim());
     }
   }
+  // Re-derive city using district fallback
+  city = parseCity(locationText || title, district);
   _log("debug", `Location: ${district ?? "unknown"}, ${city}`);
 
   // ── Images ──

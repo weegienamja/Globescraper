@@ -259,7 +259,7 @@ export async function scrapeListingRealestateKh(
       .trim() || null;
 
   // Extract city from breadcrumb / location text (defaults to Phnom Penh)
-  const city = parseCity(locationText || title);
+  let city = parseCity(locationText || title);
   log("debug", `City: ${city}`);
 
   let district = parseDistrict(locationText);
@@ -276,6 +276,11 @@ export async function scrapeListingRealestateKh(
   // Fallback: extract from URL slug (e.g. /rent/bkk-1/... → "BKK 1")
   if (!district) {
     district = extractDistrictFromUrl(url);
+  }
+
+  // Re-derive city using district as fallback (catches Sihanoukville-district-under-PP etc.)
+  if (city === "Phnom Penh") {
+    city = parseCity(locationText || title, district);
   }
 
   // Beds, baths, size

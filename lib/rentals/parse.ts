@@ -343,23 +343,43 @@ export function parseDistrict(text: string | null | undefined): string | null {
 /**
  * Extract city name from a breadcrumb or location string.
  * Look for known Cambodian cities; defaults to "Phnom Penh".
+ *
+ * If the optional `district` is itself a recognised city name (e.g.
+ * "Sihanoukville"), that city is used instead of defaulting to PP.
  */
 const CITY_ALIASES: Record<string, string> = {
   "phnom penh": "Phnom Penh",
   "siem reap": "Siem Reap",
   "sihanoukville": "Sihanoukville",
+  "preah sihanouk": "Sihanoukville",
   "kampot": "Kampot",
   "battambang": "Battambang",
   "kep": "Kep",
   "kompong cham": "Kompong Cham",
+  "kampong chhnang": "Kompong Cham",
+  "kampong cham": "Kompong Cham",
 };
 
-export function parseCity(text: string | null | undefined): string {
-  if (!text) return "Phnom Penh";
-  const lower = text.toLowerCase();
-  for (const [alias, canonical] of Object.entries(CITY_ALIASES)) {
-    if (lower.includes(alias)) return canonical;
+export function parseCity(
+  text: string | null | undefined,
+  district?: string | null,
+): string {
+  // 1. Try to find a city in the main text
+  if (text) {
+    const lower = text.toLowerCase();
+    for (const [alias, canonical] of Object.entries(CITY_ALIASES)) {
+      if (lower.includes(alias)) return canonical;
+    }
   }
+
+  // 2. Fall back: check whether the district name contains a known city
+  if (district) {
+    const dLower = district.toLowerCase();
+    for (const [alias, canonical] of Object.entries(CITY_ALIASES)) {
+      if (dLower.includes(alias)) return canonical;
+    }
+  }
+
   return "Phnom Penh";
 }
 

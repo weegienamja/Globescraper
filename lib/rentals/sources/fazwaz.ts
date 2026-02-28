@@ -224,8 +224,8 @@ export async function scrapeListingFazWaz(
   const fullLocationText =
     locationText || breadcrumbText || title;
 
-  const city = parseCity(fullLocationText);
   const district = parseDistrict(fullLocationText);
+  const city = parseCity(fullLocationText, district);
 
   // Beds, baths, size — FazWaz shows these in structured elements
   const detailText = $(

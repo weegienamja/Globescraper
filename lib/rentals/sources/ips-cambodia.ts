@@ -202,11 +202,11 @@ export async function scrapeListingIpsCambodia(
     $('[class*="location"]').first().text().trim();
 
   const locationText = locationFromTitle || breadcrumb;
-  const city = parseCity(locationText || title);
   let district = parseDistrict(locationText);
   if (!district && titleLocMatch) {
     district = parseDistrict(titleLocMatch[1]);
   }
+  const city = parseCity(locationText || title, district);
 
   // Beds, baths, size
   const detailText = $(

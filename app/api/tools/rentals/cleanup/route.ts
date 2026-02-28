@@ -32,7 +32,7 @@ export async function POST() {
 
       if (needsFix) {
         const newDistrict = parseDistrict(raw);
-        const newCity = parseCity(raw);
+        const newCity = parseCity(raw, newDistrict);
 
         await prisma.rentalListing.update({
           where: { id: listing.id },
