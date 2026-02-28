@@ -76,7 +76,9 @@ export function InteractiveHeatmap({ data, height = 450 }: Props) {
 
   /* Fetch GeoJSON on mount */
   useEffect(() => {
-    fetch(CAMBODIA_GEOJSON_PATH)
+    // Cache-bust to ensure latest GeoJSON after deploys
+    const url = `${CAMBODIA_GEOJSON_PATH}?v=${Date.now()}`;
+    fetch(url)
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();

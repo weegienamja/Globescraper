@@ -112,14 +112,35 @@ const DISTRICT_NORMALIZE: Record<string, string> = {
   kamboul: "Kamboul",
   kambol: "Kamboul",
 
-  /* ── Siem Reap sangkats → ADM2 "Siem Reap" ────────── */
+  /* ── Siem Reap sangkats (individual ADM3 zones) ────── */
   "siem reap": "Siem Reap",
-  "sala kamraeuk": "Siem Reap",
-  "svay dankum": "Siem Reap",
-  "sla kram": "Siem Reap",
-  "kouk chak": "Siem Reap",
-  "chreav": "Siem Reap",
   "krong siem reab": "Siem Reap",
+  "siem reab": "Siem Reap",
+  "sala kamraeuk": "Sala Kamreuk",
+  "sala kamreuk": "Sala Kamreuk",
+  "svay dankum": "Svay Dankum",
+  "sla kram": "Sla Kram",
+  "kouk chak": "Kok Chak",
+  "kok chak": "Kok Chak",
+  "chreav": "Chreav",
+  "srangae": "Srangae",
+  "nokor thum": "Nokor Thum",
+  "krabei riel": "Krabei Riel",
+  "khnat": "Khnat",
+  "tuek vil": "Tuek Vil",
+  "chong khnies": "Chong Khnies",
+  "sambuor": "Sambuor",
+  "sngkat sambuor": "Sambuor",
+  "bakong": "Bakong",
+  "prasat bakong": "Bakong",
+  "roluos": "Roluos",
+  "kampong phluk": "Kampong Phluk",
+  "ampil": "Ampil",
+  "kandaek": "Kandaek",
+  "leang dai": "Leang Dai",
+  "doun kaev": "Doun Kaev",
+  "preah dak": "Preah Dak",
+  "kaev poar": "Kaev Poar",
 
   /* ── Other province / city mappings ────────────────── */
   "krong preah sihanouk": "Sihanoukville",
@@ -130,7 +151,6 @@ const DISTRICT_NORMALIZE: Record<string, string> = {
   kampot: "Kampot",
   battambang: "Battambang",
   "krong akreiy ksatr": "Khsach Kandal",
-  "prasat bakong": "Prasat Bakong",
 };
 
 /**

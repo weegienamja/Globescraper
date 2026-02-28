@@ -1,7 +1,8 @@
 /**
  * Build a hybrid Cambodia GeoJSON:
- * - ADM2 (district) for all of Cambodia EXCEPT Phnom Penh khans
+ * - ADM2 (district) for all of Cambodia EXCEPT Phnom Penh khans and Siem Reap
  * - Hand-drawn sangkat polygons for Phnom Penh inner city
+ * - ADM3 sangkat polygons for the Siem Reap district area
  *
  * Run once: npx tsx scripts/build-cambodia-geojson.ts
  */
@@ -11,6 +12,7 @@ import { join } from "path";
 
 const ROOT = join(__dirname, "..");
 const ADM2_PATH = join(ROOT, "data/cambodia-adm2-simplified.geojson");
+const ADM3_PATH = join(ROOT, "data/cambodia-adm3-simplified.geojson");
 const OUT_PATH = join(ROOT, "public/geo/cambodia-districts.geojson");
 
 /* ── ADM2 features to EXCLUDE (Phnom Penh khans — replaced by hand-drawn) ── */
@@ -28,6 +30,65 @@ const PP_KHANS = new Set([
   "Dangkao",
   "Praek Pnov",
 ]);
+
+/* ── ADM2 "Siem Reap" to EXCLUDE (replaced by ADM3 sangkats) ── */
+const SR_ADM2_EXCLUDE = new Set(["Siem Reap"]);
+
+/* ── ADM3 shapeNames to INCLUDE for Siem Reap area ── */
+const SR_SANGKATS = new Set([
+  // Core city sangkats (in SR ADM2 bounding box)
+  "Sala Kamreuk",
+  "Svay Dankum",
+  "Sla Kram",
+  "Kok Chak",
+  "Siem Reab",
+  "Srangae",
+  "Nokor Thum",
+  "Khnat",
+  "Tuek Vil",
+  "Chreav",
+  "Krabei Riel",
+  "Sngkat Sambuor",
+  "Chong Khnies",
+  "Ampil",
+  "Kandaek",
+  "Roluos",
+  "Kampong Phluk",
+  // Border sangkats (edge of SR district)
+  "Leang Dai",
+  "Doun Kaev",
+  "Preah Dak",
+  "Kaev Poar",
+  "Bakong",
+]);
+
+/** Siem Reap area bounding box — used to disambiguate duplicate names */
+const SR_BBOX = {
+  minLat: 13.20, maxLat: 13.52,
+  minLng: 103.69, maxLng: 104.02,
+};
+
+/** Compute centroid from GeoJSON coordinates */
+function centroid(feature: any): [number, number] {
+  const geom = feature.geometry;
+  const ring =
+    geom.type === "MultiPolygon"
+      ? geom.coordinates[0][0]
+      : geom.coordinates[0];
+  const n = ring.length;
+  let latS = 0, lngS = 0;
+  for (let i = 0; i < n; i++) {
+    lngS += ring[i][0];
+    latS += ring[i][1];
+  }
+  return [latS / n, lngS / n];
+}
+
+/* ── ADM3 Siem Reap shapeName → canonical display name ── */
+const SR_RENAME: Record<string, string> = {
+  "Siem Reab": "Siem Reap",
+  "Sngkat Sambuor": "Sambuor",
+};
 
 /* ── ADM2 shapeName → canonical display name ── */
 const ADM2_RENAME: Record<string, string> = {
@@ -246,12 +307,14 @@ function main() {
   const adm2 = JSON.parse(readFileSync(ADM2_PATH, "utf-8"));
   console.log(`  Total ADM2 features: ${adm2.features.length}`);
 
-  // Filter out PP khans
+  // Filter out PP khans AND the SR ADM2 feature
   const nonPP = adm2.features.filter(
-    (f: any) => !PP_KHANS.has(f.properties.shapeName),
+    (f: any) =>
+      !PP_KHANS.has(f.properties.shapeName) &&
+      !SR_ADM2_EXCLUDE.has(f.properties.shapeName),
   );
-  console.log(`  Non-PP ADM2 features: ${nonPP.length}`);
-  console.log(`  Removed PP khans: ${adm2.features.length - nonPP.length}`);
+  console.log(`  Non-PP/SR ADM2 features: ${nonPP.length}`);
+  console.log(`  Removed: ${adm2.features.length - nonPP.length} (PP khans + SR ADM2)`);
 
   // Normalize properties: use { name: "..." } for all features
   const adm2Features = nonPP.map((f: any) => {
@@ -274,13 +337,40 @@ function main() {
     },
   }));
 
+  // Read ADM3 and extract Siem Reap sangkats
+  console.log("\nReading ADM3 data...");
+  const adm3 = JSON.parse(readFileSync(ADM3_PATH, "utf-8"));
+  console.log(`  Total ADM3 features: ${adm3.features.length}`);
+
+  const srFeatures = adm3.features
+    .filter((f: any) => {
+      if (!SR_SANGKATS.has(f.properties.shapeName)) return false;
+      // Disambiguate by centroid — only include those in SR area
+      const [lat, lng] = centroid(f);
+      return (
+        lat >= SR_BBOX.minLat && lat <= SR_BBOX.maxLat &&
+        lng >= SR_BBOX.minLng && lng <= SR_BBOX.maxLng
+      );
+    })
+    .map((f: any) => {
+      const rawName = f.properties.shapeName;
+      const name = SR_RENAME[rawName] || rawName;
+      return {
+        type: "Feature",
+        properties: { name, zone: "siem-reap" },
+        geometry: f.geometry,
+      };
+    });
+  console.log(`  SR sangkat features: ${srFeatures.length}`);
+
   // Combine
   const combined = {
     type: "FeatureCollection",
-    features: [...adm2Features, ...ppFeatures],
+    features: [...adm2Features, ...ppFeatures, ...srFeatures],
   };
 
-  console.log(`  PP hand-drawn features: ${ppFeatures.length}`);
+  console.log(`\n  PP hand-drawn features: ${ppFeatures.length}`);
+  console.log(`  SR ADM3 features: ${srFeatures.length}`);
   console.log(`  Total combined features: ${combined.features.length}`);
 
   // Write
