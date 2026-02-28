@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/rentals/api-guard";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
+import { reverseDistrictAliases } from "@/lib/rentals/district-geo";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -25,6 +26,7 @@ export async function GET(req: NextRequest) {
     const source = url.searchParams.get("source") || undefined;
     const propertyType = url.searchParams.get("propertyType") || undefined;
     const search = url.searchParams.get("search") || undefined;
+    const districtParam = url.searchParams.get("district") || undefined;
     const sort = url.searchParams.get("sort") || "lastSeenAt";
     const order = url.searchParams.get("order") === "asc" ? "asc" : "desc";
 
@@ -34,6 +36,12 @@ export async function GET(req: NextRequest) {
     }
     if (propertyType && (propertyType === "CONDO" || propertyType === "APARTMENT")) {
       where.propertyType = propertyType;
+    }
+    if (districtParam) {
+      // Use reverse alias lookup to find all DB district values
+      // that normalise to this canonical name
+      const aliases = reverseDistrictAliases(districtParam);
+      where.district = { in: aliases };
     }
     if (search) {
       where.OR = [

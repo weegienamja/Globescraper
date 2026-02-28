@@ -207,6 +207,33 @@ const DISTRICT_NORMALIZE: Record<string, string> = {
 };
 
 /**
+ * Given a canonical (normalised) district name, return all raw alias strings
+ * from the normalisation map that resolve to it, PLUS the canonical name itself.
+ * Useful for querying the DB where district values may be stored un-normalised.
+ *
+ * Example: reverseDistrictAliases("Chamkar Mon")
+ *   → ["Chamkar Mon", "chamkarmon", "chamkar mon", "toul tom poung", "toul tum poung", …]
+ */
+export function reverseDistrictAliases(canonical: string): string[] {
+  const result = new Set<string>();
+  result.add(canonical); // always include the canonical name itself
+
+  for (const [alias, target] of Object.entries(DISTRICT_NORMALIZE)) {
+    if (target === canonical) {
+      result.add(alias);
+      // Also add Title Case / original-looking forms
+      const titleCase = alias
+        .split(" ")
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(" ");
+      result.add(titleCase);
+    }
+  }
+
+  return Array.from(result);
+}
+
+/**
  * Normalise a district name to the canonical form used in the GeoJSON.
  * Returns the canonical name, or the original trimmed string if unknown.
  */

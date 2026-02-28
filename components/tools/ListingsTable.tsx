@@ -36,12 +36,18 @@ interface ListingsData {
 
 /* ── Component ───────────────────────────────────────────── */
 
-export function ListingsTable() {
+interface ListingsTableProps {
+  /** Pre-filter to a specific district (canonical name from heatmap). */
+  initialDistrict?: string;
+}
+
+export function ListingsTable({ initialDistrict }: ListingsTableProps = {}) {
   const [data, setData] = useState<ListingsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [source, setSource] = useState("");
   const [propertyType, setPropertyType] = useState("");
+  const [district, setDistrict] = useState(initialDistrict || "");
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [sort, setSort] = useState("lastSeenAt");
@@ -58,6 +64,7 @@ export function ListingsTable() {
       params.set("order", order);
       if (source) params.set("source", source);
       if (propertyType) params.set("propertyType", propertyType);
+      if (district) params.set("district", district);
       if (search) params.set("search", search);
 
       const res = await fetch(`/api/tools/rentals/listings?${params}`);
@@ -69,7 +76,7 @@ export function ListingsTable() {
     } finally {
       setLoading(false);
     }
-  }, [page, source, propertyType, search, sort, order]);
+  }, [page, source, propertyType, district, search, sort, order]);
 
   useEffect(() => {
     fetchListings();
@@ -157,6 +164,37 @@ export function ListingsTable() {
           <option value="CONDO">Condo</option>
           <option value="APARTMENT">Apartment</option>
         </select>
+        {district && (
+          <div style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+            padding: "6px 12px",
+            background: "rgba(99, 102, 241, 0.15)",
+            border: "1px solid rgba(99, 102, 241, 0.3)",
+            borderRadius: "8px",
+            color: "#a5b4fc",
+            fontSize: "13px",
+            fontWeight: 500,
+          }}>
+            <span>📍 {district}</span>
+            <button
+              onClick={() => { setDistrict(""); setPage(1); }}
+              style={{
+                background: "none",
+                border: "none",
+                color: "#a5b4fc",
+                cursor: "pointer",
+                fontSize: "16px",
+                lineHeight: 1,
+                padding: "0 2px",
+              }}
+              title="Clear district filter"
+            >
+              ×
+            </button>
+          </div>
+        )}
         <div style={s.searchWrap}>
           <input
             style={s.searchInput}

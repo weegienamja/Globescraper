@@ -216,21 +216,44 @@ export function InteractiveHeatmap({ data, height = 450 }: Props) {
               ? `$${Math.round(info.medianPrice).toLocaleString()}/mo`
               : "—";
 
-          const sourceLabel = isFallback
-            ? `<div style="color:#94a3b8;font-size:11px">${district} district data</div>`
-            : "";
+          let popupHtml: string;
 
-          const popupHtml =
-            `<div style="font-family:sans-serif;font-size:13px;line-height:1.6;min-width:170px">` +
-            `<strong style="font-size:15px;color:#1e293b">${name}</strong>` +
-            (district ? `<div style="color:#94a3b8;font-size:11px">${district}</div>` : "") +
-            `<hr style="border:none;border-top:1px solid #e2e8f0;margin:6px 0"/>` +
-            `<div>Median: <strong style="color:${priceColor(info.medianPrice)}">${priceStr}</strong></div>` +
-            `<div>Band: ${priceBand(info.medianPrice)}</div>` +
-            `<div>${info.totalListings} listing${info.totalListings !== 1 ? "s" : ""}</div>` +
-            sourceLabel +
-            `<div style="color:#94a3b8;font-size:11px;margin-top:4px">${info.types.join(", ")}</div>` +
-            `</div>`;
+          // Build the link to filtered listings page
+          const linkDistrict = isFallback ? (district || name) : name;
+          const listingsUrl = `/tools/rentals/listings?district=${encodeURIComponent(linkDistrict)}`;
+          const viewLink =
+            `<a href="${listingsUrl}" style="display:inline-block;margin-top:8px;padding:5px 12px;` +
+            `background:#3b82f6;color:#fff;border-radius:6px;text-decoration:none;font-size:12px;font-weight:600;" ` +
+            `onmouseover="this.style.background='#2563eb'" onmouseout="this.style.background='#3b82f6'">` +
+            `View ${info.totalListings} listing${info.totalListings !== 1 ? "s" : ""} \u2192</a>`;
+
+          if (isFallback) {
+            // Fallback: show district-level summary without repeating exact numbers
+            popupHtml =
+              `<div style="font-family:sans-serif;font-size:13px;line-height:1.6;min-width:170px">` +
+              `<strong style="font-size:15px;color:#1e293b">${name}</strong>` +
+              (district ? `<div style="color:#94a3b8;font-size:11px">${district} district</div>` : "") +
+              `<hr style="border:none;border-top:1px solid #e2e8f0;margin:6px 0"/>` +
+              `<div style="color:#64748b;font-size:12px;font-style:italic;margin-bottom:4px">No sangkat-specific data</div>` +
+              `<div>District median: <strong style="color:${priceColor(info.medianPrice)}">${priceStr}</strong></div>` +
+              `<div>Band: ${priceBand(info.medianPrice)}</div>` +
+              `<div style="color:#94a3b8;font-size:11px;margin-top:4px">${info.totalListings} listing${info.totalListings !== 1 ? "s" : ""} across ${district}</div>` +
+              `<div style="color:#94a3b8;font-size:11px">${info.types.join(", ")}</div>` +
+              viewLink +
+              `</div>`;
+          } else {
+            popupHtml =
+              `<div style="font-family:sans-serif;font-size:13px;line-height:1.6;min-width:170px">` +
+              `<strong style="font-size:15px;color:#1e293b">${name}</strong>` +
+              (district ? `<div style="color:#94a3b8;font-size:11px">${district}</div>` : "") +
+              `<hr style="border:none;border-top:1px solid #e2e8f0;margin:6px 0"/>` +
+              `<div>Median: <strong style="color:${priceColor(info.medianPrice)}">${priceStr}</strong></div>` +
+              `<div>Band: ${priceBand(info.medianPrice)}</div>` +
+              `<div>${info.totalListings} listing${info.totalListings !== 1 ? "s" : ""}</div>` +
+              `<div style="color:#94a3b8;font-size:11px;margin-top:4px">${info.types.join(", ")}</div>` +
+              viewLink +
+              `</div>`;
+          }
 
           layer.bindPopup(popupHtml, { className: "choropleth-popup" });
         }
@@ -244,12 +267,17 @@ export function InteractiveHeatmap({ data, height = 450 }: Props) {
           });
 
           const tooltipHtml = hasData
-            ? `<strong>${name}</strong>` +
-              (district ? `<br/><span style="color:#94a3b8;font-size:11px">${district}</span>` : "") +
-              `<br/>Median: <b style="color:${priceColor(info.medianPrice)}">` +
-              `$${Math.round(info.medianPrice ?? 0).toLocaleString()}/mo</b>` +
-              `<br/>${info.totalListings} listing${info.totalListings !== 1 ? "s" : ""}` +
-              (isFallback ? `<br/><span style="color:#94a3b8;font-size:10px">District data</span>` : "")
+            ? isFallback
+              ? `<strong>${name}</strong>` +
+                (district ? `<br/><span style="color:#94a3b8;font-size:11px">${district} district</span>` : "") +
+                `<br/>District median: <b style="color:${priceColor(info.medianPrice)}">` +
+                `$${Math.round(info.medianPrice ?? 0).toLocaleString()}/mo</b>` +
+                `<br/><span style="color:#94a3b8;font-size:10px">No sangkat data — showing district</span>`
+              : `<strong>${name}</strong>` +
+                (district ? `<br/><span style="color:#94a3b8;font-size:11px">${district}</span>` : "") +
+                `<br/>Median: <b style="color:${priceColor(info.medianPrice)}">` +
+                `$${Math.round(info.medianPrice ?? 0).toLocaleString()}/mo</b>` +
+                `<br/>${info.totalListings} listing${info.totalListings !== 1 ? "s" : ""}`
             : `<strong>${name}</strong>` +
               (district ? `<br/><span style="color:#94a3b8;font-size:11px">${district}</span>` : "") +
               `<br/><span style="color:#64748b">No data</span>`;
