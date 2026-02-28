@@ -125,3 +125,72 @@ export function BreadcrumbJsonLd({ items }: { items: BreadcrumbItem[] }) {
     />
   );
 }
+
+type FAQItem = { question: string; answer: string };
+
+/**
+ * FAQPage JSON-LD — placed on pages with FAQ sections.
+ */
+export function FAQJsonLd({ items }: { items: FAQItem[] }) {
+  const data = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: items.map((faq) => ({
+      "@type": "Question",
+      name: faq.question,
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: faq.answer,
+      },
+    })),
+  };
+
+  return (
+    <script
+      type="application/ld+json"
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }}
+    />
+  );
+}
+
+type BlogPostEntry = {
+  title: string;
+  url: string;
+  datePublished: string;
+  image?: string;
+};
+
+/**
+ * CollectionPage JSON-LD — used on the /blog index.
+ */
+export function BlogCollectionJsonLd({ posts }: { posts: BlogPostEntry[] }) {
+  const data = {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    name: "Cambodia Teaching Blog",
+    description:
+      "Practical guides, packing lists, cost breakdowns, and real advice for teaching English in Cambodia and Southeast Asia.",
+    url: `${siteConfig.url}/blog`,
+    mainEntity: {
+      "@type": "ItemList",
+      itemListElement: posts.map((p, i) => ({
+        "@type": "ListItem",
+        position: i + 1,
+        url: `${siteConfig.url}${p.url}`,
+        name: p.title,
+      })),
+    },
+    publisher: {
+      "@type": "Organization",
+      name: siteConfig.name,
+      url: siteConfig.url,
+    },
+  };
+
+  return (
+    <script
+      type="application/ld+json"
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }}
+    />
+  );
+}

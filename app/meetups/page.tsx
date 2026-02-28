@@ -6,8 +6,21 @@ import { COMMUNITY_COUNTRIES } from "@/lib/validations/community";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "Meetups",
-  description: "Browse and join community meetups for teachers in Southeast Asia.",
+  title: "Teacher Meetups in Southeast Asia",
+  description: "Find and join meetups for English teachers across Cambodia, Vietnam, Thailand, and the Philippines. Grab coffee, explore cities, and make friends.",
+  alternates: { canonical: "/meetups" },
+  openGraph: {
+    title: "Teacher Meetups in Southeast Asia",
+    description: "Find and join meetups for English teachers across Cambodia, Vietnam, Thailand, and the Philippines.",
+    url: "/meetups",
+    images: [{ url: "/og-default.png", width: 1200, height: 630 }],
+  },
+  twitter: {
+    card: "summary_large_image" as const,
+    title: "Teacher Meetups in Southeast Asia",
+    description: "Find and join meetups for English teachers across Cambodia, Vietnam, Thailand, and the Philippines.",
+    images: ["/og-default.png"],
+  },
 };
 
 /* ── Invite page for logged-out visitors ──────────────────── */

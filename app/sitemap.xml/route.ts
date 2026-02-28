@@ -13,6 +13,8 @@ export async function GET() {
     { path: "/blog", priority: "0.9", changefreq: "weekly" },
     { path: "/about", priority: "0.7", changefreq: "monthly" },
     { path: "/how-it-works-to-teach-english", priority: "0.8", changefreq: "monthly" },
+    { path: "/community", priority: "0.7", changefreq: "weekly" },
+    { path: "/meetups", priority: "0.7", changefreq: "weekly" },
   ].map(
     (p) =>
       `  <url><loc>${base}${p.path}</loc><lastmod>${STATIC_LASTMOD}</lastmod><changefreq>${p.changefreq}</changefreq><priority>${p.priority}</priority></url>`

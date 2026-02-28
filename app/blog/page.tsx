@@ -5,6 +5,7 @@ import { getPostsMeta, getPagesMeta } from "@/lib/content";
 import { getHeroImage } from "@/lib/contentImages";
 import { BlogCardTracker } from "@/components/BlogCardTracker";
 import { getPublishedAiPosts } from "@/lib/published-posts";
+import { BlogCollectionJsonLd, BreadcrumbJsonLd } from "@/components/JsonLd";
 
 /** AI-published posts live in the database, so this page must be dynamic. */
 export const dynamic = "force-dynamic";
@@ -62,6 +63,20 @@ export default async function BlogIndex() {
 
   return (
     <section>
+      <BreadcrumbJsonLd
+        items={[
+          { name: "Home", href: "/" },
+          { name: "Blog", href: "/blog" },
+        ]}
+      />
+      <BlogCollectionJsonLd
+        posts={allPosts.map((p) => ({
+          title: p.title.replace(" | GlobeScraper", ""),
+          url: `/${p.slug}`,
+          datePublished: p.date,
+          image: p.heroImageUrl || undefined,
+        }))}
+      />
       <h1>Blog</h1>
       <p className="small">Teaching in Southeast Asia, without the fluff.</p>
       <div className="blog-list">

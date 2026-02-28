@@ -10,6 +10,8 @@ Disallow: /login
 Disallow: /signup
 Disallow: /dashboard
 Disallow: /create-profile
+Disallow: /tools
+Disallow: /unsubscribe
 
 Sitemap: ${siteConfig.url}/sitemap.xml
 `;

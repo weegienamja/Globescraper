@@ -23,8 +23,21 @@ const ENUM_COUNTRY_MAP: Record<string, string> = {
 };
 
 export const metadata = {
-  title: "Community",
-  description: "Connect with teachers moving to or living in Southeast Asia.",
+  title: "Teacher Community in Southeast Asia",
+  description: "Join a growing community of English teachers living in Cambodia, Vietnam, Thailand, and the Philippines. Share tips, find friends, and get support.",
+  alternates: { canonical: "/community" },
+  openGraph: {
+    title: "Teacher Community in Southeast Asia",
+    description: "Join a growing community of English teachers living in Cambodia, Vietnam, Thailand, and the Philippines.",
+    url: "/community",
+    images: [{ url: "/og-default.png", width: 1200, height: 630 }],
+  },
+  twitter: {
+    card: "summary_large_image" as const,
+    title: "Teacher Community in Southeast Asia",
+    description: "Join a growing community of English teachers living in Cambodia, Vietnam, Thailand, and the Philippines.",
+    images: ["/og-default.png"],
+  },
 };
 
 /* ── Invite page for logged-out visitors ──────────────────── */

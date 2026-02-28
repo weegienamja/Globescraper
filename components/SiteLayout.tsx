@@ -381,8 +381,9 @@ export function SiteLayout({ children }: { children: React.ReactNode }) {
             {navItems.map((item) => (
               <Link key={item.href} href={item.href}>{item.label}</Link>
             ))}
-            <a href={socials.instagram} target="_blank" rel="noopener noreferrer">Instagram</a>
-            <a href={socials.tiktok} target="_blank" rel="noopener noreferrer">TikTok</a>
+            <Link href="/sitemap.xml">Sitemap</Link>
+            <a href={socials.instagram} target="_blank" rel="me noopener noreferrer">Instagram</a>
+            <a href={socials.tiktok} target="_blank" rel="me noopener noreferrer">TikTok</a>
           </nav>
         </div>
       </footer>
