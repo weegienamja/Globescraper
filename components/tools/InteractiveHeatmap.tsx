@@ -154,6 +154,16 @@ export function InteractiveHeatmap({ data, height = 450 }: Props) {
       if (info.totalListings >= MIN_LISTINGS) districtsWithData.add(name);
     }
 
+    /* ── Single shared tooltip (avoids stuck-tooltip bug) ── */
+    const sharedTooltip = L.tooltip({
+      sticky: true,
+      direction: "top",
+      className: "choropleth-tooltip",
+    });
+
+    /** Track which district name is currently highlighted. */
+    let activeDistrict: string | null = null;
+
     const geoLayer = L.geoJSON(geoJson, {
       style: (feature) => {
         const name = feature?.properties?.name as string | undefined;
@@ -171,20 +181,6 @@ export function InteractiveHeatmap({ data, height = 450 }: Props) {
         const name = feature.properties?.name as string;
         const info = lookup.get(name);
         const hasData = info && info.totalListings >= MIN_LISTINGS;
-
-        /* ── Tooltip (hover) ──────────────────────────── */
-        const tooltipHtml = hasData
-          ? `<strong>${name}</strong><br/>` +
-            `Median: <b style="color:${priceColor(info.medianPrice)}">` +
-            `$${Math.round(info.medianPrice ?? 0).toLocaleString()}/mo</b><br/>` +
-            `${info.totalListings} listing${info.totalListings !== 1 ? "s" : ""}`
-          : `<strong>${name}</strong><br/><span style="color:#64748b">No data</span>`;
-
-        layer.bindTooltip(tooltipHtml, {
-          sticky: true,
-          direction: "top",
-          className: "choropleth-tooltip",
-        });
 
         /* ── Click popup ──────────────────────────────── */
         if (hasData) {
@@ -206,25 +202,59 @@ export function InteractiveHeatmap({ data, height = 450 }: Props) {
           layer.bindPopup(popupHtml, { className: "choropleth-popup" });
         }
 
-        /* ── Hover highlight (all tiles in same district) ── */
-        layer.on("mouseover", () => {
-          geoLayer.eachLayer((other: any) => {
-            if (other.feature?.properties?.name === name) {
-              (other as L.Path).setStyle({
-                weight: 2.5,
-                fillOpacity: hasData ? 0.75 : 0.15,
-                color: "#f8fafc",
+        /* ── Hover: shared tooltip + highlight siblings ── */
+        layer.on("mouseover", (e: L.LeafletMouseEvent) => {
+          if (activeDistrict !== name) {
+            // Reset previous district highlight
+            if (activeDistrict) {
+              const prev = activeDistrict;
+              geoLayer.eachLayer((other: any) => {
+                if (other.feature?.properties?.name === prev) {
+                  geoLayer.resetStyle(other as L.Path);
+                }
               });
-              (other as L.Path).bringToFront();
             }
-          });
+            activeDistrict = name;
+            // Highlight all tiles in this district
+            geoLayer.eachLayer((other: any) => {
+              if (other.feature?.properties?.name === name) {
+                (other as L.Path).setStyle({
+                  weight: 2.5,
+                  fillOpacity: hasData ? 0.75 : 0.15,
+                  color: "#f8fafc",
+                });
+              }
+            });
+          }
+
+          // Show shared tooltip at cursor
+          const tooltipHtml = hasData
+            ? `<strong>${name}</strong><br/>` +
+              `Median: <b style="color:${priceColor(info.medianPrice)}">` +
+              `$${Math.round(info.medianPrice ?? 0).toLocaleString()}/mo</b><br/>` +
+              `${info.totalListings} listing${info.totalListings !== 1 ? "s" : ""}`
+            : `<strong>${name}</strong><br/><span style="color:#64748b">No data</span>`;
+
+          sharedTooltip
+            .setContent(tooltipHtml)
+            .setLatLng(e.latlng)
+            .addTo(map);
         });
+
+        layer.on("mousemove", (e: L.LeafletMouseEvent) => {
+          sharedTooltip.setLatLng(e.latlng);
+        });
+
         layer.on("mouseout", () => {
-          geoLayer.eachLayer((other: any) => {
-            if (other.feature?.properties?.name === name) {
-              geoLayer.resetStyle(other as L.Path);
-            }
-          });
+          map.removeLayer(sharedTooltip);
+          if (activeDistrict === name) {
+            geoLayer.eachLayer((other: any) => {
+              if (other.feature?.properties?.name === name) {
+                geoLayer.resetStyle(other as L.Path);
+              }
+            });
+            activeDistrict = null;
+          }
         });
       },
     }).addTo(map);
