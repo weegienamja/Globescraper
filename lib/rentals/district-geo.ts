@@ -164,7 +164,6 @@ const DISTRICT_NORMALIZE: Record<string, string> = {
   "pur senchey": "Por Sen Chey",
   "por senchey": "Por Sen Chey",
   "stung meanchey": "Stung Meanchey",
-  "stung mean chey": "Stung Meanchey",
   "dangkao": "Dangkao",
   "prek pnov": "Prek Pnov",
   "kamboul": "Kamboul",
