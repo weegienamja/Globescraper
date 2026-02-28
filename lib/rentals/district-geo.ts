@@ -136,10 +136,10 @@ const DISTRICT_NORMALIZE: Record<string, string> = {
   "phsar daeum thkov": "Phsar Daeum Thkov",
   "chak angrae leu": "Chak Angrae Leu",
   "chak angrae kraom": "Chak Angrae Kraom",
-  // Generic Meanchey → khan level
-  "meanchey": "Meanchey",
-  "mean chey": "Meanchey",
-  "chak angrae": "Meanchey",
+  // Generic Meanchey → khan level (GeoJSON parent district = "Stung Meanchey")
+  "meanchey": "Stung Meanchey",
+  "mean chey": "Stung Meanchey",
+  "chak angrae": "Stung Meanchey",
 
   /* ── Chbar Ampov sangkats ──────────────────────────── */
   "nirouth": "Nirouth",
@@ -154,6 +154,8 @@ const DISTRICT_NORMALIZE: Record<string, string> = {
   "kakab": "Kakab",
   "kakap": "Kakab",
   "stueng meanchey": "Stueng Meanchey",
+  "stueng mean chey": "Stueng Meanchey",
+  "stung mean chey": "Stueng Meanchey",
   "preaek phnov": "Preaek Phnov",
   "prey sa": "Prey Sa",
   "spean thma": "Spean Thma",
@@ -162,6 +164,7 @@ const DISTRICT_NORMALIZE: Record<string, string> = {
   "pur senchey": "Por Sen Chey",
   "por senchey": "Por Sen Chey",
   "stung meanchey": "Stung Meanchey",
+  "stung mean chey": "Stung Meanchey",
   "dangkao": "Dangkao",
   "prek pnov": "Prek Pnov",
   "kamboul": "Kamboul",
