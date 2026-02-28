@@ -119,99 +119,153 @@ export function parseBedsBathsSize(text: string): BedsBathsSize {
 
 /* ── District parsing ────────────────────────────────────── */
 
-/** Known district aliases → canonical name (must match GeoJSON polygon names) */
+/** Known district aliases → canonical name (must match GeoJSON sangkat/polygon names) */
 const DISTRICT_ALIASES: Record<string, string> = {
-  /* ── BKK / Chamkarmon sangkats ─────────────────────── */
+  /* ── Chamkar Mon sangkats ──────────────────────────── */
   "bkk1": "BKK1",
   "bkk 1": "BKK1",
   "boeung keng kang 1": "BKK1",
   "boeung keng kang i": "BKK1",
   "boeng keng kang": "BKK1",
-  "chamkarmon": "BKK1",
-  "chamkar mon": "BKK1",
   "bkk2": "BKK2",
   "bkk 2": "BKK2",
+  "boeung keng kang 2": "BKK2",
   "bkk3": "BKK3",
   "bkk 3": "BKK3",
+  "boeung keng kang 3": "BKK3",
   "tonle bassac": "Tonle Bassac",
   "tonle basac": "Tonle Bassac",
-  "toul tom poung": "Toul Tom Poung",
-  "toul tum poung": "Toul Tom Poung",
-  "toul tum pong": "Toul Tom Poung",
-  "russian market": "Toul Tom Poung",
-  "tuol tom pong": "Toul Tom Poung",
-  "tuol tompong": "Toul Tom Poung",
-  "boeung trabek": "Toul Tom Poung",
+  "chakto mukh": "Chakto Mukh",
+  "boeng trabaek": "Boeng Trabaek",
+  "boeung trabek": "Boeng Trabaek",
+  "toul tompong 1": "Toul Tompong 1",
+  "tuol tumpong 1": "Toul Tompong 1",
+  "toul tompong 2": "Toul Tompong 2",
+  "tuol tumpong 2": "Toul Tompong 2",
+  "russian market": "Toul Tompong 1",
+  "olympic": "Olympic",
+  "tumnob tuek": "Tumnob Tuek",
+  "tuol svay prey 1": "Tuol Svay Prey 1",
+  "tuol svay prey 2": "Tuol Svay Prey 2",
+  // Generic Chamkar Mon / Toul Tom Poung → khan level
+  "chamkarmon": "Chamkar Mon",
+  "chamkar mon": "Chamkar Mon",
+  "toul tom poung": "Chamkar Mon",
+  "toul tum poung": "Chamkar Mon",
+  "toul tum pong": "Chamkar Mon",
+  "tuol tom pong": "Chamkar Mon",
+  "tuol tompong": "Chamkar Mon",
+  "tuol svay prey": "Chamkar Mon",
 
   /* ── Daun Penh sangkats ────────────────────────────── */
+  "voat phnum": "Voat Phnum",
+  "wat phnom": "Voat Phnum",
+  "srah chak": "Srah Chak",
+  "chey chumneah": "Chey Chumneah",
+  "phsar chas": "Phsar Chas",
+  "boeng reang": "Boeng Reang",
+  // Generic Daun Penh / ambiguous sangkats → khan level
   "daun penh": "Daun Penh",
   "doun penh": "Daun Penh",
-  "wat phnom": "Daun Penh",
   "phsar kandal": "Daun Penh",
-  "srah chak": "Daun Penh",
-  "chakto mukh": "Daun Penh",
-  "boeng reang": "Daun Penh",
-  "chey chumneah": "Daun Penh",
   "phsar thmey": "Daun Penh",
 
   /* ── 7 Makara sangkats ────────────────────────────── */
+  "mittapheap": "Mittapheap",
+  "monourom": "Monourom",
+  "boeung prolit": "Boeng Proluet",
+  "boeng proluet": "Boeng Proluet",
+  "veal vong": "Veal Vong",
+  "phsar daeum kor": "Phsar Daeum Kor",
+  "boeng salang": "Boeng Salang",
+  // Generic 7 Makara / ambiguous → khan level
   "7 makara": "7 Makara",
   "prampi makara": "7 Makara",
   "prampir meakkakra": "7 Makara",
-  "boeung prolit": "7 Makara",
-  "veal vong": "7 Makara",
   "phsar depou": "7 Makara",
-  "tuol svay prey": "7 Makara",
-  "tuol sangkae": "7 Makara",
+  "ou ruessei": "7 Makara",
 
   /* ── Toul Kork sangkats ────────────────────────────── */
+  "boeng kak 1": "Boeng Kak 1",
+  "boeung kak 1": "Boeng Kak 1",
+  "boeng kak 2": "Boeng Kak 2",
+  "boeung kak 2": "Boeng Kak 2",
+  "tuol sangke": "Tuol Sangke",
+  "tuol sangkae": "Tuol Sangke",
+  "tuek lak 1": "Tuek Lak 1",
+  "tuek l'ak 1": "Tuek Lak 1",
+  "tuek lak 2": "Tuek Lak 2",
+  "tuek lak 3": "Tuek Lak 3",
+  // Generic Toul Kork / ambiguous → khan level
   "toul kork": "Toul Kork",
   "tuol kork": "Toul Kork",
   "tuol kouk": "Toul Kork",
-  "boeung kak 1": "Toul Kork",
-  "boeung kak 2": "Toul Kork",
   "boeung kak": "Toul Kork",
   "tuek l'ak": "Toul Kork",
-  "tuek l'ak 1": "Toul Kork",
   "teuk laak": "Toul Kork",
 
   /* ── Sen Sok sangkats ──────────────────────────────── */
+  "phnom penh thmey": "Phnom Penh Thmei",
+  "phnom penh thmei": "Phnom Penh Thmei",
+  "tuek thla": "Tuek Thla",
+  "khmuonh": "Khmuonh",
+  "krang thnong": "Krang Thnong",
+  // Generic Sen Sok → khan level
   "sen sok": "Sen Sok",
   "sensok": "Sen Sok",
   "saensokh": "Sen Sok",
-  "phnom penh thmey": "Sen Sok",
-  "tuek thla": "Sen Sok",
 
-  /* ── Russey Keo ────────────────────────────────────── */
+  /* ── Russey Keo sangkats ───────────────────────────── */
+  "ruessei kaev": "Ruessei Kaev",
+  "svay pak": "Svay Pak",
+  "preaek ta sek": "Preaek Ta Sek",
+  "preaek lieb": "Preaek Lieb",
+  // Generic Russey Keo → khan level
   "russey keo": "Russey Keo",
   "russei keo": "Russey Keo",
-  "ruessei kaev": "Russey Keo",
 
-  /* ── Chroy Changvar ────────────────────────────────── */
+  /* ── Chroy Changvar sangkats ───────────────────────── */
+  "chrouy changvar": "Chrouy Changvar",
+  "kaoh dach": "Kaoh Dach",
+  "preaek ampil": "Preaek Ampil",
+  // Generic Chroy Changvar → khan level
   "chroy changvar": "Chroy Changvar",
-  "chrouy changvar": "Chroy Changvar",
   "chrouy changva": "Chroy Changvar",
 
   /* ── Meanchey sangkats ─────────────────────────────── */
+  "boeng tumpun": "Boeng Tumpun",
+  "boeung tumpun": "Boeng Tumpun",
+  "boeung tumpun 1": "Boeng Tumpun",
+  "phsar daeum thkov": "Phsar Daeum Thkov",
+  "chak angrae leu": "Chak Angrae Leu",
+  "chak angrae kraom": "Chak Angrae Kraom",
+  // Generic Meanchey → khan level
   "meanchey": "Meanchey",
   "mean chey": "Meanchey",
-  "boeung tumpun": "Meanchey",
-  "boeung tumpun 1": "Meanchey",
-  "phsar daeum thkov": "Meanchey",
   "chak angrae": "Meanchey",
 
-  /* ── Chbar Ampov ───────────────────────────────────── */
+  /* ── Chbar Ampov sangkats ──────────────────────────── */
+  "nirouth": "Nirouth",
+  "preaek pra": "Preaek Pra",
+  "veal sbov": "Veal Sbov",
+  "preaek aeng": "Preaek Aeng",
+  // Generic Chbar Ampov → khan level
   "chbar ampov": "Chbar Ampov",
-  "nirouth": "Chbar Ampov",
 
-  /* ── Remaining outer khans ─────────────────────────── */
+  /* ── Other PP khan sangkats ────────────────────────── */
+  "chaom chau": "Chaom Chau",
+  "kakab": "Kakab",
+  "kakap": "Kakab",
+  "stueng meanchey": "Stueng Meanchey",
+  "preaek phnov": "Preaek Phnov",
+  "prey sa": "Prey Sa",
+  "spean thma": "Spean Thma",
+  // Generic outer khans → khan level
   "por sen chey": "Por Sen Chey",
   "pur senchey": "Por Sen Chey",
   "por senchey": "Por Sen Chey",
   "stung meanchey": "Stung Meanchey",
-  "stueng meanchey": "Stung Meanchey",
   "dangkao": "Dangkao",
-  "kakap": "Dangkao",
   "prek pnov": "Prek Pnov",
   "kamboul": "Kamboul",
   "kambol": "Kamboul",

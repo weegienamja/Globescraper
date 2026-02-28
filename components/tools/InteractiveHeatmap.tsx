@@ -148,10 +148,32 @@ export function InteractiveHeatmap({ data, height = 450 }: Props) {
 
     const MIN_LISTINGS = 3;
 
-    /** Districts that have actual data (≥ MIN_LISTINGS). */
-    const districtsWithData = new Set<string>();
-    for (const [name, info] of lookup) {
-      if (info.totalListings >= MIN_LISTINGS) districtsWithData.add(name);
+    /**
+     * Resolve feature data: try exact sangkat name first,
+     * then fall back to parent district (khan) for PP sangkats.
+     */
+    function resolveFeatureData(feature: any): {
+      info: DistrictSummary | undefined;
+      isFallback: boolean;
+    } {
+      const name = feature?.properties?.name as string | undefined;
+      const district = feature?.properties?.district as string | undefined;
+
+      // 1. Exact sangkat / feature name match
+      const direct = name ? lookup.get(name) : undefined;
+      if (direct && direct.totalListings >= MIN_LISTINGS) {
+        return { info: direct, isFallback: false };
+      }
+
+      // 2. Fall back to parent district (PP sangkats carry a district prop)
+      if (district) {
+        const fallback = lookup.get(district);
+        if (fallback && fallback.totalListings >= MIN_LISTINGS) {
+          return { info: fallback, isFallback: true };
+        }
+      }
+
+      return { info: undefined, isFallback: false };
     }
 
     /* ── Single shared tooltip (avoids stuck-tooltip bug) ── */
@@ -161,26 +183,31 @@ export function InteractiveHeatmap({ data, height = 450 }: Props) {
       className: "choropleth-tooltip",
     });
 
-    /** Track which district name is currently highlighted. */
-    let activeDistrict: string | null = null;
-
     const geoLayer = L.geoJSON(geoJson, {
       style: (feature) => {
-        const name = feature?.properties?.name as string | undefined;
-        const info = name ? lookup.get(name) : undefined;
-        const hasData = info && info.totalListings >= MIN_LISTINGS;
+        const { info, isFallback } = resolveFeatureData(feature);
+
+        if (!info) {
+          return {
+            fillColor: "#0f172a",
+            fillOpacity: 0.08,
+            color: "#1f2937",
+            weight: 1,
+          };
+        }
 
         return {
-          fillColor: hasData ? priceColor(info.medianPrice) : "#0f172a",
-          fillOpacity: hasData ? 0.55 : 0.08,
-          color: "#1f2937",
+          fillColor: priceColor(info.medianPrice),
+          fillOpacity: isFallback ? 0.3 : 0.55,
+          color: isFallback ? "#334155" : "#1f2937",
           weight: 1,
         };
       },
       onEachFeature: (feature, layer) => {
         const name = feature.properties?.name as string;
-        const info = lookup.get(name);
-        const hasData = info && info.totalListings >= MIN_LISTINGS;
+        const district = feature.properties?.district as string | undefined;
+        const { info, isFallback } = resolveFeatureData(feature);
+        const hasData = !!info;
 
         /* ── Click popup ──────────────────────────────── */
         if (hasData) {
@@ -189,51 +216,43 @@ export function InteractiveHeatmap({ data, height = 450 }: Props) {
               ? `$${Math.round(info.medianPrice).toLocaleString()}/mo`
               : "—";
 
+          const sourceLabel = isFallback
+            ? `<div style="color:#94a3b8;font-size:11px">${district} district data</div>`
+            : "";
+
           const popupHtml =
             `<div style="font-family:sans-serif;font-size:13px;line-height:1.6;min-width:170px">` +
             `<strong style="font-size:15px;color:#1e293b">${name}</strong>` +
+            (district ? `<div style="color:#94a3b8;font-size:11px">${district}</div>` : "") +
             `<hr style="border:none;border-top:1px solid #e2e8f0;margin:6px 0"/>` +
             `<div>Median: <strong style="color:${priceColor(info.medianPrice)}">${priceStr}</strong></div>` +
             `<div>Band: ${priceBand(info.medianPrice)}</div>` +
             `<div>${info.totalListings} listing${info.totalListings !== 1 ? "s" : ""}</div>` +
+            sourceLabel +
             `<div style="color:#94a3b8;font-size:11px;margin-top:4px">${info.types.join(", ")}</div>` +
             `</div>`;
 
           layer.bindPopup(popupHtml, { className: "choropleth-popup" });
         }
 
-        /* ── Hover: shared tooltip + highlight siblings ── */
+        /* ── Hover: individual highlight + tooltip ──── */
         layer.on("mouseover", (e: L.LeafletMouseEvent) => {
-          if (activeDistrict !== name) {
-            // Reset previous district highlight
-            if (activeDistrict) {
-              const prev = activeDistrict;
-              geoLayer.eachLayer((other: any) => {
-                if (other.feature?.properties?.name === prev) {
-                  geoLayer.resetStyle(other as L.Path);
-                }
-              });
-            }
-            activeDistrict = name;
-            // Highlight all tiles in this district
-            geoLayer.eachLayer((other: any) => {
-              if (other.feature?.properties?.name === name) {
-                (other as L.Path).setStyle({
-                  weight: 2.5,
-                  fillOpacity: hasData ? 0.75 : 0.15,
-                  color: "#f8fafc",
-                });
-              }
-            });
-          }
+          (layer as L.Path).setStyle({
+            weight: 2.5,
+            fillOpacity: hasData ? (isFallback ? 0.45 : 0.75) : 0.15,
+            color: "#f8fafc",
+          });
 
-          // Show shared tooltip at cursor
           const tooltipHtml = hasData
-            ? `<strong>${name}</strong><br/>` +
-              `Median: <b style="color:${priceColor(info.medianPrice)}">` +
-              `$${Math.round(info.medianPrice ?? 0).toLocaleString()}/mo</b><br/>` +
-              `${info.totalListings} listing${info.totalListings !== 1 ? "s" : ""}`
-            : `<strong>${name}</strong><br/><span style="color:#64748b">No data</span>`;
+            ? `<strong>${name}</strong>` +
+              (district ? `<br/><span style="color:#94a3b8;font-size:11px">${district}</span>` : "") +
+              `<br/>Median: <b style="color:${priceColor(info.medianPrice)}">` +
+              `$${Math.round(info.medianPrice ?? 0).toLocaleString()}/mo</b>` +
+              `<br/>${info.totalListings} listing${info.totalListings !== 1 ? "s" : ""}` +
+              (isFallback ? `<br/><span style="color:#94a3b8;font-size:10px">District data</span>` : "")
+            : `<strong>${name}</strong>` +
+              (district ? `<br/><span style="color:#94a3b8;font-size:11px">${district}</span>` : "") +
+              `<br/><span style="color:#64748b">No data</span>`;
 
           sharedTooltip
             .setContent(tooltipHtml)
@@ -247,26 +266,24 @@ export function InteractiveHeatmap({ data, height = 450 }: Props) {
 
         layer.on("mouseout", () => {
           map.removeLayer(sharedTooltip);
-          if (activeDistrict === name) {
-            geoLayer.eachLayer((other: any) => {
-              if (other.feature?.properties?.name === name) {
-                geoLayer.resetStyle(other as L.Path);
-              }
-            });
-            activeDistrict = null;
-          }
+          geoLayer.resetStyle(layer as L.Path);
         });
       },
     }).addTo(map);
 
-    /* ── District name labels (one per name, only for features with data) ── */
+    /* ── Labels: one per district for PP sangkats, one per name for others ── */
     const labelCentroids = new Map<
       string,
       { latSum: number; lngSum: number; count: number }
     >();
     geoJson.features.forEach((feature: any) => {
       const name = feature.properties?.name as string;
-      if (!districtsWithData.has(name)) return;
+      const district = feature.properties?.district as string | undefined;
+      const { info } = resolveFeatureData(feature);
+      if (!info) return;
+
+      // For PP/SR sangkats use parent district as label key (avoids clutter)
+      const labelKey = district || name;
 
       const geom = feature.geometry;
       const coords =
@@ -275,13 +292,13 @@ export function InteractiveHeatmap({ data, height = 450 }: Props) {
           : geom.coordinates;
       const [lat, lng] = polygonCentroid(coords);
 
-      const existing = labelCentroids.get(name);
+      const existing = labelCentroids.get(labelKey);
       if (existing) {
         existing.latSum += lat;
         existing.lngSum += lng;
         existing.count += 1;
       } else {
-        labelCentroids.set(name, { latSum: lat, lngSum: lng, count: 1 });
+        labelCentroids.set(labelKey, { latSum: lat, lngSum: lng, count: 1 });
       }
     });
 
@@ -299,7 +316,7 @@ export function InteractiveHeatmap({ data, height = 450 }: Props) {
 
     /* ── Auto-fit to features that have data ──────────── */
     const dataFeatures = geoJson.features.filter(
-      (f: any) => districtsWithData.has(f.properties?.name),
+      (f: any) => resolveFeatureData(f).info,
     );
     if (dataFeatures.length > 0) {
       const dataGeo = L.geoJSON({

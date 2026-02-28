@@ -1,8 +1,8 @@
 /**
  * Build a hybrid Cambodia GeoJSON:
  * - ADM2 (district) for all of Cambodia EXCEPT Phnom Penh khans and Siem Reap
- * - ADM3 sangkat polygons merged into display-name groups for Phnom Penh
- * - ADM3 sangkat polygons for the Siem Reap district area
+ * - ADM3 individual sangkat polygons for Phnom Penh (each with unique name + parent district)
+ * - ADM3 individual sangkat polygons for the Siem Reap district area
  *
  * Boundary data: geoBoundaries.org (CC BY 4.0)
  *
@@ -19,7 +19,7 @@ const OUT_PATH = join(ROOT, "public/geo/cambodia-districts.geojson");
 
 /* ── ADM2 features to EXCLUDE ──────────────────────────── */
 
-/** PP ADM2 khans (replaced by merged ADM3 sangkats) */
+/** PP ADM2 khans (replaced by individual ADM3 sangkats) */
 const PP_KHANS_EXCLUDE = new Set([
   "Chamkar Mon",
   "Tuol Kouk",
@@ -45,131 +45,143 @@ const ADM2_RENAME: Record<string, string> = {
   "Khemara Phoumin": "Sihanoukville",
 };
 
-/* ── Phnom Penh ADM3 → display name mapping ────────────── */
+/* ── Phnom Penh ADM3 → individual sangkat mapping ──────── */
+
+/** Info about an individual PP sangkat. */
+interface SangkatInfo {
+  /** Unique sangkat display name (used as GeoJSON feature name). */
+  name: string;
+  /** Parent khan / district. */
+  district: string;
+}
 
 /**
- * Maps ADM3 shapeName → our display name.
- * Multiple sangkats sharing a display name are merged into one MultiPolygon.
+ * Maps ADM3 shapeName → individual sangkat info.
+ * Each sangkat becomes its own GeoJSON feature with a unique name.
+ * Truncated shapeNames (ending with *) are matched exactly as they appear.
  */
-const PP_ADM3_MAP: Record<string, string> = {
-  /* ── Chamkar Mon → BKK1/2/3, Tonle Bassac, Toul Tom Poung ── */
-  // BKK1/2/3 are mapped by shapeID below (names truncated in source)
-  "Tonle Basak": "Tonle Bassac",
-  "Chakto Mukh": "Tonle Bassac",
-  "Boeng Trabaek": "Toul Tom Poung",
-  "Tuol Tumpung Ti Muoy": "Toul Tom Poung",
-  "Tuol Tumpung Ti Pir": "Toul Tom Poung",
-  Olympic: "Toul Tom Poung",
-  "Tumnob Tuek": "Toul Tom Poung",
+const PP_ADM3_MAP: Record<string, SangkatInfo> = {
+  /* ── Chamkar Mon sangkats ────────────────────────────── */
+  // BKK1/2/3 mapped by shapeID below (truncated names in source)
+  "Tonle Basak": { name: "Tonle Bassac", district: "Chamkar Mon" },
+  "Chakto Mukh": { name: "Chakto Mukh", district: "Chamkar Mon" },
+  "Boeng Trabaek": { name: "Boeng Trabaek", district: "Chamkar Mon" },
+  "Tuol Tumpung Ti Muoy": { name: "Toul Tompong 1", district: "Chamkar Mon" },
+  "Tuol Tumpung Ti Pir": { name: "Toul Tompong 2", district: "Chamkar Mon" },
+  Olympic: { name: "Olympic", district: "Chamkar Mon" },
+  "Tumnob Tuek": { name: "Tumnob Tuek", district: "Chamkar Mon" },
+  // Tuol Svay Prey — truncated in source data
+  "Tuol Svay Prey Ti M*": { name: "Tuol Svay Prey 1", district: "Chamkar Mon" },
+  "Tuol Svay Prey Ti P*": { name: "Tuol Svay Prey 2", district: "Chamkar Mon" },
 
-  /* ── Daun Penh ── */
-  "Voat Phnum": "Daun Penh",
-  "Phsar Kandal Ti Muoy": "Daun Penh",
-  "Phsar Kandal Ti Pir": "Daun Penh",
-  "Srah Chak": "Daun Penh",
-  "Chey Chummeah": "Daun Penh",
-  "Phsar Thmei Ti Muoy": "Daun Penh",
-  "Phsar Thmei Ti Pir": "Daun Penh",
-  "Phsar Thmei Ti Bei": "Daun Penh",
-  "Phsar Chas": "Daun Penh",
-  "Boeng Reang": "Daun Penh",
+  /* ── Daun Penh sangkats ──────────────────────────────── */
+  "Voat Phnum": { name: "Voat Phnum", district: "Daun Penh" },
+  "Phsar Kandal Ti Muoy": { name: "Phsar Kandal 1", district: "Daun Penh" },
+  "Phsar Kandal Ti Pir": { name: "Phsar Kandal 2", district: "Daun Penh" },
+  "Srah Chak": { name: "Srah Chak", district: "Daun Penh" },
+  "Chey Chummeah": { name: "Chey Chumneah", district: "Daun Penh" },
+  "Phsar Thmei Ti Muoy": { name: "Phsar Thmei 1", district: "Daun Penh" },
+  "Phsar Thmei Ti Pir": { name: "Phsar Thmei 2", district: "Daun Penh" },
+  "Phsar Thmei Ti Bei": { name: "Phsar Thmei 3", district: "Daun Penh" },
+  "Phsar Chas": { name: "Phsar Chas", district: "Daun Penh" },
+  "Boeng Reang": { name: "Boeng Reang", district: "Daun Penh" },
 
-  /* ── 7 Makara ── */
-  Mittapheap: "7 Makara",
-  Monourom: "7 Makara",
-  "Boeng Proluet": "7 Makara",
-  "Veal Vong": "7 Makara",
-  "Ou Ruessei Ti Muoy": "7 Makara",
-  "Ou Ruessei Ti Pir": "7 Makara",
-  "Ou Ruessei Ti Bei": "7 Makara",
-  "Ou Ruessei Ti Buon": "7 Makara",
-  "Phsar Depou Ti Muoy": "7 Makara",
-  "Phsar Depou Ti Pir": "7 Makara",
-  "Phsar Depou Ti Bei": "7 Makara",
-  "Phsar Daeum Kor": "7 Makara",
-  "Boeng Salang": "7 Makara",
+  /* ── 7 Makara sangkats ───────────────────────────────── */
+  Mittapheap: { name: "Mittapheap", district: "7 Makara" },
+  Monourom: { name: "Monourom", district: "7 Makara" },
+  "Boeng Proluet": { name: "Boeng Proluet", district: "7 Makara" },
+  "Veal Vong": { name: "Veal Vong", district: "7 Makara" },
+  "Ou Ruessei Ti Muoy": { name: "Ou Ruessei 1", district: "7 Makara" },
+  "Ou Ruessei Ti Pir": { name: "Ou Ruessei 2", district: "7 Makara" },
+  "Ou Ruessei Ti Bei": { name: "Ou Ruessei 3", district: "7 Makara" },
+  "Ou Ruessei Ti Buon": { name: "Ou Ruessei 4", district: "7 Makara" },
+  "Phsar Depou Ti Muoy": { name: "Phsar Depou 1", district: "7 Makara" },
+  "Phsar Depou Ti Pir": { name: "Phsar Depou 2", district: "7 Makara" },
+  "Phsar Depou Ti Bei": { name: "Phsar Depou 3", district: "7 Makara" },
+  "Phsar Daeum Kor": { name: "Phsar Daeum Kor", district: "7 Makara" },
+  "Boeng Salang": { name: "Boeng Salang", district: "7 Makara" },
 
-  /* ── Toul Kork ── */
-  "Boeng Kak Ti Muoy": "Toul Kork",
-  "Boeng Kak Ti Pir": "Toul Kork",
-  "Tuol Sangke": "Toul Kork",
+  /* ── Toul Kork sangkats ──────────────────────────────── */
+  "Boeng Kak Ti Muoy": { name: "Boeng Kak 1", district: "Toul Kork" },
+  "Boeng Kak Ti Pir": { name: "Boeng Kak 2", district: "Toul Kork" },
+  "Tuol Sangke": { name: "Tuol Sangke", district: "Toul Kork" },
+  // Tuek L'ak — full names in source data
+  "Tuek L'ak Ti Muoy": { name: "Tuek Lak 1", district: "Toul Kork" },
+  "Tuek L'ak Ti Pir": { name: "Tuek Lak 2", district: "Toul Kork" },
+  "Tuek L'ak Ti Bei": { name: "Tuek Lak 3", district: "Toul Kork" },
 
-  /* ── Sen Sok ── */
-  "Phnom Penh Thmei": "Sen Sok",
-  "Tuek Thla": "Sen Sok",
-  Khmuonh: "Sen Sok",
-  "Krang Thnong": "Sen Sok",
+  /* ── Sen Sok sangkats ────────────────────────────────── */
+  "Phnom Penh Thmei": { name: "Phnom Penh Thmei", district: "Sen Sok" },
+  "Tuek Thla": { name: "Tuek Thla", district: "Sen Sok" },
+  Khmuonh: { name: "Khmuonh", district: "Sen Sok" },
+  "Krang Thnong": { name: "Krang Thnong", district: "Sen Sok" },
 
-  /* ── Russey Keo ── */
-  "Ruessei Kaev": "Russey Keo",
-  "Svay Pak": "Russey Keo",
-  "Preaek Ta Sek": "Russey Keo",
-  "Preaek Lieb": "Russey Keo",
+  /* ── Russey Keo sangkats ─────────────────────────────── */
+  "Ruessei Kaev": { name: "Ruessei Kaev", district: "Russey Keo" },
+  "Svay Pak": { name: "Svay Pak", district: "Russey Keo" },
+  "Preaek Ta Sek": { name: "Preaek Ta Sek", district: "Russey Keo" },
+  "Preaek Lieb": { name: "Preaek Lieb", district: "Russey Keo" },
+  // Chrang Chamreh — truncated in source data
+  "Chrang Chamreh Ti M*": { name: "Chrang Chamreh 1", district: "Russey Keo" },
+  "Chrang Chamreh Ti P*": { name: "Chrang Chamreh 2", district: "Russey Keo" },
+  // Km 6 — truncated in source data
+  "Kilomaetr Lekh Pram*": { name: "Km 6", district: "Russey Keo" },
 
-  /* ── Chroy Changvar ── */
-  "Chrouy Changvar": "Chroy Changvar",
-  "Kaoh Dach": "Chroy Changvar",
-  "Preaek Ampil": "Chroy Changvar",
-  "Svay Chrum": "Chroy Changvar",
+  /* ── Chroy Changvar sangkats ─────────────────────────── */
+  "Chrouy Changvar": { name: "Chrouy Changvar", district: "Chroy Changvar" },
+  "Kaoh Dach": { name: "Kaoh Dach", district: "Chroy Changvar" },
+  "Preaek Ampil": { name: "Preaek Ampil", district: "Chroy Changvar" },
+  "Svay Chrum": { name: "Svay Chrum", district: "Chroy Changvar" },
+  // Preaek Ta Kov — lowercase k in source data
+  "Preaek Ta kov": { name: "Preaek Ta Kov", district: "Chroy Changvar" },
 
-  /* ── Meanchey ── */
-  "Boeng Tumpun": "Meanchey",
-  "Phsar Daeum Thkov": "Meanchey",
-  "Chak Angrae Leu": "Meanchey",
-  "Chak Angrae Kraom": "Meanchey",
+  /* ── Meanchey sangkats ───────────────────────────────── */
+  "Boeng Tumpun": { name: "Boeng Tumpun", district: "Meanchey" },
+  "Phsar Daeum Thkov": { name: "Phsar Daeum Thkov", district: "Meanchey" },
+  "Chak Angrae Leu": { name: "Chak Angrae Leu", district: "Meanchey" },
+  "Chak Angrae Kraom": { name: "Chak Angrae Kraom", district: "Meanchey" },
 
-  /* ── Stung Meanchey ── */
-  "Stueng Mean chey": "Stung Meanchey",
+  /* ── Stung Meanchey sangkats ─────────────────────────── */
+  "Stueng Mean chey": { name: "Stueng Meanchey", district: "Stung Meanchey" },
 
-  /* ── Chbar Ampov ── */
-  "Chhbar Ampov Ti Muoy": "Chbar Ampov",
-  "Chbar Ampov Ti Pir": "Chbar Ampov",
-  Nirouth: "Chbar Ampov",
-  "Preaek Pra": "Chbar Ampov",
-  "Veal Sbov": "Chbar Ampov",
-  "Preaek Aeng": "Chbar Ampov",
+  /* ── Chbar Ampov sangkats ────────────────────────────── */
+  "Chhbar Ampov Ti Muoy": { name: "Chbar Ampov 1", district: "Chbar Ampov" },
+  "Chbar Ampov Ti Pir": { name: "Chbar Ampov 2", district: "Chbar Ampov" },
+  Nirouth: { name: "Nirouth", district: "Chbar Ampov" },
+  "Preaek Pra": { name: "Preaek Pra", district: "Chbar Ampov" },
+  "Veal Sbov": { name: "Veal Sbov", district: "Chbar Ampov" },
+  "Preaek Aeng": { name: "Preaek Aeng", district: "Chbar Ampov" },
 
-  /* ── Por Sen Chey ── */
-  "Chaom Chau": "Por Sen Chey",
-  Kakab: "Por Sen Chey",
+  /* ── Por Sen Chey sangkats ───────────────────────────── */
+  "Chaom Chau": { name: "Chaom Chau", district: "Por Sen Chey" },
+  Kakab: { name: "Kakab", district: "Por Sen Chey" },
 
-  /* ── Kamboul ── */
-  "Pong Tuek": "Kamboul",
-  "Prey Veaeng": "Kamboul",
-  "Sak Sampov": "Kamboul",
+  /* ── Kamboul sangkats ────────────────────────────────── */
+  "Pong Tuek": { name: "Pong Tuek", district: "Kamboul" },
+  "Prey Veaeng": { name: "Prey Veaeng", district: "Kamboul" },
+  "Sak Sampov": { name: "Sak Sampov", district: "Kamboul" },
 
-  /* ── Dangkao ── */
-  Dangkao: "Dangkao",
-  "Prey Sa": "Dangkao",
-  "Spean Thma": "Dangkao",
-  "Cheung Aek": "Dangkao",
-  "Preaek Kampues": "Dangkao",
-  "Prek Ruessey": "Dangkao",
+  /* ── Dangkao sangkats ────────────────────────────────── */
+  Dangkao: { name: "Dangkao", district: "Dangkao" },
+  "Prey Sa": { name: "Prey Sa", district: "Dangkao" },
+  "Spean Thma": { name: "Spean Thma", district: "Dangkao" },
+  "Cheung Aek": { name: "Cheung Aek", district: "Dangkao" },
+  "Preaek Kampues": { name: "Preaek Kampues", district: "Dangkao" },
+  "Prek Ruessey": { name: "Prek Ruessey", district: "Dangkao" },
 
-  /* ── Prek Pnov ── */
-  "Preaek Phnov": "Prek Pnov",
-  "Kaoh Oknha Tei": "Prek Pnov",
+  /* ── Prek Pnov sangkats ──────────────────────────────── */
+  "Preaek Phnov": { name: "Preaek Phnov", district: "Prek Pnov" },
+  "Kaoh Oknha Tei": { name: "Kaoh Oknha Tei", district: "Prek Pnov" },
 };
 
 /**
  * BKK features have identical truncated names in geoBoundaries.
- * Disambiguate by full shapeID → display name.
+ * Disambiguate by full shapeID → sangkat info.
  */
-const BKK_BY_ID: Record<string, string> = {
-  "89927896B73048198705496": "BKK1",
-  "89927896B68782742352730": "BKK2",
-  "89927896B61351852717763": "BKK3",
-};
-
-/**
- * Truncated ADM3 shapeNames — match by prefix.
- */
-const PP_TRUNCATED_MAP: Record<string, string> = {
-  "Tuek L'ak Ti": "Toul Kork",
-  "Tuol Svay Prey Ti": "Toul Tom Poung",
-  "Chrang Chamreh Ti": "Russey Keo",
-  "Kilomaetr Lekh Pram": "Russey Keo",
-  "Preaek Ta kov": "Chroy Changvar",
+const BKK_BY_ID: Record<string, SangkatInfo> = {
+  "89927896B73048198705496": { name: "BKK1", district: "Chamkar Mon" },
+  "89927896B68782742352730": { name: "BKK2", district: "Chamkar Mon" },
+  "89927896B61351852717763": { name: "BKK3", district: "Chamkar Mon" },
 };
 
 /* ── Siem Reap ADM3 config ─────────────────────────────── */
@@ -229,39 +241,6 @@ function featureCentroid(feature: any): [number, number] {
   return [latS / n, lngS / n];
 }
 
-/**
- * Extract all polygon rings from a feature as MultiPolygon coordinate arrays.
- * Normalises both Polygon and MultiPolygon to uniform [ring[]] arrays.
- */
-function extractPolygons(feature: any): number[][][][] {
-  const geom = feature.geometry;
-  if (geom.type === "MultiPolygon") {
-    return geom.coordinates;
-  }
-  return [geom.coordinates];
-}
-
-/**
- * Merge multiple features into a single MultiPolygon GeoJSON feature.
- */
-function mergeFeatures(
-  features: any[],
-  properties: Record<string, any>,
-): any {
-  const allPolygons: number[][][][] = [];
-  for (const f of features) {
-    allPolygons.push(...extractPolygons(f));
-  }
-  return {
-    type: "Feature",
-    properties,
-    geometry: {
-      type: "MultiPolygon",
-      coordinates: allPolygons,
-    },
-  };
-}
-
 /* ── PP bounding box — reject ADM3 features outside PP ── */
 
 const PP_BBOX = {
@@ -271,13 +250,13 @@ const PP_BBOX = {
   maxLng: 105.02,
 };
 
-/* ── Resolve PP ADM3 feature → display name ────────────── */
+/* ── Resolve PP ADM3 feature → sangkat info ────────────── */
 
-function resolvePPName(feature: any): string | null {
+function resolvePPSangkat(feature: any): SangkatInfo | null {
   const shapeName: string = feature.properties.shapeName;
   const shapeID: string = feature.properties.shapeID;
 
-  // 1. BKK by shapeID (unique, no bbox needed)
+  // 1. BKK by shapeID (all 3 have identical truncated shapeName)
   if (BKK_BY_ID[shapeID]) return BKK_BY_ID[shapeID];
 
   // 2. Geographic filter — reject features outside PP
@@ -290,13 +269,8 @@ function resolvePPName(feature: any): string | null {
   )
     return null;
 
-  // 3. Direct name match
+  // 3. Direct name match (includes truncated names like "Chrang Chamreh Ti M*")
   if (PP_ADM3_MAP[shapeName]) return PP_ADM3_MAP[shapeName];
-
-  // 4. Truncated name (prefix match)
-  for (const [prefix, displayName] of Object.entries(PP_TRUNCATED_MAP)) {
-    if (shapeName.startsWith(prefix)) return displayName;
-  }
 
   return null;
 }
@@ -327,28 +301,35 @@ function main() {
     `\n  ADM2 baseline: ${baseFeatures.length} (excl ${adm2.features.length - baseFeatures.length} PP/SR)`,
   );
 
-  /* ── 2. Phnom Penh — individual ADM3 sangkats (named by parent district) ── */
+  /* ── 2. Phnom Penh — individual ADM3 sangkats ── */
 
   const ppFeatures: any[] = [];
-  const ppCounts = new Map<string, number>();
+  const ppDistrictCounts = new Map<string, number>();
 
   for (const f of adm3.features) {
-    const displayName = resolvePPName(f);
-    if (!displayName) continue;
-    ppCounts.set(displayName, (ppCounts.get(displayName) || 0) + 1);
+    const info = resolvePPSangkat(f);
+    if (!info) continue;
+    ppDistrictCounts.set(
+      info.district,
+      (ppDistrictCounts.get(info.district) || 0) + 1,
+    );
     ppFeatures.push({
       type: "Feature",
-      properties: { name: displayName, zone: "phnom-penh" },
+      properties: {
+        name: info.name,
+        district: info.district,
+        zone: "phnom-penh",
+      },
       geometry: f.geometry,
     });
   }
 
-  const ppDistricts = new Set(ppCounts.keys());
+  const ppDistricts = new Set(ppDistrictCounts.keys());
   console.log(
     `  PP sangkats: ${ppFeatures.length} ADM3 features across ${ppDistricts.size} districts`,
   );
-  for (const [name, count] of [...ppCounts.entries()].sort()) {
-    console.log(`    ${name.padEnd(20)} ← ${count} sangkat(s)`);
+  for (const [district, count] of [...ppDistrictCounts.entries()].sort()) {
+    console.log(`    ${district.padEnd(20)} ← ${count} sangkat(s)`);
   }
 
   /* ── 3. Siem Reap — individual ADM3 sangkats ── */
