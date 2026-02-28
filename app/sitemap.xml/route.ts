@@ -5,6 +5,12 @@ import { siteConfig } from "@/lib/site";
 /** Last significant update to static pages (update when content changes). */
 const STATIC_LASTMOD = "2026-02-24";
 
+/**
+ * Revalidate sitemap every hour so newly published AI posts appear
+ * within a reasonable window for Google.
+ */
+export const revalidate = 3600;
+
 export async function GET() {
   const base = siteConfig.url;
 

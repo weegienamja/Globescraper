@@ -8,8 +8,8 @@ import { getPostsMeta, getHtmlForPost } from "@/lib/content";
 import { getHeroImage } from "@/lib/contentImages";
 import { getPublishedAiPost, getPublishedAiPosts } from "@/lib/published-posts";
 import { ArticleJsonLd, BreadcrumbJsonLd } from "@/components/JsonLd";
-import AdminPostToolbar from "@/components/admin/AdminPostToolbar";
-import AdminHeroEditorGate from "@/components/admin/AdminHeroEditorGate";
+import AdminPostToolbarLazy from "@/components/admin/AdminPostToolbarLazy";
+import AdminHeroEditorLazy from "@/components/admin/AdminHeroEditorLazy";
 
 /**
  * Strip the first image that appears immediately after the H1 heading
@@ -26,6 +26,13 @@ function stripLeadingHeroImage(markdown: string): string {
  * beyond the statically generated set.
  */
 export const dynamicParams = true;
+
+/**
+ * ISR – serve pages from edge cache, revalidate in background every hour.
+ * Critical for Google crawling: without this, every page request triggers
+ * a full server render with no-cache headers, causing Googlebot to slow-crawl.
+ */
+export const revalidate = 3600;
 
 export function generateStaticParams() {
   return getPostsMeta().map((p) => ({ slug: p.slug }));
@@ -148,7 +155,7 @@ export default async function PostPage({ params }: { params: { slug: string } })
 
       <div className="post-layout">
         <div className="post-layout__main">
-          <AdminPostToolbar slug={slug} isAiPost={isAi} />
+          <AdminPostToolbarLazy slug={slug} isAiPost={isAi} />
           <Image
             src={heroSrc}
             alt={title}
@@ -168,7 +175,7 @@ export default async function PostPage({ params }: { params: { slug: string } })
         {/* Desktop sidebar */}
         <div className="post-layout__sidebar">
           <RecommendedPosts posts={topRecommended} />
-          <AdminHeroEditorGate slug={slug} isAiPost={isAi} heroSrc={heroSrc} />
+          <AdminHeroEditorLazy slug={slug} isAiPost={isAi} heroSrc={heroSrc} />
         </div>
       </div>
 

@@ -7,8 +7,11 @@ import { BlogCardTracker } from "@/components/BlogCardTracker";
 import { getPublishedAiPosts } from "@/lib/published-posts";
 import { BlogCollectionJsonLd, BreadcrumbJsonLd } from "@/components/JsonLd";
 
-/** AI-published posts live in the database, so this page must be dynamic. */
-export const dynamic = "force-dynamic";
+/**
+ * ISR – revalidate every 10 minutes so new posts appear promptly
+ * while still serving cached pages to crawlers and visitors.
+ */
+export const revalidate = 600;
 
 export function generateMetadata(): Metadata {
   const meta = getPagesMeta().blog;
