@@ -206,17 +206,25 @@ export function InteractiveHeatmap({ data, height = 450 }: Props) {
           layer.bindPopup(popupHtml, { className: "choropleth-popup" });
         }
 
-        /* ── Hover highlight ──────────────────────────── */
+        /* ── Hover highlight (all tiles in same district) ── */
         layer.on("mouseover", () => {
-          (layer as L.Path).setStyle({
-            weight: 2.5,
-            fillOpacity: hasData ? 0.75 : 0.15,
-            color: "#f8fafc",
+          geoLayer.eachLayer((other: any) => {
+            if (other.feature?.properties?.name === name) {
+              (other as L.Path).setStyle({
+                weight: 2.5,
+                fillOpacity: hasData ? 0.75 : 0.15,
+                color: "#f8fafc",
+              });
+              (other as L.Path).bringToFront();
+            }
           });
-          (layer as L.Path).bringToFront();
         });
         layer.on("mouseout", () => {
-          geoLayer.resetStyle(layer as L.Path);
+          geoLayer.eachLayer((other: any) => {
+            if (other.feature?.properties?.name === name) {
+              geoLayer.resetStyle(other as L.Path);
+            }
+          });
         });
       },
     }).addTo(map);
