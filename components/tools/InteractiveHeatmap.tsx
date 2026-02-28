@@ -68,11 +68,61 @@ interface Props {
   height?: number;
 }
 
+/** Human-readable labels for property type enum values */
+const TYPE_LABELS: Record<string, string> = {
+  CONDO: "Condo",
+  APARTMENT: "Apartment",
+  SERVICED_APARTMENT: "Serviced Apt",
+  PENTHOUSE: "Penthouse",
+  OTHER: "Other",
+};
+
 export function InteractiveHeatmap({ data, height = 450 }: Props) {
   const mapRef = useRef<HTMLDivElement>(null);
   const leafletMap = useRef<L.Map | null>(null);
   const [geoJson, setGeoJson] = useState<GeoJSON.FeatureCollection | null>(null);
   const [geoError, setGeoError] = useState(false);
+
+  /* ── Property type filter state ──────────────────────── */
+  const allTypes = useMemo(() => {
+    const types = new Set<string>();
+    for (const row of data) types.add(row.propertyType);
+    // Return in preferred display order
+    const order = ["CONDO", "APARTMENT", "SERVICED_APARTMENT", "PENTHOUSE", "OTHER"];
+    return order.filter((t) => types.has(t));
+  }, [data]);
+
+  // By default all types are selected
+  const [selectedTypes, setSelectedTypes] = useState<Set<string>>(() => new Set());
+
+  // Initialise selectedTypes when allTypes is first computed
+  useEffect(() => {
+    if (allTypes.length > 0 && selectedTypes.size === 0) {
+      setSelectedTypes(new Set(allTypes));
+    }
+  }, [allTypes]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const toggleType = (type: string) => {
+    setSelectedTypes((prev) => {
+      const next = new Set(prev);
+      if (next.has(type)) {
+        // Don't allow deselecting ALL — keep at least one
+        if (next.size <= 1) return prev;
+        next.delete(type);
+      } else {
+        next.add(type);
+      }
+      return next;
+    });
+  };
+
+  const selectAllTypes = () => setSelectedTypes(new Set(allTypes));
+
+  /* Filtered data based on selected property types */
+  const filteredData = useMemo(
+    () => (selectedTypes.size === 0 ? data : data.filter((r) => selectedTypes.has(r.propertyType))),
+    [data, selectedTypes]
+  );
 
   /* Fetch GeoJSON on mount */
   useEffect(() => {
@@ -94,7 +144,7 @@ export function InteractiveHeatmap({ data, height = 450 }: Props) {
       { listings: number; prices: number[]; types: Set<string> }
     >();
 
-    for (const row of data) {
+    for (const row of filteredData) {
       const key = normalizeDistrictName(row.district) ?? "Unknown";
       if (!agg.has(key)) {
         agg.set(key, { listings: 0, prices: [], types: new Set() });
@@ -120,7 +170,7 @@ export function InteractiveHeatmap({ data, height = 450 }: Props) {
       });
     }
     return result;
-  }, [data]);
+  }, [filteredData]);
 
   /* Build map once GeoJSON is loaded */
   useEffect(() => {
@@ -439,6 +489,58 @@ export function InteractiveHeatmap({ data, height = 450 }: Props) {
           box-shadow: 0 8px 24px rgba(0,0,0,0.3);
         }
       `}</style>
+      {/* Property type filter bar */}
+      {allTypes.length > 1 && (
+        <div style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: "6px",
+          marginBottom: "10px",
+          alignItems: "center",
+        }}>
+          <span style={{ color: "#94a3b8", fontSize: "12px", fontWeight: 600, marginRight: "4px" }}>
+            Filter:
+          </span>
+          {allTypes.map((type) => {
+            const active = selectedTypes.has(type);
+            return (
+              <button
+                key={type}
+                onClick={() => toggleType(type)}
+                style={{
+                  padding: "4px 12px",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  borderRadius: "6px",
+                  border: active ? "1px solid #3b82f6" : "1px solid #334155",
+                  background: active ? "#1e3a5f" : "#0f172a",
+                  color: active ? "#93c5fd" : "#64748b",
+                  cursor: "pointer",
+                  transition: "all 0.15s ease",
+                }}
+              >
+                {TYPE_LABELS[type] || type}
+              </button>
+            );
+          })}
+          {selectedTypes.size < allTypes.length && (
+            <button
+              onClick={selectAllTypes}
+              style={{
+                padding: "4px 10px",
+                fontSize: "11px",
+                borderRadius: "6px",
+                border: "1px solid #334155",
+                background: "transparent",
+                color: "#64748b",
+                cursor: "pointer",
+              }}
+            >
+              All
+            </button>
+          )}
+        </div>
+      )}
       <div
         ref={mapRef}
         style={{

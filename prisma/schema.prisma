@@ -781,6 +781,8 @@ enum QueueStatus {
 enum PropertyType {
   CONDO
   APARTMENT
+  SERVICED_APARTMENT
+  PENTHOUSE
   OTHER
 }
 

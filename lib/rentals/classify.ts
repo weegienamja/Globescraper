@@ -12,7 +12,16 @@ const REJECT_KEYWORDS = [
   "house", "villa", "villas", "land", "borey", "townhouse",
   "shophouse", "shop house", "commercial", "warehouse", "factory",
   "office space", "flat land", "plot", "lot for", "twin villa",
+];
+
+/** Keywords that strongly indicate PENTHOUSE */
+const PENTHOUSE_KEYWORDS = [
   "penthouse",
+];
+
+/** Keywords that strongly indicate SERVICED_APARTMENT */
+const SERVICED_APARTMENT_KEYWORDS = [
+  "serviced apartment", "service apartment",
 ];
 
 /** Keywords that strongly indicate CONDO */
@@ -22,15 +31,14 @@ const CONDO_KEYWORDS = [
 
 /** Keywords that strongly indicate APARTMENT */
 const APARTMENT_KEYWORDS = [
-  "apartment", "flat", "service apartment", "serviced apartment",
-  "studio apartment", "studio",
+  "apartment", "flat", "studio apartment", "studio",
 ];
 
 /**
  * Classify a listing's property type based on title and description.
  *
- * Returns CONDO, APARTMENT, or OTHER.
- * OTHER should typically be skipped during ingestion for MVP.
+ * Returns CONDO, APARTMENT, SERVICED_APARTMENT, PENTHOUSE, or OTHER.
+ * OTHER should typically be skipped during ingestion.
  */
 export function classifyPropertyType(
   title: string,
@@ -41,14 +49,23 @@ export function classifyPropertyType(
   // Check rejection keywords first (these override)
   for (const kw of REJECT_KEYWORDS) {
     if (text.includes(kw)) {
-      // But if it also mentions condo/apartment, check which signal is stronger
-      const hasCondo = CONDO_KEYWORDS.some((k) => text.includes(k));
-      const hasApartment = APARTMENT_KEYWORDS.some((k) => text.includes(k));
-      if (!hasCondo && !hasApartment) return PropertyType.OTHER;
+      // But if it also mentions a positive type, let it through
+      const hasPositive =
+        PENTHOUSE_KEYWORDS.some((k) => text.includes(k)) ||
+        SERVICED_APARTMENT_KEYWORDS.some((k) => text.includes(k)) ||
+        CONDO_KEYWORDS.some((k) => text.includes(k)) ||
+        APARTMENT_KEYWORDS.some((k) => text.includes(k));
+      if (!hasPositive) return PropertyType.OTHER;
     }
   }
 
-  // Check positive keywords
+  // Check positive keywords (most-specific first)
+  for (const kw of PENTHOUSE_KEYWORDS) {
+    if (text.includes(kw)) return PropertyType.PENTHOUSE;
+  }
+  for (const kw of SERVICED_APARTMENT_KEYWORDS) {
+    if (text.includes(kw)) return PropertyType.SERVICED_APARTMENT;
+  }
   for (const kw of CONDO_KEYWORDS) {
     if (text.includes(kw)) return PropertyType.CONDO;
   }
@@ -63,5 +80,10 @@ export function classifyPropertyType(
  * Check whether a property type should be ingested (not OTHER for MVP).
  */
 export function shouldIngest(type: PropertyType): boolean {
-  return type === PropertyType.CONDO || type === PropertyType.APARTMENT;
+  return (
+    type === PropertyType.CONDO ||
+    type === PropertyType.APARTMENT ||
+    type === PropertyType.SERVICED_APARTMENT ||
+    type === PropertyType.PENTHOUSE
+  );
 }
