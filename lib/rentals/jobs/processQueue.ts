@@ -147,6 +147,17 @@ export async function processQueueJob(
 
             const now = new Date();
             const priceStr = scraped.priceMonthlyUsd ? `$${scraped.priceMonthlyUsd}/mo` : "no price";
+
+            // Skip listings with no price (POA, missing, etc.)
+            if (!scraped.priceMonthlyUsd) {
+              log("debug", `[${idx}/${items.length}] Skipped (no price): ${scraped.title?.slice(0, 60) || "(no title)"}`);
+              await prisma.scrapeQueue.update({
+                where: { id: item.id },
+                data: { status: QueueStatus.DONE, attempts: item.attempts + 1, lastError: "Skipped: no price" },
+              });
+              return { type: "failed" as const };
+            }
+
             log("info", `[${idx}/${items.length}] Parsed: ${scraped.title?.slice(0, 60) || "(no title)"}`, {
               type: scraped.propertyType,
               district: scraped.district || "unknown",
