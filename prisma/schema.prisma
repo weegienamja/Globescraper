@@ -884,6 +884,27 @@ model JobRun {
   @@index([startedAt])
 }
 
+// ─── Rental Index Monthly ───────────────────────────────────
+
+model RentalIndexMonthly {
+  id             String       @id @default(cuid())
+  yearMonth      String       @db.VarChar(7) // "2026-02"
+  city           String       @db.VarChar(100)
+  district       String?      @db.VarChar(200)
+  bedrooms       Int?
+  propertyType   PropertyType
+  listingCount   Int
+  medianRent     Float?
+  meanRent       Float?
+  p25Rent        Float?
+  p75Rent        Float?
+  updatedAt      DateTime     @default(now()) @updatedAt
+
+  @@unique([yearMonth, city, district, bedrooms, propertyType])
+  @@index([city, district])
+  @@index([yearMonth])
+}
+
 // ─── Title Generation Log ───────────────────────────────────
 
 model TitleGenerationLog {
