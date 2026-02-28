@@ -1,8 +1,8 @@
 /**
  * Script: Discover rental listings from all enabled sources.
  *
- * Usage: npx tsx scripts/rentals_discover.ts [KHMER24|REALESTATE_KH]
- * If no source specified, runs both enabled sources.
+ * Usage: npx tsx scripts/rentals_discover.ts [SOURCE_NAME]
+ * If no source specified, runs all enabled sources.
  */
 
 import { RentalSource } from "@prisma/client";
@@ -14,7 +14,7 @@ async function main() {
   const arg = process.argv[2]?.toUpperCase();
   const sources: RentalSource[] = arg
     ? [arg as RentalSource]
-    : (["KHMER24", "REALESTATE_KH"] as RentalSource[]);
+    : (["KHMER24", "REALESTATE_KH", "IPS_CAMBODIA", "CAMREALTY", "LONGTERMLETTINGS", "FAZWAZ"] as RentalSource[]);
 
   console.log("[rentals_discover] Starting discover job...");
 

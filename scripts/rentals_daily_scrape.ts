@@ -32,7 +32,14 @@ process.env.RENTALS_MAX_PROCESS = process.env.RENTALS_MAX_PROCESS ?? "200";
 import type { PipelineLogFn, PipelineProgressFn } from "../lib/rentals/pipelineLogger";
 import type { RentalSource } from "@prisma/client";
 
-const SOURCES: RentalSource[] = ["REALESTATE_KH", "KHMER24"];
+const SOURCES: RentalSource[] = [
+  "REALESTATE_KH",
+  "KHMER24",
+  "IPS_CAMBODIA",
+  "CAMREALTY",
+  "LONGTERMLETTINGS",
+  "FAZWAZ",
+];
 
 /* ── Logger ──────────────────────────────────────────────── */
 

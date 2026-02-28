@@ -11,6 +11,11 @@ import { RentalSource } from "@prisma/client";
 export const enabledSources: Record<RentalSource, boolean> = {
   KHMER24: true,
   REALESTATE_KH: true,
+  IPS_CAMBODIA: true,
+  CAMREALTY: true,
+  LONGTERMLETTINGS: true,
+  FAZWAZ: true,
+  HOMETOGO: false, // Disabled: nightly GBP pricing, JS SPA, aggregator — poor fit for monthly USD heatmap
 };
 
 export function isSourceEnabled(source: RentalSource): boolean {

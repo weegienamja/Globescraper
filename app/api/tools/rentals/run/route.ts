@@ -21,7 +21,10 @@ import { prisma } from "@/lib/prisma";
 import { RentalSource } from "@prisma/client";
 import type { PipelineLogFn, PipelineLogEntry, PipelineProgressFn, PipelineProgressEntry } from "@/lib/rentals/pipelineLogger";
 
-const VALID_SOURCES = new Set<string>(["KHMER24", "REALESTATE_KH"]);
+const VALID_SOURCES = new Set<string>([
+  "KHMER24", "REALESTATE_KH", "IPS_CAMBODIA", "CAMREALTY",
+  "LONGTERMLETTINGS", "FAZWAZ", "HOMETOGO",
+]);
 const VALID_JOBS = new Set<string>(["discover", "process-queue", "build-index", "run-all"]);
 
 /** Allow longer execution for streaming jobs on Vercel */
@@ -43,7 +46,7 @@ export async function POST(req: NextRequest) {
 
   if (job !== "build-index" && job !== "run-all" && (!source || !VALID_SOURCES.has(source))) {
     return NextResponse.json(
-      { error: "Invalid source. Use ?source=KHMER24 or ?source=REALESTATE_KH" },
+      { error: "Invalid source. Use ?source=KHMER24|REALESTATE_KH|IPS_CAMBODIA|CAMREALTY|LONGTERMLETTINGS|FAZWAZ" },
       { status: 400 }
     );
   }

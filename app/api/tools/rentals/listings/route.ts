@@ -9,7 +9,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/rentals/api-guard";
 import { prisma } from "@/lib/prisma";
-import { Prisma } from "@prisma/client";
+import { Prisma, RentalSource } from "@prisma/client";
 import { reverseDistrictAliases } from "@/lib/rentals/district-geo";
 
 export const dynamic = "force-dynamic";
@@ -31,8 +31,8 @@ export async function GET(req: NextRequest) {
     const order = url.searchParams.get("order") === "asc" ? "asc" : "desc";
 
     const where: Prisma.RentalListingWhereInput = {};
-    if (source && (source === "KHMER24" || source === "REALESTATE_KH")) {
-      where.source = source;
+    if (source && Object.values(RentalSource).includes(source as RentalSource)) {
+      where.source = source as RentalSource;
     }
     if (propertyType && (propertyType === "CONDO" || propertyType === "APARTMENT")) {
       where.propertyType = propertyType;

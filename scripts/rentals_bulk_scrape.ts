@@ -56,7 +56,15 @@ import type { PipelineLogFn, PipelineProgressFn } from "../lib/rentals/pipelineL
 import type { RentalSource } from "@prisma/client";
 
 /* ── Source selection ────────────────────────────────────── */
-const VALID_SOURCES: RentalSource[] = ["REALESTATE_KH", "KHMER24"];
+const VALID_SOURCES: RentalSource[] = [
+  "REALESTATE_KH",
+  "KHMER24",
+  "IPS_CAMBODIA",
+  "CAMREALTY",
+  "LONGTERMLETTINGS",
+  "FAZWAZ",
+  "HOMETOGO",
+];
 const sourceArg = process.argv.find((a) => VALID_SOURCES.includes(a as RentalSource));
 const SOURCES: RentalSource[] = sourceArg
   ? [sourceArg as RentalSource]

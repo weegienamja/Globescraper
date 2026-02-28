@@ -11,6 +11,11 @@ import { RentalSource, QueueStatus } from "@prisma/client";
 import { isSourceEnabled, DISCOVER_MAX_URLS } from "../config";
 import { discoverKhmer24 } from "../sources/khmer24";
 import { discoverRealestateKh } from "../sources/realestate-kh";
+import { discoverIpsCambodia } from "../sources/ips-cambodia";
+import { discoverCamRealty } from "../sources/camrealty";
+import { discoverLongTermLettings } from "../sources/longtermlettings";
+import { discoverFazWaz } from "../sources/fazwaz";
+import { discoverHomeToGo } from "../sources/hometogo";
 import { type PipelineLogFn, type PipelineProgressFn, noopLogger, noopProgress } from "../pipelineLogger";
 
 export interface DiscoverOptions {
@@ -73,6 +78,21 @@ export async function discoverListingsJob(
         break;
       case "REALESTATE_KH":
         discovered = await discoverRealestateKh(log);
+        break;
+      case "IPS_CAMBODIA":
+        discovered = await discoverIpsCambodia(log);
+        break;
+      case "CAMREALTY":
+        discovered = await discoverCamRealty(log);
+        break;
+      case "LONGTERMLETTINGS":
+        discovered = await discoverLongTermLettings(log);
+        break;
+      case "FAZWAZ":
+        discovered = await discoverFazWaz(log);
+        break;
+      case "HOMETOGO":
+        discovered = await discoverHomeToGo(log);
         break;
       default:
         throw new Error(`Unknown source: ${source}`);

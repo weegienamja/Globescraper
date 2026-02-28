@@ -11,6 +11,11 @@ import { RentalSource, QueueStatus } from "@prisma/client";
 import { isSourceEnabled, PROCESS_QUEUE_MAX, PROCESS_QUEUE_CONCURRENCY } from "../config";
 import { scrapeListingKhmer24 } from "../sources/khmer24";
 import { scrapeListingRealestateKh } from "../sources/realestate-kh";
+import { scrapeListingIpsCambodia } from "../sources/ips-cambodia";
+import { scrapeListingCamRealty } from "../sources/camrealty";
+import { scrapeListingLongTermLettings } from "../sources/longtermlettings";
+import { scrapeListingFazWaz } from "../sources/fazwaz";
+import { scrapeListingHomeToGo } from "../sources/hometogo";
 import { computeFingerprint } from "../fingerprint";
 import { politeDelay } from "../http";
 import { type PipelineLogFn, type PipelineProgressFn, noopLogger, noopProgress } from "../pipelineLogger";
@@ -322,6 +327,16 @@ async function scrapeForSource(source: RentalSource, url: string, log?: _LogFn) 
       return scrapeListingKhmer24(url, log);
     case "REALESTATE_KH":
       return scrapeListingRealestateKh(url, log);
+    case "IPS_CAMBODIA":
+      return scrapeListingIpsCambodia(url, log);
+    case "CAMREALTY":
+      return scrapeListingCamRealty(url, log);
+    case "LONGTERMLETTINGS":
+      return scrapeListingLongTermLettings(url, log);
+    case "FAZWAZ":
+      return scrapeListingFazWaz(url, log);
+    case "HOMETOGO":
+      return scrapeListingHomeToGo(url, log);
     default:
       return null;
   }

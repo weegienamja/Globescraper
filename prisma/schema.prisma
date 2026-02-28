@@ -754,6 +754,11 @@ model EmailLog {
 enum RentalSource {
   KHMER24
   REALESTATE_KH
+  IPS_CAMBODIA
+  CAMREALTY
+  LONGTERMLETTINGS
+  FAZWAZ
+  HOMETOGO
 }
 
 enum JobType {

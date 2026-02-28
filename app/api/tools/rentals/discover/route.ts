@@ -10,7 +10,10 @@ import { requireAdminApi } from "@/lib/rentals/api-guard";
 import { discoverListingsJob } from "@/lib/rentals/jobs/discover";
 import { RentalSource } from "@prisma/client";
 
-const VALID_SOURCES = new Set<string>(["KHMER24", "REALESTATE_KH"]);
+const VALID_SOURCES = new Set<string>([
+  "KHMER24", "REALESTATE_KH", "IPS_CAMBODIA", "CAMREALTY",
+  "LONGTERMLETTINGS", "FAZWAZ", "HOMETOGO",
+]);
 
 export async function POST(req: NextRequest) {
   const guard = await requireAdminApi();
@@ -19,7 +22,7 @@ export async function POST(req: NextRequest) {
   const source = req.nextUrl.searchParams.get("source");
   if (!source || !VALID_SOURCES.has(source)) {
     return NextResponse.json(
-      { error: "Invalid source. Use ?source=KHMER24 or ?source=REALESTATE_KH" },
+      { error: "Invalid source. Use ?source=KHMER24|REALESTATE_KH|IPS_CAMBODIA|CAMREALTY|LONGTERMLETTINGS|FAZWAZ" },
       { status: 400 }
     );
   }
