@@ -1,8 +1,10 @@
 /**
  * Build a hybrid Cambodia GeoJSON:
  * - ADM2 (district) for all of Cambodia EXCEPT Phnom Penh khans and Siem Reap
- * - Hand-drawn sangkat polygons for Phnom Penh inner city
+ * - ADM3 sangkat polygons merged into display-name groups for Phnom Penh
  * - ADM3 sangkat polygons for the Siem Reap district area
+ *
+ * Boundary data: geoBoundaries.org (CC BY 4.0)
  *
  * Run once: npx tsx scripts/build-cambodia-geojson.ts
  */
@@ -15,8 +17,10 @@ const ADM2_PATH = join(ROOT, "data/cambodia-adm2-simplified.geojson");
 const ADM3_PATH = join(ROOT, "data/cambodia-adm3-simplified.geojson");
 const OUT_PATH = join(ROOT, "public/geo/cambodia-districts.geojson");
 
-/* ── ADM2 features to EXCLUDE (Phnom Penh khans — replaced by hand-drawn) ── */
-const PP_KHANS = new Set([
+/* ── ADM2 features to EXCLUDE ──────────────────────────── */
+
+/** PP ADM2 khans (replaced by merged ADM3 sangkats) */
+const PP_KHANS_EXCLUDE = new Set([
   "Chamkar Mon",
   "Tuol Kouk",
   "Doun Penh",
@@ -31,12 +35,146 @@ const PP_KHANS = new Set([
   "Praek Pnov",
 ]);
 
-/* ── ADM2 "Siem Reap" to EXCLUDE (replaced by ADM3 sangkats) ── */
+/** SR ADM2 (replaced by ADM3 sangkats) */
 const SR_ADM2_EXCLUDE = new Set(["Siem Reap"]);
 
-/* ── ADM3 shapeNames to INCLUDE for Siem Reap area ── */
+/* ── ADM2 rename ───────────────────────────────────────── */
+
+const ADM2_RENAME: Record<string, string> = {
+  Kaeb: "Kep",
+  "Khemara Phoumin": "Sihanoukville",
+};
+
+/* ── Phnom Penh ADM3 → display name mapping ────────────── */
+
+/**
+ * Maps ADM3 shapeName → our display name.
+ * Multiple sangkats sharing a display name are merged into one MultiPolygon.
+ */
+const PP_ADM3_MAP: Record<string, string> = {
+  /* ── Chamkar Mon → BKK1/2/3, Tonle Bassac, Toul Tom Poung ── */
+  // BKK1/2/3 are mapped by shapeID below (names truncated in source)
+  "Tonle Basak": "Tonle Bassac",
+  "Chakto Mukh": "Tonle Bassac",
+  "Boeng Trabaek": "Toul Tom Poung",
+  "Tuol Tumpung Ti Muoy": "Toul Tom Poung",
+  "Tuol Tumpung Ti Pir": "Toul Tom Poung",
+  Olympic: "Toul Tom Poung",
+  "Tumnob Tuek": "Toul Tom Poung",
+
+  /* ── Daun Penh ── */
+  "Voat Phnum": "Daun Penh",
+  "Phsar Kandal Ti Muoy": "Daun Penh",
+  "Phsar Kandal Ti Pir": "Daun Penh",
+  "Srah Chak": "Daun Penh",
+  "Chey Chummeah": "Daun Penh",
+  "Phsar Thmei Ti Muoy": "Daun Penh",
+  "Phsar Thmei Ti Pir": "Daun Penh",
+  "Phsar Thmei Ti Bei": "Daun Penh",
+  "Phsar Chas": "Daun Penh",
+  "Boeng Reang": "Daun Penh",
+
+  /* ── 7 Makara ── */
+  Mittapheap: "7 Makara",
+  Monourom: "7 Makara",
+  "Boeng Proluet": "7 Makara",
+  "Veal Vong": "7 Makara",
+  "Ou Ruessei Ti Muoy": "7 Makara",
+  "Ou Ruessei Ti Pir": "7 Makara",
+  "Ou Ruessei Ti Bei": "7 Makara",
+  "Ou Ruessei Ti Buon": "7 Makara",
+  "Phsar Depou Ti Muoy": "7 Makara",
+  "Phsar Depou Ti Pir": "7 Makara",
+  "Phsar Depou Ti Bei": "7 Makara",
+  "Phsar Daeum Kor": "7 Makara",
+  "Boeng Salang": "7 Makara",
+
+  /* ── Toul Kork ── */
+  "Boeng Kak Ti Muoy": "Toul Kork",
+  "Boeng Kak Ti Pir": "Toul Kork",
+  "Tuol Sangke": "Toul Kork",
+
+  /* ── Sen Sok ── */
+  "Phnom Penh Thmei": "Sen Sok",
+  "Tuek Thla": "Sen Sok",
+  Khmuonh: "Sen Sok",
+  "Krang Thnong": "Sen Sok",
+
+  /* ── Russey Keo ── */
+  "Ruessei Kaev": "Russey Keo",
+  "Svay Pak": "Russey Keo",
+  "Preaek Ta Sek": "Russey Keo",
+  "Preaek Lieb": "Russey Keo",
+
+  /* ── Chroy Changvar ── */
+  "Chrouy Changvar": "Chroy Changvar",
+  "Kaoh Dach": "Chroy Changvar",
+  "Preaek Ampil": "Chroy Changvar",
+  "Svay Chrum": "Chroy Changvar",
+
+  /* ── Meanchey ── */
+  "Boeng Tumpun": "Meanchey",
+  "Phsar Daeum Thkov": "Meanchey",
+  "Chak Angrae Leu": "Meanchey",
+  "Chak Angrae Kraom": "Meanchey",
+
+  /* ── Stung Meanchey ── */
+  "Stueng Mean chey": "Stung Meanchey",
+
+  /* ── Chbar Ampov ── */
+  "Chhbar Ampov Ti Muoy": "Chbar Ampov",
+  "Chbar Ampov Ti Pir": "Chbar Ampov",
+  Nirouth: "Chbar Ampov",
+  "Preaek Pra": "Chbar Ampov",
+  "Veal Sbov": "Chbar Ampov",
+  "Preaek Aeng": "Chbar Ampov",
+
+  /* ── Por Sen Chey ── */
+  "Chaom Chau": "Por Sen Chey",
+  Kakab: "Por Sen Chey",
+
+  /* ── Kamboul ── */
+  "Pong Tuek": "Kamboul",
+  "Prey Veaeng": "Kamboul",
+  "Sak Sampov": "Kamboul",
+
+  /* ── Dangkao ── */
+  Dangkao: "Dangkao",
+  "Prey Sa": "Dangkao",
+  "Spean Thma": "Dangkao",
+  "Cheung Aek": "Dangkao",
+  "Preaek Kampues": "Dangkao",
+  "Prek Ruessey": "Dangkao",
+
+  /* ── Prek Pnov ── */
+  "Preaek Phnov": "Prek Pnov",
+  "Kaoh Oknha Tei": "Prek Pnov",
+};
+
+/**
+ * BKK features have identical truncated names in geoBoundaries.
+ * Disambiguate by full shapeID → display name.
+ */
+const BKK_BY_ID: Record<string, string> = {
+  "89927896B73048198705496": "BKK1",
+  "89927896B68782742352730": "BKK2",
+  "89927896B61351852717763": "BKK3",
+};
+
+/**
+ * Truncated ADM3 shapeNames — match by prefix.
+ */
+const PP_TRUNCATED_MAP: Record<string, string> = {
+  "Tuek L'ak Ti": "Toul Kork",
+  "Tuol Svay Prey Ti": "Toul Tom Poung",
+  "Chrang Chamreh Ti": "Russey Keo",
+  "Kilomaetr Lekh Pram": "Russey Keo",
+  "Preaek Ta kov": "Chroy Changvar",
+};
+
+/* ── Siem Reap ADM3 config ─────────────────────────────── */
+
 const SR_SANGKATS = new Set([
-  // Core city sangkats (in SR ADM2 bounding box)
   "Sala Kamreuk",
   "Svay Dankum",
   "Sla Kram",
@@ -54,7 +192,6 @@ const SR_SANGKATS = new Set([
   "Kandaek",
   "Roluos",
   "Kampong Phluk",
-  // Border sangkats (edge of SR district)
   "Leang Dai",
   "Doun Kaev",
   "Preah Dak",
@@ -62,21 +199,29 @@ const SR_SANGKATS = new Set([
   "Bakong",
 ]);
 
-/** Siem Reap area bounding box — used to disambiguate duplicate names */
 const SR_BBOX = {
-  minLat: 13.20, maxLat: 13.52,
-  minLng: 103.69, maxLng: 104.02,
+  minLat: 13.2,
+  maxLat: 13.52,
+  minLng: 103.69,
+  maxLng: 104.02,
 };
 
-/** Compute centroid from GeoJSON coordinates */
-function centroid(feature: any): [number, number] {
+const SR_RENAME: Record<string, string> = {
+  "Siem Reab": "Siem Reap",
+  "Sngkat Sambuor": "Sambuor",
+};
+
+/* ── Helpers ────────────────────────────────────────────── */
+
+function featureCentroid(feature: any): [number, number] {
   const geom = feature.geometry;
   const ring =
     geom.type === "MultiPolygon"
       ? geom.coordinates[0][0]
       : geom.coordinates[0];
   const n = ring.length;
-  let latS = 0, lngS = 0;
+  let latS = 0,
+    lngS = 0;
   for (let i = 0; i < n; i++) {
     lngS += ring[i][0];
     latS += ring[i][1];
@@ -84,272 +229,139 @@ function centroid(feature: any): [number, number] {
   return [latS / n, lngS / n];
 }
 
-/* ── ADM3 Siem Reap shapeName → canonical display name ── */
-const SR_RENAME: Record<string, string> = {
-  "Siem Reab": "Siem Reap",
-  "Sngkat Sambuor": "Sambuor",
-};
-
-/* ── ADM2 shapeName → canonical display name ── */
-const ADM2_RENAME: Record<string, string> = {
-  "Kaeb": "Kep",
-  "Khemara Phoumin": "Sihanoukville",
-  "Stueng Hav": "Stueng Hav",
-  "Preah Sihanouk": "Preah Sihanouk",
-  "Stueng Saen": "Stueng Saen",
-  "Stueng Traeng": "Stueng Traeng",
-};
-
-/* ── Hand-drawn Phnom Penh sangkat/khan polygons ── */
-interface DistrictDef {
-  name: string;
-  coords: [number, number][];
+/**
+ * Extract all polygon rings from a feature as MultiPolygon coordinate arrays.
+ * Normalises both Polygon and MultiPolygon to uniform [ring[]] arrays.
+ */
+function extractPolygons(feature: any): number[][][][] {
+  const geom = feature.geometry;
+  if (geom.type === "MultiPolygon") {
+    return geom.coordinates;
+  }
+  return [geom.coordinates];
 }
 
-const PP_DISTRICTS: DistrictDef[] = [
-  {
-    name: "BKK1",
-    coords: [
-      [104.9200, 11.5530], [104.9210, 11.5585], [104.9215, 11.5625],
-      [104.9280, 11.5625], [104.9275, 11.5580], [104.9270, 11.5530],
-      [104.9240, 11.5525], [104.9200, 11.5530],
-    ],
-  },
-  {
-    name: "BKK2",
-    coords: [
-      [104.9200, 11.5440], [104.9200, 11.5480], [104.9200, 11.5530],
-      [104.9240, 11.5525], [104.9270, 11.5530], [104.9280, 11.5440],
-      [104.9240, 11.5435], [104.9200, 11.5440],
-    ],
-  },
-  {
-    name: "BKK3",
-    coords: [
-      [104.9080, 11.5440], [104.9085, 11.5500], [104.9080, 11.5530],
-      [104.9090, 11.5580], [104.9100, 11.5625], [104.9215, 11.5625],
-      [104.9210, 11.5585], [104.9200, 11.5530], [104.9200, 11.5480],
-      [104.9200, 11.5440], [104.9140, 11.5438], [104.9080, 11.5440],
-    ],
-  },
-  {
-    name: "Tonle Bassac",
-    coords: [
-      [104.9275, 11.5530], [104.9280, 11.5580], [104.9280, 11.5625],
-      [104.9290, 11.5660], [104.9325, 11.5680], [104.9370, 11.5650],
-      [104.9400, 11.5580], [104.9420, 11.5500], [104.9420, 11.5380],
-      [104.9400, 11.5355], [104.9340, 11.5360], [104.9300, 11.5420],
-      [104.9280, 11.5440], [104.9275, 11.5530],
-    ],
-  },
-  {
-    name: "Toul Tom Poung",
-    coords: [
-      [104.9080, 11.5360], [104.9075, 11.5400], [104.9080, 11.5440],
-      [104.9140, 11.5438], [104.9200, 11.5440], [104.9240, 11.5435],
-      [104.9280, 11.5440], [104.9300, 11.5420], [104.9340, 11.5360],
-      [104.9280, 11.5340], [104.9200, 11.5350], [104.9140, 11.5355],
-      [104.9080, 11.5360],
-    ],
-  },
-  {
-    name: "Daun Penh",
-    coords: [
-      [104.9100, 11.5625], [104.9100, 11.5680], [104.9095, 11.5720],
-      [104.9100, 11.5780], [104.9120, 11.5800], [104.9205, 11.5800],
-      [104.9260, 11.5790], [104.9310, 11.5770], [104.9340, 11.5820],
-      [104.9380, 11.5780], [104.9370, 11.5720], [104.9370, 11.5650],
-      [104.9325, 11.5680], [104.9290, 11.5660], [104.9280, 11.5625],
-      [104.9215, 11.5625], [104.9100, 11.5625],
-    ],
-  },
-  {
-    name: "7 Makara",
-    coords: [
-      [104.8920, 11.5500], [104.8910, 11.5560], [104.8900, 11.5620],
-      [104.8895, 11.5700], [104.8900, 11.5780], [104.8950, 11.5800],
-      [104.9000, 11.5810], [104.9100, 11.5800], [104.9100, 11.5780],
-      [104.9095, 11.5720], [104.9100, 11.5680], [104.9100, 11.5625],
-      [104.9090, 11.5580], [104.9080, 11.5530], [104.9085, 11.5500],
-      [104.9080, 11.5440], [104.9020, 11.5445], [104.8960, 11.5460],
-      [104.8920, 11.5500],
-    ],
-  },
-  {
-    name: "Toul Kork",
-    coords: [
-      [104.8870, 11.5780], [104.8865, 11.5840], [104.8870, 11.5900],
-      [104.8900, 11.5960], [104.8950, 11.5980], [104.9020, 11.5990],
-      [104.9100, 11.5985], [104.9200, 11.5980], [104.9260, 11.5960],
-      [104.9310, 11.5980], [104.9340, 11.5940], [104.9340, 11.5870],
-      [104.9340, 11.5820], [104.9310, 11.5770], [104.9260, 11.5790],
-      [104.9205, 11.5800], [104.9120, 11.5800], [104.9100, 11.5800],
-      [104.9000, 11.5810], [104.8950, 11.5800], [104.8900, 11.5780],
-      [104.8870, 11.5780],
-    ],
-  },
-  {
-    name: "Sen Sok",
-    coords: [
-      [104.8380, 11.5760], [104.8350, 11.5880], [104.8360, 11.6000],
-      [104.8400, 11.6100], [104.8450, 11.6180], [104.8540, 11.6220],
-      [104.8660, 11.6200], [104.8780, 11.6100], [104.8850, 11.6020],
-      [104.8870, 11.5960], [104.8900, 11.5960], [104.8870, 11.5900],
-      [104.8865, 11.5840], [104.8870, 11.5780], [104.8680, 11.5760],
-      [104.8530, 11.5750], [104.8380, 11.5760],
-    ],
-  },
-  {
-    name: "Russey Keo",
-    coords: [
-      [104.8870, 11.5960], [104.8900, 11.5960], [104.8950, 11.5980],
-      [104.9020, 11.5990], [104.9100, 11.5985], [104.9200, 11.5980],
-      [104.9260, 11.5960], [104.9310, 11.5980], [104.9310, 11.6050],
-      [104.9300, 11.6120], [104.9280, 11.6200], [104.9250, 11.6280],
-      [104.9200, 11.6350], [104.9100, 11.6380], [104.9000, 11.6350],
-      [104.8920, 11.6280], [104.8870, 11.6200], [104.8850, 11.6100],
-      [104.8850, 11.6020], [104.8870, 11.5960],
-    ],
-  },
-  {
-    name: "Chroy Changvar",
-    coords: [
-      [104.9340, 11.5820], [104.9340, 11.5870], [104.9340, 11.5940],
-      [104.9350, 11.6020], [104.9380, 11.6100], [104.9420, 11.6200],
-      [104.9480, 11.6320], [104.9530, 11.6400], [104.9580, 11.6380],
-      [104.9620, 11.6300], [104.9600, 11.6200], [104.9560, 11.6100],
-      [104.9520, 11.6000], [104.9480, 11.5900], [104.9440, 11.5820],
-      [104.9400, 11.5790], [104.9380, 11.5780], [104.9340, 11.5820],
-    ],
-  },
-  {
-    name: "Por Sen Chey",
-    coords: [
-      [104.8340, 11.5250], [104.8320, 11.5380], [104.8330, 11.5500],
-      [104.8350, 11.5600], [104.8380, 11.5700], [104.8380, 11.5760],
-      [104.8530, 11.5750], [104.8680, 11.5760], [104.8700, 11.5680],
-      [104.8750, 11.5580], [104.8780, 11.5500], [104.8760, 11.5400],
-      [104.8720, 11.5300], [104.8660, 11.5220], [104.8580, 11.5200],
-      [104.8480, 11.5210], [104.8400, 11.5230], [104.8340, 11.5250],
-    ],
-  },
-  {
-    name: "Kamboul",
-    coords: [
-      [104.7970, 11.5180], [104.7950, 11.5280], [104.7960, 11.5380],
-      [104.8000, 11.5480], [104.8060, 11.5550], [104.8150, 11.5580],
-      [104.8250, 11.5560], [104.8330, 11.5500], [104.8320, 11.5380],
-      [104.8340, 11.5250], [104.8280, 11.5200], [104.8200, 11.5180],
-      [104.8100, 11.5170], [104.7970, 11.5180],
-    ],
-  },
-  {
-    name: "Meanchey",
-    coords: [
-      [104.8960, 11.5120], [104.8940, 11.5200], [104.8920, 11.5300],
-      [104.8920, 11.5400], [104.8920, 11.5500], [104.8960, 11.5460],
-      [104.9020, 11.5445], [104.9080, 11.5440], [104.9075, 11.5400],
-      [104.9080, 11.5360], [104.9140, 11.5355], [104.9200, 11.5350],
-      [104.9280, 11.5340], [104.9340, 11.5360], [104.9380, 11.5300],
-      [104.9400, 11.5200], [104.9380, 11.5120], [104.9300, 11.5080],
-      [104.9200, 11.5060], [104.9100, 11.5080], [104.8960, 11.5120],
-    ],
-  },
-  {
-    name: "Chbar Ampov",
-    coords: [
-      [104.9420, 11.5060], [104.9400, 11.5200], [104.9400, 11.5355],
-      [104.9420, 11.5380], [104.9420, 11.5500], [104.9440, 11.5560],
-      [104.9500, 11.5600], [104.9560, 11.5580], [104.9620, 11.5520],
-      [104.9680, 11.5440], [104.9720, 11.5340], [104.9740, 11.5220],
-      [104.9720, 11.5120], [104.9660, 11.5060], [104.9580, 11.5030],
-      [104.9500, 11.5040], [104.9420, 11.5060],
-    ],
-  },
-  {
-    name: "Stung Meanchey",
-    coords: [
-      [104.8860, 11.4920], [104.8840, 11.5000], [104.8860, 11.5060],
-      [104.8900, 11.5100], [104.8960, 11.5120], [104.9100, 11.5080],
-      [104.9200, 11.5060], [104.9240, 11.4980], [104.9200, 11.4920],
-      [104.9120, 11.4880], [104.9020, 11.4870], [104.8940, 11.4890],
-      [104.8860, 11.4920],
-    ],
-  },
-  {
-    name: "Dangkao",
-    coords: [
-      [104.8500, 11.4600], [104.8480, 11.4700], [104.8500, 11.4800],
-      [104.8560, 11.4880], [104.8650, 11.4920], [104.8760, 11.4940],
-      [104.8860, 11.4920], [104.8940, 11.4890], [104.9020, 11.4870],
-      [104.9000, 11.4780], [104.8960, 11.4700], [104.8900, 11.4620],
-      [104.8800, 11.4570], [104.8680, 11.4560], [104.8580, 11.4570],
-      [104.8500, 11.4600],
-    ],
-  },
-  {
-    name: "Prek Pnov",
-    coords: [
-      [104.8600, 11.6280], [104.8580, 11.6380], [104.8600, 11.6480],
-      [104.8680, 11.6560], [104.8780, 11.6600], [104.8900, 11.6580],
-      [104.9000, 11.6520], [104.9100, 11.6440], [104.9150, 11.6380],
-      [104.9200, 11.6350], [104.9100, 11.6380], [104.9000, 11.6350],
-      [104.8920, 11.6280], [104.8870, 11.6200], [104.8780, 11.6100],
-      [104.8660, 11.6200], [104.8600, 11.6280],
-    ],
-  },
-];
+/**
+ * Merge multiple features into a single MultiPolygon GeoJSON feature.
+ */
+function mergeFeatures(
+  features: any[],
+  properties: Record<string, any>,
+): any {
+  const allPolygons: number[][][][] = [];
+  for (const f of features) {
+    allPolygons.push(...extractPolygons(f));
+  }
+  return {
+    type: "Feature",
+    properties,
+    geometry: {
+      type: "MultiPolygon",
+      coordinates: allPolygons,
+    },
+  };
+}
 
-/* ── Build ── */
+/* ── PP bounding box — reject ADM3 features outside PP ── */
+
+const PP_BBOX = {
+  minLat: 11.43,
+  maxLat: 11.70,
+  minLng: 104.78,
+  maxLng: 105.02,
+};
+
+/* ── Resolve PP ADM3 feature → display name ────────────── */
+
+function resolvePPName(feature: any): string | null {
+  const shapeName: string = feature.properties.shapeName;
+  const shapeID: string = feature.properties.shapeID;
+
+  // 1. BKK by shapeID (unique, no bbox needed)
+  if (BKK_BY_ID[shapeID]) return BKK_BY_ID[shapeID];
+
+  // 2. Geographic filter — reject features outside PP
+  const [lat, lng] = featureCentroid(feature);
+  if (
+    lat < PP_BBOX.minLat ||
+    lat > PP_BBOX.maxLat ||
+    lng < PP_BBOX.minLng ||
+    lng > PP_BBOX.maxLng
+  )
+    return null;
+
+  // 3. Direct name match
+  if (PP_ADM3_MAP[shapeName]) return PP_ADM3_MAP[shapeName];
+
+  // 4. Truncated name (prefix match)
+  for (const [prefix, displayName] of Object.entries(PP_TRUNCATED_MAP)) {
+    if (shapeName.startsWith(prefix)) return displayName;
+  }
+
+  return null;
+}
+
+/* ── Build ─────────────────────────────────────────────── */
 
 function main() {
-  console.log("Reading ADM2 data...");
+  console.log("Reading source data...");
   const adm2 = JSON.parse(readFileSync(ADM2_PATH, "utf-8"));
-  console.log(`  Total ADM2 features: ${adm2.features.length}`);
-
-  // Filter out PP khans AND the SR ADM2 feature
-  const nonPP = adm2.features.filter(
-    (f: any) =>
-      !PP_KHANS.has(f.properties.shapeName) &&
-      !SR_ADM2_EXCLUDE.has(f.properties.shapeName),
-  );
-  console.log(`  Non-PP/SR ADM2 features: ${nonPP.length}`);
-  console.log(`  Removed: ${adm2.features.length - nonPP.length} (PP khans + SR ADM2)`);
-
-  // Normalize properties: use { name: "..." } for all features
-  const adm2Features = nonPP.map((f: any) => {
-    const rawName = f.properties.shapeName;
-    const name = ADM2_RENAME[rawName] || rawName;
-    return {
-      type: "Feature",
-      properties: { name },
-      geometry: f.geometry,
-    };
-  });
-
-  // Convert hand-drawn PP polygons to GeoJSON features
-  const ppFeatures = PP_DISTRICTS.map((d) => ({
-    type: "Feature",
-    properties: { name: d.name, zone: "phnom-penh" },
-    geometry: {
-      type: "Polygon",
-      coordinates: [d.coords],
-    },
-  }));
-
-  // Read ADM3 and extract Siem Reap sangkats
-  console.log("\nReading ADM3 data...");
   const adm3 = JSON.parse(readFileSync(ADM3_PATH, "utf-8"));
-  console.log(`  Total ADM3 features: ${adm3.features.length}`);
+  console.log(`  ADM2 features: ${adm2.features.length}`);
+  console.log(`  ADM3 features: ${adm3.features.length}`);
+
+  /* ── 1. ADM2 baseline (minus PP + SR) ── */
+
+  const baseFeatures = adm2.features
+    .filter(
+      (f: any) =>
+        !PP_KHANS_EXCLUDE.has(f.properties.shapeName) &&
+        !SR_ADM2_EXCLUDE.has(f.properties.shapeName),
+    )
+    .map((f: any) => {
+      const rawName = f.properties.shapeName;
+      const name = ADM2_RENAME[rawName] || rawName;
+      return { type: "Feature", properties: { name }, geometry: f.geometry };
+    });
+  console.log(
+    `\n  ADM2 baseline: ${baseFeatures.length} (excl ${adm2.features.length - baseFeatures.length} PP/SR)`,
+  );
+
+  /* ── 2. Phnom Penh — ADM3 sangkats merged by display name ── */
+
+  const ppGroups = new Map<string, any[]>();
+  let ppMatched = 0;
+
+  for (const f of adm3.features) {
+    const displayName = resolvePPName(f);
+    if (!displayName) continue;
+    ppMatched++;
+    if (!ppGroups.has(displayName)) ppGroups.set(displayName, []);
+    ppGroups.get(displayName)!.push(f);
+  }
+
+  const ppFeatures = [...ppGroups.entries()].map(([name, features]) =>
+    mergeFeatures(features, { name, zone: "phnom-penh" }),
+  );
+
+  console.log(
+    `  PP sangkats: ${ppMatched} ADM3 → ${ppFeatures.length} merged features`,
+  );
+  for (const [name, features] of [...ppGroups.entries()].sort()) {
+    console.log(`    ${name.padEnd(20)} ← ${features.length} sangkat(s)`);
+  }
+
+  /* ── 3. Siem Reap — individual ADM3 sangkats ── */
 
   const srFeatures = adm3.features
     .filter((f: any) => {
       if (!SR_SANGKATS.has(f.properties.shapeName)) return false;
-      // Disambiguate by centroid — only include those in SR area
-      const [lat, lng] = centroid(f);
+      const [lat, lng] = featureCentroid(f);
       return (
-        lat >= SR_BBOX.minLat && lat <= SR_BBOX.maxLat &&
-        lng >= SR_BBOX.minLng && lng <= SR_BBOX.maxLng
+        lat >= SR_BBOX.minLat &&
+        lat <= SR_BBOX.maxLat &&
+        lng >= SR_BBOX.minLng &&
+        lng <= SR_BBOX.maxLng
       );
     })
     .map((f: any) => {
@@ -361,23 +373,24 @@ function main() {
         geometry: f.geometry,
       };
     });
-  console.log(`  SR sangkat features: ${srFeatures.length}`);
+  console.log(`  SR sangkats: ${srFeatures.length}`);
 
-  // Combine
+  /* ── 4. Combine and write ── */
+
   const combined = {
     type: "FeatureCollection",
-    features: [...adm2Features, ...ppFeatures, ...srFeatures],
+    features: [...baseFeatures, ...ppFeatures, ...srFeatures],
   };
 
-  console.log(`\n  PP hand-drawn features: ${ppFeatures.length}`);
-  console.log(`  SR ADM3 features: ${srFeatures.length}`);
-  console.log(`  Total combined features: ${combined.features.length}`);
+  console.log(`\n  Total features: ${combined.features.length}`);
+  console.log(
+    `    ADM2 base: ${baseFeatures.length}, PP: ${ppFeatures.length}, SR: ${srFeatures.length}`,
+  );
 
-  // Write
   mkdirSync(join(ROOT, "public/geo"), { recursive: true });
   const json = JSON.stringify(combined);
   writeFileSync(OUT_PATH, json);
-  console.log(`\nWrote ${(json.length / 1024).toFixed(1)} KB → ${OUT_PATH}`);
+  console.log(`  Wrote ${(json.length / 1024).toFixed(1)} KB → ${OUT_PATH}`);
 }
 
 main();
