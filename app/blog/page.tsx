@@ -71,6 +71,9 @@ export default async function BlogIndex() {
     }
   }
 
+  // Sort all posts newest-first by date
+  allPosts.sort((a, b) => b.date.localeCompare(a.date));
+
   return (
     <section>
       <BreadcrumbJsonLd
