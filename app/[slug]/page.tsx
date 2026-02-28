@@ -7,7 +7,7 @@ import { RecommendedPosts } from "@/components/RecommendedPosts";
 import { getPostsMeta, getHtmlForPost } from "@/lib/content";
 import { getHeroImage } from "@/lib/contentImages";
 import { getPublishedAiPost, getPublishedAiPosts } from "@/lib/published-posts";
-import { ArticleJsonLd, BreadcrumbJsonLd } from "@/components/JsonLd";
+import { ArticleJsonLd, BreadcrumbJsonLd, FAQJsonLd } from "@/components/JsonLd";
 import AdminPostToolbarLazy from "@/components/admin/AdminPostToolbarLazy";
 import AdminHeroEditorLazy from "@/components/admin/AdminHeroEditorLazy";
 
@@ -19,6 +19,37 @@ import AdminHeroEditorLazy from "@/components/admin/AdminHeroEditorLazy";
 function stripLeadingHeroImage(markdown: string): string {
   // Match: # Title\n\n![alt](url)\n  — the hero injected by injectImagesIntoMarkdown
   return markdown.replace(/^(# .+)\n\n!\[[^\]]*\]\([^)]+\)\n/m, "$1\n");
+}
+
+/**
+ * Extract FAQ pairs from markdown. Handles two formats:
+ *   **Question?**\nAnswer text.
+ *   **Q: Question?**\nAnswer text.
+ * Returns empty array if no ## FAQ heading is found.
+ */
+function extractFAQs(markdown: string): Array<{ question: string; answer: string }> {
+  const faqHeadingIdx = markdown.search(/^## FAQ/m);
+  if (faqHeadingIdx === -1) return [];
+
+  // Get everything after ## FAQ until the next ## heading or end of file
+  const afterFaq = markdown.substring(faqHeadingIdx);
+  const nextHeadingMatch = afterFaq.substring(6).search(/^## /m);
+  const faqSection = nextHeadingMatch === -1
+    ? afterFaq
+    : afterFaq.substring(0, nextHeadingMatch + 6);
+
+  const faqs: Array<{ question: string; answer: string }> = [];
+  // Match **Q: Question?** or **Question?** followed by answer lines
+  const pattern = /\*\*(?:Q:\s*)?(.+?)\*\*\n([\s\S]*?)(?=\n\*\*|$)/g;
+  let m;
+  while ((m = pattern.exec(faqSection)) !== null) {
+    const question = m[1].trim();
+    const answer = m[2].trim();
+    if (question && answer) {
+      faqs.push({ question, answer });
+    }
+  }
+  return faqs;
 }
 
 /**
@@ -114,6 +145,9 @@ export default async function PostPage({ params }: { params: { slug: string } })
   const author = isAi ? aiPost.author : staticPost!.author;
   const heroSrc = isAi ? (aiPost.heroImageUrl || getHeroImage(slug)) : getHeroImage(slug);
 
+  // Extract FAQ items from AI post markdown for structured data
+  const faqItems = isAi ? extractFAQs(aiPost.markdown) : [];
+
   // Build recommended posts list (all posts except current, max 6)
   const staticPosts = getPostsMeta();
   const aiPosts = await getPublishedAiPosts();
@@ -152,6 +186,7 @@ export default async function PostPage({ params }: { params: { slug: string } })
           { name: title, href: `/${slug}` },
         ]}
       />
+      {faqItems.length > 0 && <FAQJsonLd items={faqItems} />}
 
       <div className="post-layout">
         <div className="post-layout__main">
