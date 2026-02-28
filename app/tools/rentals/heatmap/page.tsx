@@ -17,13 +17,20 @@ export const revalidate = 0; // force-dynamic equivalent
 export default async function HeatmapPage() {
   await requireAdmin();
 
-  // Get the latest index date
-  const latestEntry = await prisma.rentalIndexDaily.findFirst({
-    orderBy: { date: "desc" },
-    select: { date: true },
+  // Always aggregate directly from all active listings
+  // This is more reliable than the daily index which only covers one day's snapshots
+  const listings = await prisma.rentalListing.findMany({
+    where: { isActive: true },
+    select: {
+      district: true,
+      city: true,
+      bedrooms: true,
+      propertyType: true,
+      priceMonthlyUsd: true,
+    },
   });
 
-  let indexData: {
+  type HeatmapRow = {
     district: string | null;
     city: string | null;
     bedrooms: number | null;
@@ -32,70 +39,36 @@ export default async function HeatmapPage() {
     medianPriceUsd: number | null;
     p25PriceUsd: number | null;
     p75PriceUsd: number | null;
-  }[] = [];
+  };
 
-  if (latestEntry) {
-    indexData = await prisma.rentalIndexDaily.findMany({
-      where: { date: latestEntry.date },
-      orderBy: { medianPriceUsd: "desc" },
-      select: {
-        district: true,
-        city: true,
-        bedrooms: true,
-        propertyType: true,
-        listingCount: true,
-        medianPriceUsd: true,
-        p25PriceUsd: true,
-        p75PriceUsd: true,
-      },
-    });
+  // Group by district + propertyType + bedrooms
+  const groups = new Map<string, { district: string | null; city: string | null; bedrooms: number | null; propertyType: string; prices: number[] }>();
+  for (const l of listings) {
+    const key = `${l.district}|${l.propertyType}|${l.bedrooms}`;
+    if (!groups.has(key)) {
+      groups.set(key, { district: l.district, city: l.city, bedrooms: l.bedrooms, propertyType: l.propertyType || "Unknown", prices: [] });
+    }
+    if (l.priceMonthlyUsd !== null) groups.get(key)!.prices.push(l.priceMonthlyUsd);
   }
 
-  // If no index data, fall back to aggregating directly from listings
-  let fallbackData: typeof indexData = [];
-  if (indexData.length === 0) {
-    const listings = await prisma.rentalListing.findMany({
-      where: { isActive: true },
-      select: {
-        district: true,
-        city: true,
-        bedrooms: true,
-        propertyType: true,
-        priceMonthlyUsd: true,
-      },
+  const displayData: HeatmapRow[] = [];
+  for (const g of groups.values()) {
+    const sorted = g.prices.sort((a, b) => a - b);
+    const median = sorted.length > 0 ? sorted[Math.floor(sorted.length / 2)] : null;
+    const p25 = sorted.length >= 4 ? sorted[Math.floor(sorted.length * 0.25)] : null;
+    const p75 = sorted.length >= 4 ? sorted[Math.floor(sorted.length * 0.75)] : null;
+    displayData.push({
+      district: g.district,
+      city: g.city,
+      bedrooms: g.bedrooms,
+      propertyType: g.propertyType,
+      listingCount: sorted.length,
+      medianPriceUsd: median,
+      p25PriceUsd: p25,
+      p75PriceUsd: p75,
     });
-
-    // Group by district + propertyType + bedrooms
-    const groups = new Map<string, { district: string | null; city: string | null; bedrooms: number | null; propertyType: string; prices: number[] }>();
-    for (const l of listings) {
-      const key = `${l.district}|${l.propertyType}|${l.bedrooms}`;
-      if (!groups.has(key)) {
-        groups.set(key, { district: l.district, city: l.city, bedrooms: l.bedrooms, propertyType: l.propertyType || "Unknown", prices: [] });
-      }
-      if (l.priceMonthlyUsd !== null) groups.get(key)!.prices.push(l.priceMonthlyUsd);
-    }
-
-    for (const g of groups.values()) {
-      const sorted = g.prices.sort((a, b) => a - b);
-      const median = sorted.length > 0 ? sorted[Math.floor(sorted.length / 2)] : null;
-      const p25 = sorted.length >= 4 ? sorted[Math.floor(sorted.length * 0.25)] : null;
-      const p75 = sorted.length >= 4 ? sorted[Math.floor(sorted.length * 0.75)] : null;
-      fallbackData.push({
-        district: g.district,
-        city: g.city,
-        bedrooms: g.bedrooms,
-        propertyType: g.propertyType,
-        listingCount: sorted.length,
-        medianPriceUsd: median,
-        p25PriceUsd: p25,
-        p75PriceUsd: p75,
-      });
-    }
-    fallbackData.sort((a, b) => (b.medianPriceUsd ?? 0) - (a.medianPriceUsd ?? 0));
   }
-
-  const displayData = indexData.length > 0 ? indexData : fallbackData;
-  const isFromIndex = indexData.length > 0;
+  displayData.sort((a, b) => (b.medianPriceUsd ?? 0) - (a.medianPriceUsd ?? 0));
 
   const formatPrice = (v: number | null) =>
     v !== null ? `$${Math.round(v).toLocaleString()}` : "—";
@@ -117,16 +90,9 @@ export default async function HeatmapPage() {
         <div style={pageStyles.mapCard}>
           <h2 style={pageStyles.sectionTitle}>
             Map View
-            {!isFromIndex && displayData.length > 0 && (
-              <span style={{
-                fontSize: "12px",
-                color: "#f59e0b",
-                fontWeight: 400,
-                background: "rgba(245,158,11,0.1)",
-                padding: "3px 8px",
-                borderRadius: "6px",
-              }}>
-                Live from listings (no index built yet)
+            {displayData.length > 0 && (
+              <span style={pageStyles.dateTag}>
+                {listings.length} active listings
               </span>
             )}
           </h2>
@@ -152,22 +118,13 @@ export default async function HeatmapPage() {
         <div style={pageStyles.tableCard}>
           <h2 style={pageStyles.sectionTitle}>
             Price Index by District
-            {latestEntry && isFromIndex && (
+            {displayData.length > 0 && (
               <span style={pageStyles.dateTag}>
-                {new Date(latestEntry.date).toLocaleDateString("en-US", {
+                {new Date().toLocaleDateString("en-US", {
                   month: "long",
                   day: "numeric",
                   year: "numeric",
                 })}
-              </span>
-            )}
-            {!isFromIndex && displayData.length > 0 && (
-              <span style={{
-                ...pageStyles.dateTag,
-                background: "rgba(245,158,11,0.15)",
-                color: "#f59e0b",
-              }}>
-                Live from listings
               </span>
             )}
           </h2>

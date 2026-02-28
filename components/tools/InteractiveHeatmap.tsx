@@ -146,7 +146,7 @@ export function InteractiveHeatmap({ data, height = 450 }: Props) {
 
     /* ── Choropleth GeoJSON layer ──────────────────────── */
 
-    const MIN_LISTINGS = 3;
+    const MIN_LISTINGS = 1;
 
     /**
      * Resolve feature data: try exact sangkat name first,
