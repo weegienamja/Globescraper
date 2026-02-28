@@ -13,6 +13,7 @@ import {
 /*  Affiliate domain patterns                                          */
 /* ------------------------------------------------------------------ */
 const AFFILIATE_PATTERNS: [RegExp, string][] = [
+  [/bridge\.edu/i, "Bridge TEFL"],
   [/nordvpn/i, "NordVPN"],
   [/safetywing/i, "SafetyWing"],
   [/anker/i, "Anker"],
