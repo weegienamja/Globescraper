@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import rehypeRaw from "rehype-raw";
 import { labelTableCells } from "@/lib/tableMobile";
 
 /**
@@ -18,7 +19,7 @@ export function MarkdownContent({ markdown }: { markdown: string }) {
 
   return (
     <article className="prose" ref={ref}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{markdown}</ReactMarkdown>
+      <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>{markdown}</ReactMarkdown>
     </article>
   );
 }
