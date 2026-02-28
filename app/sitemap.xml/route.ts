@@ -31,8 +31,13 @@ export async function GET() {
       `  <url><loc>${base}/${p.slug}</loc><lastmod>${p.modifiedDate ?? p.date}</lastmod><changefreq>monthly</changefreq><priority>0.8</priority></url>`
   );
 
-  // Include AI-published articles in sitemap
-  const aiPosts = await getPublishedAiPosts();
+  // Include AI-published articles in sitemap (graceful if DB is down)
+  let aiPosts: Awaited<ReturnType<typeof getPublishedAiPosts>> = [];
+  try {
+    aiPosts = await getPublishedAiPosts();
+  } catch (e) {
+    console.error("[Sitemap] DB error fetching AI posts:", e);
+  }
   const staticSlugs = new Set(getPostsMeta().map((p) => p.slug));
   const aiEntries = aiPosts
     .filter((p) => !staticSlugs.has(p.slug))

@@ -98,8 +98,13 @@ export async function generateMetadata({ params }: { params: { slug: string } })
     };
   }
 
-  // Check AI-published posts
-  const aiPost = await getPublishedAiPost(params.slug);
+  // Check AI-published posts (graceful fallback if DB is unavailable)
+  let aiPost: Awaited<ReturnType<typeof getPublishedAiPost>> = null;
+  try {
+    aiPost = await getPublishedAiPost(params.slug);
+  } catch (e) {
+    console.error(`[generateMetadata] DB error for slug "${params.slug}":`, e);
+  }
   if (aiPost) {
     const ogImage = aiPost.ogImageUrl || aiPost.heroImageUrl || getHeroImage(aiPost.slug);
     return {
@@ -131,7 +136,16 @@ export async function generateMetadata({ params }: { params: { slug: string } })
 export default async function PostPage({ params }: { params: { slug: string } }) {
   // Resolve post from static or AI sources
   const staticPost = getPostsMeta().find((p) => p.slug === params.slug);
-  const aiPost = !staticPost ? await getPublishedAiPost(params.slug) : null;
+
+  // Wrap DB call in try-catch so static posts still render if DB is down
+  let aiPost: Awaited<ReturnType<typeof getPublishedAiPost>> = null;
+  if (!staticPost) {
+    try {
+      aiPost = await getPublishedAiPost(params.slug);
+    } catch (e) {
+      console.error(`[PostPage] DB error fetching AI post "${params.slug}":`, e);
+    }
+  }
 
   if (!staticPost && !aiPost) return notFound();
 
@@ -150,7 +164,12 @@ export default async function PostPage({ params }: { params: { slug: string } })
 
   // Build recommended posts list (all posts except current, max 6)
   const staticPosts = getPostsMeta();
-  const aiPosts = await getPublishedAiPosts();
+  let aiPosts: Awaited<ReturnType<typeof getPublishedAiPosts>> = [];
+  try {
+    aiPosts = await getPublishedAiPosts();
+  } catch (e) {
+    console.error("[PostPage] DB error fetching AI posts for recommendations:", e);
+  }
   const slugSet = new Set<string>();
   const recommended: Array<{ slug: string; title: string; description: string; isAiGenerated?: boolean; heroImageUrl?: string | null }> = [];
 

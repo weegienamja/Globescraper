@@ -36,7 +36,14 @@ export function generateMetadata(): Metadata {
 
 export default async function BlogIndex() {
   const staticPosts = getPostsMeta();
-  const aiPosts = await getPublishedAiPosts();
+
+  // Graceful fallback: if DB is unavailable, show only static posts
+  let aiPosts: Awaited<ReturnType<typeof getPublishedAiPosts>> = [];
+  try {
+    aiPosts = await getPublishedAiPosts();
+  } catch (e) {
+    console.error("[BlogIndex] DB error fetching AI posts:", e);
+  }
 
   // Merge and deduplicate by slug, newest first
   const slugSet = new Set<string>();
