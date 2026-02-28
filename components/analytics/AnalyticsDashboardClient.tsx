@@ -5,7 +5,7 @@
  * Receives server-fetched initial data and manages filter state + URL sync.
  */
 
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import dynamic from "next/dynamic";
 import { KpiCards } from "@/components/analytics/KpiCards";
 import { TopMoversTable } from "@/components/analytics/TopMoversTable";
@@ -114,6 +114,11 @@ interface AnalyticsPayload {
     volatility: number;
     listingCount: number;
   }[];
+  heatmapDistricts?: {
+    district: string;
+    listingCount: number;
+    medianPriceUsd: number | null;
+  }[];
   districts?: string[];
   filters: {
     city: string;
@@ -199,21 +204,16 @@ export function AnalyticsDashboardClient({ initialData, districts: initialDistri
     }
   }, [city, district, bedrooms, propertyType, range]);
 
-  // Refetch when filters change (debounced skip for initial)
+  // Refetch when filters change — skip only the very first render
+  const isFirstLoad = useRef(true);
   useEffect(() => {
-    if (!initialData) {
-      fetchData();
+    if (isFirstLoad.current) {
+      isFirstLoad.current = false;
+      // Only fetch on mount if there's no server-provided data
+      if (!initialData) fetchData();
       return;
     }
-    // Only refetch if filters differ from initial
-    const f = initialData.filters;
-    const changed =
-      city !== (f.city || "Phnom Penh") ||
-      district !== (f.district || "") ||
-      bedrooms !== String(f.bedrooms ?? "") ||
-      propertyType !== (f.propertyType || "") ||
-      range !== (f.range || "90d");
-    if (changed) fetchData();
+    fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [city, district, bedrooms, propertyType, range]);
 
@@ -225,10 +225,23 @@ export function AnalyticsDashboardClient({ initialData, districts: initialDistri
     window.open(`/api/tools/rentals/analytics?${params}`, "_blank");
   };
 
-  // Transform trend data for heatmap district view (use latest)
+  // Transform district data for heatmap — prefer full heatmapDistricts, fallback to movers
   const heatmapData = useMemo(() => {
     if (!data) return [];
-    // Derive from movers which have the latest aggregated data
+    // Use heatmapDistricts (all districts, no cap) when available
+    if (data.heatmapDistricts && data.heatmapDistricts.length > 0) {
+      return data.heatmapDistricts.map((d) => ({
+        district: d.district,
+        city: city,
+        bedrooms: null as number | null,
+        propertyType: "ALL",
+        listingCount: d.listingCount,
+        medianPriceUsd: d.medianPriceUsd,
+        p25PriceUsd: null as number | null,
+        p75PriceUsd: null as number | null,
+      }));
+    }
+    // Fallback to movers (legacy, capped at 20)
     return data.movers.map((m) => ({
       district: m.district,
       city: city,

@@ -13,6 +13,7 @@ import {
   computeTrend,
   computeDistribution,
   computeMovers,
+  computeDistrictHeatmap,
   type IndexRow,
 } from "@/lib/analytics/calculateStats";
 import { volatilityScore } from "@/lib/analytics/volatility";
@@ -53,6 +54,7 @@ export default async function AnalyticsPage() {
   const trend = computeTrend(rows);
   const distribution = computeDistribution(rows);
   const movers = computeMovers(rows);
+  const heatmapDistricts = computeDistrictHeatmap(rows);
 
   const allMedians = rows
     .map((r) => r.medianPriceUsd)
@@ -63,6 +65,7 @@ export default async function AnalyticsPage() {
     trend,
     distribution,
     movers,
+    heatmapDistricts,
     filters: {
       city: "Phnom Penh",
       range: "90d",

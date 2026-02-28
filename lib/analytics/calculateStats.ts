@@ -269,6 +269,45 @@ export function computeMovers(rows: IndexRow[]): MoverRow[] {
   return movers.slice(0, 20);
 }
 
+/* ── District Heatmap Data (all districts, no cap) ───────── */
+
+export interface HeatmapDistrictRow {
+  district: string;
+  listingCount: number;
+  medianPriceUsd: number | null;
+}
+
+/**
+ * Aggregate all districts for the heatmap — NOT capped or filtered.
+ * Returns every district with at least 1 listing.
+ */
+export function computeDistrictHeatmap(rows: IndexRow[]): HeatmapDistrictRow[] {
+  const byDistrict = new Map<
+    string,
+    { listings: number; prices: number[] }
+  >();
+  for (const r of rows) {
+    const d = r.district ?? "Unknown";
+    if (d === "Unknown") continue;
+    if (!byDistrict.has(d)) byDistrict.set(d, { listings: 0, prices: [] });
+    const entry = byDistrict.get(d)!;
+    entry.listings += r.listingCount;
+    if (r.medianPriceUsd !== null) entry.prices.push(r.medianPriceUsd);
+  }
+
+  const result: HeatmapDistrictRow[] = [];
+  for (const [district, data] of byDistrict) {
+    const sorted = data.prices.sort((a, b) => a - b);
+    result.push({
+      district,
+      listingCount: data.listings,
+      medianPriceUsd: sorted.length > 0 ? sorted[Math.floor(sorted.length / 2)] : null,
+    });
+  }
+
+  return result.sort((a, b) => b.listingCount - a.listingCount);
+}
+
 /* ── Supply Signal Logic ─────────────────────────────────── */
 
 function computeSupplySignal(

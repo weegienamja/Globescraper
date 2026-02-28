@@ -223,7 +223,7 @@ export function HistoricalHeatmap({ data, height = 450, monthlySnapshots, city }
       geoLayerRef.current = null;
     }
 
-    const MIN_LISTINGS = 3;
+    const MIN_LISTINGS = 1;
 
     function resolveFeatureData(feature: GeoJSON.Feature) {
       const name = feature?.properties?.name as string | undefined;

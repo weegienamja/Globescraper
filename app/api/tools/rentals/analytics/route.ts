@@ -21,6 +21,7 @@ import {
   computeTrend,
   computeDistribution,
   computeMovers,
+  computeDistrictHeatmap,
   type IndexRow,
 } from "@/lib/analytics/calculateStats";
 import { volatilityScore } from "@/lib/analytics/volatility";
@@ -83,6 +84,7 @@ export async function GET(req: NextRequest) {
     const trend = computeTrend(rows);
     const distribution = computeDistribution(rows);
     const movers = computeMovers(rows);
+    const heatmapDistricts = computeDistrictHeatmap(rows);
 
     // Volatility score from all median values
     const allMedians = rows
@@ -109,6 +111,7 @@ export async function GET(req: NextRequest) {
       trend,
       distribution,
       movers,
+      heatmapDistricts,
       districts: availableDistricts,
       filters: { city, district, bedrooms, propertyType, range },
       meta: {
