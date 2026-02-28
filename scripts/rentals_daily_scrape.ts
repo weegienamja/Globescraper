@@ -122,6 +122,12 @@ async function main() {
   log("info", "Building index for yesterday…");
   await buildDailyIndexJob(undefined, log, progress);
 
+  // Phase 4: Mark stale listings inactive (not seen in 7+ days)
+  console.log("\n--- Mark Stale Listings ---\n");
+  const { markStaleListingsJob } = await import("../lib/rentals/jobs/markStaleListings");
+  const staleResult = await markStaleListingsJob(7, log);
+  log("info", `Stale check: ${staleResult.deactivated} deactivated, ${staleResult.alreadyInactive} already inactive`);
+
   // Cleanup
   await closeBrowser();
   await prisma.$disconnect();

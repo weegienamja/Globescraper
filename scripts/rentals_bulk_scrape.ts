@@ -112,7 +112,7 @@ async function main() {
 
   /* ── Phase 1: Discover ─────────────────────────────────── */
   if (!SKIP_DISCOVER) {
-    console.log("━━━ Phase 1/3: Discover Listings ━━━\n");
+    console.log("━━━ Phase 1/4: Discover Listings ━━━\n");
     const result = await discoverListingsJob(
       SOURCE,
       { maxUrls: MAX_URLS },
@@ -121,12 +121,12 @@ async function main() {
     );
     console.log(`\n  ✔ Discovered ${result.discovered} URLs, queued ${result.queued}, skipped ${result.skippedDuplicate} duplicates\n`);
   } else {
-    console.log("━━━ Phase 1/3: Discover — SKIPPED ━━━\n");
+    console.log("━━━ Phase 1/4: Discover — SKIPPED ━━━\n");
   }
 
   /* ── Phase 2: Process Queue ────────────────────────────── */
   if (!SKIP_PROCESS) {
-    console.log("━━━ Phase 2/3: Process Queue ━━━\n");
+    console.log("━━━ Phase 2/4: Process Queue ━━━\n");
 
     let totalProcessed = 0;
     let totalInserted = 0;
@@ -166,14 +166,14 @@ async function main() {
 
     console.log(`  ✔ Process complete — ${totalProcessed} total (${totalInserted} new, ${totalUpdated} updated, ${totalFailed} failed)\n`);
   } else {
-    console.log("━━━ Phase 2/3: Process Queue — SKIPPED ━━━\n");
+    console.log("━━━ Phase 2/4: Process Queue — SKIPPED ━━━\n");
   }
 
   } // end for-each source
 
   /* ── Phase 3: Build Index ──────────────────────────────── */
   if (!SKIP_INDEX) {
-    console.log("━━━ Phase 3/3: Build Daily Index ━━━\n");
+    console.log("━━━ Phase 3/4: Build Daily Index ━━━\n");
 
     const now = new Date();
     const todayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
@@ -188,8 +188,14 @@ async function main() {
 
     console.log(`\n  ✔ Index built — ${todayResult.indexRows + yesterdayResult.indexRows} total rows\n`);
   } else {
-    console.log("━━━ Phase 3/3: Build Index — SKIPPED ━━━\n");
+    console.log("━━━ Phase 3/4: Build Index — SKIPPED ━━━\n");
   }
+
+  /* ── Phase 4/4: Mark Stale Listings ──────────────────── */
+  console.log("━━━ Phase 4/4: Mark Stale Listings ━━━\n");
+  const { markStaleListingsJob } = await import("../lib/rentals/jobs/markStaleListings");
+  const staleResult = await markStaleListingsJob(7, log);
+  console.log(`  ✔ ${staleResult.deactivated} listings deactivated, ${staleResult.alreadyInactive} already inactive\n`);
 
   const totalMs = Date.now() - totalStart;
   const mins = Math.floor(totalMs / 60000);

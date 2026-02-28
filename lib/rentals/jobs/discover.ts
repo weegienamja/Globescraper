@@ -106,15 +106,22 @@ export async function discoverListingsJob(
       log("info", `Capped to ${maxUrls} URLs (${discovered.length} found)`);
     }
 
-    // Enqueue URLs (upsert to avoid duplicates)
+    // Enqueue URLs (upsert — re-discovered URLs are reset to PENDING for re-scraping)
     log("info", `Enqueueing ${capped.length} URLs to scrape queue…`);
     let queued = 0;
+    let requeuedExisting = 0;
     let skippedDuplicate = 0;
 
     for (let i = 0; i < capped.length; i++) {
       const item = capped[i];
       const pct = 50 + Math.round((i / capped.length) * 45);
       try {
+        // Check if already in queue so we can count re-queued vs new
+        const existing = await prisma.scrapeQueue.findUnique({
+          where: { source_canonicalUrl: { source, canonicalUrl: item.url } },
+          select: { status: true },
+        });
+
         await prisma.scrapeQueue.upsert({
           where: {
             source_canonicalUrl: {
@@ -130,13 +137,18 @@ export async function discoverListingsJob(
             priority: 0,
           },
           update: {
+            // Reset to PENDING so existing listings get re-scraped (new snapshot)
+            status: QueueStatus.PENDING,
+            attempts: 0,
+            lastError: null,
             updatedAt: new Date(),
           },
         });
         queued++;
+        if (existing && existing.status === "DONE") requeuedExisting++;
         if (queued % 10 === 0 || i === capped.length - 1) {
           progress({ phase: "discover", percent: pct, label: `Enqueued ${queued}/${capped.length} URLs` });
-          log("info", `Enqueued ${queued}/${capped.length} URLs so far…`);
+          log("info", `Enqueued ${queued}/${capped.length} URLs so far… (${requeuedExisting} re-queued)`);
         }
         log("debug", `✓ Queued: ${item.url}`, { sourceListingId: item.sourceListingId });
       } catch {
@@ -148,8 +160,8 @@ export async function discoverListingsJob(
     const endTime = Date.now();
     const durationMs = endTime - startTime;
 
-    progress({ phase: "discover", percent: 100, label: `Done — ${queued} queued, ${skippedDuplicate} duplicates` });
-    log("info", `Enqueue complete: ${queued} new URLs queued, ${skippedDuplicate} duplicates skipped`);
+    progress({ phase: "discover", percent: 100, label: `Done — ${queued} queued (${requeuedExisting} re-queued), ${skippedDuplicate} duplicates` });
+    log("info", `Enqueue complete: ${queued} URLs queued (${requeuedExisting} re-queued for snapshots), ${skippedDuplicate} duplicates skipped`);
     log("info", `✔ Discover finished in ${(durationMs / 1000).toFixed(1)}s — ${capped.length} found, ${queued} queued`);
 
     // Update JobRun

@@ -29,6 +29,7 @@ export interface ProcessQueueResult {
   processed: number;
   inserted: number;
   updated: number;
+  deactivated: number;
   snapshots: number;
   failed: number;
 }
@@ -58,6 +59,7 @@ export async function processQueueJob(
   let processed = 0;
   let inserted = 0;
   let updated = 0;
+  let deactivated = 0;
   let snapshots = 0;
   let failed = 0;
 
@@ -73,7 +75,7 @@ export async function processQueueJob(
           errorMessage: `Source ${source} is disabled`,
         },
       });
-      return { jobRunId: jobRun.id, processed: 0, inserted: 0, updated: 0, snapshots: 0, failed: 0 };
+      return { jobRunId: jobRun.id, processed: 0, inserted: 0, updated: 0, deactivated: 0, snapshots: 0, failed: 0 };
     }
 
     // Get pending items, ordered by priority desc and oldest first
@@ -114,16 +116,33 @@ export async function processQueueJob(
             const scraped = await scrapeForSource(source, item.canonicalUrl, log);
 
             if (!scraped) {
-              log("warn", `[${idx}/${items.length}] ✗ Filtered out (not condo/apartment or empty)`);
+              // Listing returned null — could be 404, removed, or filtered out.
+              // If this listing already exists in our DB, mark it inactive (gone from site).
+              const goneListing = await prisma.rentalListing.findUnique({
+                where: { canonicalUrl: item.canonicalUrl },
+                select: { id: true, isActive: true },
+              });
+              if (goneListing && goneListing.isActive) {
+                await prisma.rentalListing.update({
+                  where: { id: goneListing.id },
+                  data: { isActive: false },
+                });
+                log("info", `[${idx}/${items.length}] ⊘ Marked listing INACTIVE (no longer available on site)`);
+              } else {
+                log("warn", `[${idx}/${items.length}] ✗ Filtered out (not condo/apartment or empty)`);
+              }
+
               await prisma.scrapeQueue.update({
                 where: { id: item.id },
                 data: {
-                  status: item.attempts + 1 >= 3 ? QueueStatus.DONE : QueueStatus.RETRY,
+                  status: QueueStatus.DONE,
                   attempts: item.attempts + 1,
-                  lastError: "Failed to scrape or filtered out (not condo/apartment)",
+                  lastError: goneListing
+                    ? "Listing no longer available — marked inactive"
+                    : "Failed to scrape or filtered out (not condo/apartment)",
                 },
               });
-              return { type: "failed" as const };
+              return { type: goneListing ? "deactivated" as const : "failed" as const };
             }
 
             const now = new Date();
@@ -265,6 +284,7 @@ export async function processQueueJob(
         if (r.status === "fulfilled") {
           if (r.value.type === "inserted") { inserted++; snapshots++; }
           else if (r.value.type === "updated") { updated++; snapshots++; }
+          else if (r.value.type === "deactivated") { deactivated++; }
           else { failed++; }
         } else {
           failed++;
@@ -273,8 +293,8 @@ export async function processQueueJob(
 
       /* Report progress */
       const pct = Math.round((processed / items.length) * 100);
-      progress({ phase: "process", percent: pct, label: `Scraped ${processed}/${items.length} listings (${inserted} new, ${updated} updated, ${failed} failed)` });
-      log("info", `Batch ${batchNum} done — running totals: ${processed}/${items.length} processed, ${inserted} new, ${updated} updated, ${failed} failed`);
+      progress({ phase: "process", percent: pct, label: `Scraped ${processed}/${items.length} listings (${inserted} new, ${updated} updated, ${deactivated} inactive, ${failed} failed)` });
+      log("info", `Batch ${batchNum} done — running totals: ${processed}/${items.length} processed, ${inserted} new, ${updated} updated, ${deactivated} deactivated, ${failed} failed`);
 
       /* Brief pause between batches (not between each item) */
       if (batchStart + BATCH_SIZE < items.length) {
@@ -285,8 +305,8 @@ export async function processQueueJob(
     const endTime = Date.now();
     const durationMs = endTime - startTime;
 
-    log("info", `✔ Process queue finished in ${(durationMs / 1000).toFixed(1)}s — ${processed} scraped, ${inserted} new, ${updated} updated, ${snapshots} snapshots, ${failed} failed`);
-    progress({ phase: "process", percent: 100, label: `Done — ${processed} scraped, ${inserted} new, ${updated} updated` });
+    log("info", `✔ Process queue finished in ${(durationMs / 1000).toFixed(1)}s — ${processed} scraped, ${inserted} new, ${updated} updated, ${deactivated} deactivated, ${snapshots} snapshots, ${failed} failed`);
+    progress({ phase: "process", percent: 100, label: `Done — ${processed} scraped, ${inserted} new, ${updated} updated, ${deactivated} inactive` });
 
     await prisma.jobRun.update({
       where: { id: jobRun.id },
@@ -301,7 +321,7 @@ export async function processQueueJob(
       },
     });
 
-    return { jobRunId: jobRun.id, processed, inserted, updated, snapshots, failed };
+    return { jobRunId: jobRun.id, processed, inserted, updated, deactivated, snapshots, failed };
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     log("error", `Process queue job failed: ${msg}`);
@@ -314,7 +334,7 @@ export async function processQueueJob(
         errorMessage: msg.slice(0, 2000),
       },
     });
-    return { jobRunId: jobRun.id, processed, inserted, updated, snapshots, failed };
+    return { jobRunId: jobRun.id, processed, inserted, updated, deactivated, snapshots, failed };
   }
 }
 
