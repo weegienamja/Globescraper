@@ -151,16 +151,16 @@ export default async function PostPage({ params }: { params: { slug: string } })
 
   // Determine values for current post
   const isAi = !!aiPost;
-  const slug = isAi ? aiPost.slug : staticPost!.slug;
-  const title = isAi ? aiPost.title : staticPost!.title.replace(" | GlobeScraper", "");
-  const description = isAi ? aiPost.description : staticPost!.description;
-  const date = isAi ? aiPost.date : staticPost!.date;
-  const modifiedDate = isAi ? aiPost.modifiedDate : staticPost!.modifiedDate;
-  const author = isAi ? aiPost.author : staticPost!.author;
-  const heroSrc = isAi ? (aiPost.heroImageUrl || getHeroImage(slug)) : getHeroImage(slug);
+  const slug = aiPost ? aiPost.slug : staticPost!.slug;
+  const title = aiPost ? aiPost.title : staticPost!.title.replace(" | GlobeScraper", "");
+  const description = aiPost ? aiPost.description : staticPost!.description;
+  const date = aiPost ? aiPost.date : staticPost!.date;
+  const modifiedDate = aiPost ? aiPost.modifiedDate : staticPost!.modifiedDate;
+  const author = aiPost ? aiPost.author : staticPost!.author;
+  const heroSrc = aiPost ? (aiPost.heroImageUrl || getHeroImage(slug)) : getHeroImage(slug);
 
   // Extract FAQ items from AI post markdown for structured data
-  const faqItems = isAi ? extractFAQs(aiPost.markdown) : [];
+  const faqItems = aiPost ? extractFAQs(aiPost.markdown) : [];
 
   // Build recommended posts list (all posts except current, max 6)
   const staticPosts = getPostsMeta();
@@ -219,7 +219,7 @@ export default async function PostPage({ params }: { params: { slug: string } })
             className="post-hero"
             style={{ width: "100%", maxWidth: "100%", height: "auto", borderRadius: "var(--radius)", marginBottom: 24 }}
           />
-          {isAi ? (
+          {aiPost ? (
             <MarkdownContent markdown={stripLeadingHeroImage(aiPost.markdown)} />
           ) : (
             <HtmlContent html={getHtmlForPost(staticPost!.slug)} />
