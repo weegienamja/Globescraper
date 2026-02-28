@@ -1,6 +1,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import { getPagesMeta } from "@/lib/content";
+import { OrganizationJsonLd } from "@/components/JsonLd";
+import { siteConfig } from "@/lib/site";
 import type { Metadata } from "next";
 
 export function generateMetadata(): Metadata {
@@ -89,8 +91,55 @@ const guideCards = [
 ];
 
 export default function HomePage() {
+  /* ── ItemList schema — lists key content pages for carousel eligibility ── */
+  const itemList = {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    name: "GlobeScraper Teaching Guides",
+    description:
+      "Practical guides for teaching English in Southeast Asia — visas, TEFL, jobs, costs, and daily life.",
+    itemListElement: [
+      {
+        "@type": "ListItem",
+        position: 1,
+        name: "Blog — Teaching English in Southeast Asia",
+        url: `${siteConfig.url}/blog`,
+      },
+      {
+        "@type": "ListItem",
+        position: 2,
+        name: "How It Works to Teach English Abroad",
+        url: `${siteConfig.url}/how-it-works-to-teach-english`,
+      },
+      {
+        "@type": "ListItem",
+        position: 3,
+        name: "Community — Connect with Expat Teachers",
+        url: `${siteConfig.url}/community`,
+      },
+      {
+        "@type": "ListItem",
+        position: 4,
+        name: "Meetups — Teacher Events in Southeast Asia",
+        url: `${siteConfig.url}/meetups`,
+      },
+      {
+        "@type": "ListItem",
+        position: 5,
+        name: "About GlobeScraper",
+        url: `${siteConfig.url}/about`,
+      },
+    ],
+  };
+
   return (
     <main className="hp">
+      <OrganizationJsonLd />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(itemList) }}
+      />
+
       {/* ── Hero ───────────────────────────────────── */}
       <section className="hp-hero">
         <div className="hp-hero__glow" aria-hidden="true" />
