@@ -17,7 +17,7 @@ const BROWSER_UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
 /** Time to wait after navigation for CF challenge / lazy content (ms) */
-const POST_NAV_WAIT_MS = 3_000;
+const POST_NAV_WAIT_MS = 5_000;
 
 /** Hard timeout for a full page load (ms) */
 const PAGE_TIMEOUT_MS = 30_000;
@@ -80,7 +80,7 @@ export async function fetchHtmlPlaywright(
 
   try {
     const response = await page.goto(url, {
-      waitUntil: "domcontentloaded",
+      waitUntil: "networkidle",
       timeout: PAGE_TIMEOUT_MS,
     });
 
@@ -88,7 +88,7 @@ export async function fetchHtmlPlaywright(
       return null;
     }
 
-    // Wait for CF challenge / dynamic content
+    // Wait for SPA hydration / dynamic content
     await page.waitForTimeout(options?.waitMs ?? POST_NAV_WAIT_MS);
 
     // Optional: scroll to bottom to trigger lazy-loading
@@ -118,7 +118,7 @@ export async function fetchCategoryPagePlaywright(
 
   try {
     const response = await page.goto(url, {
-      waitUntil: "domcontentloaded",
+      waitUntil: "networkidle",
       timeout: PAGE_TIMEOUT_MS,
     });
 
