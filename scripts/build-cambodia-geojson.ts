@@ -327,28 +327,28 @@ function main() {
     `\n  ADM2 baseline: ${baseFeatures.length} (excl ${adm2.features.length - baseFeatures.length} PP/SR)`,
   );
 
-  /* ── 2. Phnom Penh — ADM3 sangkats merged by display name ── */
+  /* ── 2. Phnom Penh — individual ADM3 sangkats (named by parent district) ── */
 
-  const ppGroups = new Map<string, any[]>();
-  let ppMatched = 0;
+  const ppFeatures: any[] = [];
+  const ppCounts = new Map<string, number>();
 
   for (const f of adm3.features) {
     const displayName = resolvePPName(f);
     if (!displayName) continue;
-    ppMatched++;
-    if (!ppGroups.has(displayName)) ppGroups.set(displayName, []);
-    ppGroups.get(displayName)!.push(f);
+    ppCounts.set(displayName, (ppCounts.get(displayName) || 0) + 1);
+    ppFeatures.push({
+      type: "Feature",
+      properties: { name: displayName, zone: "phnom-penh" },
+      geometry: f.geometry,
+    });
   }
 
-  const ppFeatures = [...ppGroups.entries()].map(([name, features]) =>
-    mergeFeatures(features, { name, zone: "phnom-penh" }),
-  );
-
+  const ppDistricts = new Set(ppCounts.keys());
   console.log(
-    `  PP sangkats: ${ppMatched} ADM3 → ${ppFeatures.length} merged features`,
+    `  PP sangkats: ${ppFeatures.length} ADM3 features across ${ppDistricts.size} districts`,
   );
-  for (const [name, features] of [...ppGroups.entries()].sort()) {
-    console.log(`    ${name.padEnd(20)} ← ${features.length} sangkat(s)`);
+  for (const [name, count] of [...ppCounts.entries()].sort()) {
+    console.log(`    ${name.padEnd(20)} ← ${count} sangkat(s)`);
   }
 
   /* ── 3. Siem Reap — individual ADM3 sangkats ── */

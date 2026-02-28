@@ -221,7 +221,11 @@ export function InteractiveHeatmap({ data, height = 450 }: Props) {
       },
     }).addTo(map);
 
-    /* ── District name labels (only for features with data) ── */
+    /* ── District name labels (one per name, only for features with data) ── */
+    const labelCentroids = new Map<
+      string,
+      { latSum: number; lngSum: number; count: number }
+    >();
     geoJson.features.forEach((feature: any) => {
       const name = feature.properties?.name as string;
       if (!districtsWithData.has(name)) return;
@@ -231,10 +235,20 @@ export function InteractiveHeatmap({ data, height = 450 }: Props) {
         geom.type === "MultiPolygon"
           ? geom.coordinates[0]
           : geom.coordinates;
-
       const [lat, lng] = polygonCentroid(coords);
 
-      L.marker([lat, lng], {
+      const existing = labelCentroids.get(name);
+      if (existing) {
+        existing.latSum += lat;
+        existing.lngSum += lng;
+        existing.count += 1;
+      } else {
+        labelCentroids.set(name, { latSum: lat, lngSum: lng, count: 1 });
+      }
+    });
+
+    labelCentroids.forEach(({ latSum, lngSum, count }, name) => {
+      L.marker([latSum / count, lngSum / count], {
         icon: L.divIcon({
           className: "district-label",
           html: `<span>${name}</span>`,
