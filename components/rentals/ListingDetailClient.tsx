@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { ListingGallery } from "@/components/rentals/ListingGallery";
 import { ListingFactsCard } from "@/components/rentals/ListingFactsCard";
 import { AmenitiesList } from "@/components/rentals/AmenitiesList";
@@ -26,10 +25,11 @@ interface DetailListing {
   lastSeenAt: string;
   latitude: number | null;
   longitude: number | null;
+  canonicalUrl: string;
+  source: string;
 }
 
 export function ListingDetailClient({ listing }: { listing: DetailListing }) {
-  const [showModal, setShowModal] = useState(false);
   const { isSaved, toggleSaved } = useSavedListings();
 
   const displayTitle = listing.titleRewritten || listing.title;
@@ -127,31 +127,25 @@ export function ListingDetailClient({ listing }: { listing: DetailListing }) {
           district={listing.district}
           saved={isSaved(listing.id)}
           onToggleSave={() => toggleSaved(listing.id)}
-          onEnquire={() => setShowModal(true)}
+          sourceUrl={listing.canonicalUrl}
+          sourceName={formatSourceName(listing.source)}
         />
       </div>
 
-      {/* Enquire modal */}
-      {showModal && (
-        <div className="enquire-overlay" onClick={() => setShowModal(false)} role="dialog" aria-modal="true" aria-label="Enquire about this property">
-          <div className="enquire-modal" onClick={(e) => e.stopPropagation()}>
-            <h3 className="enquire-modal__title">Enquire about this property</h3>
-            <p className="enquire-modal__text">
-              Messaging integration is coming soon. In the meantime, you can contact the agent through the original listing site.
-            </p>
-            <button
-              type="button"
-              className="enquire-modal__close"
-              onClick={() => setShowModal(false)}
-              aria-label="Close modal"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      )}
     </>
   );
+}
+
+function formatSourceName(source: string): string {
+  const map: Record<string, string> = {
+    REALESTATE_KH: "Realestate.com.kh",
+    KHMER24: "Khmer24",
+    FAZWAZ: "FazWaz",
+    COMPASS: "Compass",
+    CAMBODIA_HOUSING: "Cambodia Housing",
+    HUTTONS: "Huttons",
+  };
+  return map[source] ?? source;
 }
 
 function parseImages(json: string | null): string[] {

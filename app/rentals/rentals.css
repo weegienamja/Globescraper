@@ -26,6 +26,94 @@
   color: var(--text-muted);
 }
 
+/* ── Two-column grid (listings + sidebar) ──────────────── */
+
+.rentals-page__grid {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 24px;
+  align-items: start;
+}
+
+.rentals-page__main {
+  min-width: 0;
+}
+
+.rentals-page__sidebar {
+  position: sticky;
+  top: 80px;
+}
+
+@media (max-width: 900px) {
+  .rentals-page__grid {
+    grid-template-columns: 1fr;
+  }
+  .rentals-page__sidebar {
+    position: static;
+    order: -1;
+  }
+}
+
+/* ── Heatmap preview card ──────────────────────────────── */
+
+.heatmap-preview {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.heatmap-preview__title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--text-heading);
+  margin: 0 0 2px;
+}
+
+.heatmap-preview__subtitle {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin: 0 0 12px;
+}
+
+.heatmap-preview__map {
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
+.heatmap-preview__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-bottom: 14px;
+}
+
+.heatmap-preview__legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+}
+
+.heatmap-preview__link {
+  display: block;
+  text-align: center;
+  padding: 10px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #fff;
+  background: #3b82f6;
+  border-radius: 8px;
+  text-decoration: none;
+  transition: background 0.15s;
+}
+
+.heatmap-preview__link:hover {
+  background: #2563eb;
+}
+
 .rentals-page__sort-row {
   display: flex;
   align-items: center;

@@ -76,8 +76,8 @@ function polygonCentroid(coords: number[][][]): [number, number] {
 
 interface Props {
   data: DistrictIndexRow[];
-  /** Height in pixels (default 450) */
-  height?: number;
+  /** Height in pixels or CSS value (default 450) */
+  height?: number | string;
   /** Show the "Show Pins" toggle for individual listing markers (default true). */
   showListingPoints?: boolean;
   /** Base path for "View listings" links in popups (default "/tools/rentals/listings"). */
@@ -289,15 +289,21 @@ export function InteractiveHeatmap({ data, height = 450, showListingPoints = tru
       center: [11.562, 104.920],
       zoom: 7,
       zoomControl: true,
-      attributionControl: true,
+      attributionControl: false,
     });
+
+    /* Minimal custom attribution */
+    L.control.attribution({
+      position: "bottomright",
+      prefix: false,
+    }).addTo(map);
 
     /* Dark-themed tile layer (CartoDB Dark Matter) */
     L.tileLayer(
       "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
       {
         attribution:
-          '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a> | Boundaries: <a href="https://www.geoboundaries.org/">geoBoundaries</a>',
+          '© OSM © CARTO',
         maxZoom: 18,
       },
     ).addTo(map);

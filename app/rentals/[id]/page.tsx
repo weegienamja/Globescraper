@@ -49,6 +49,8 @@ export default async function ListingDetailPage({ params }: Props) {
       lastSeenAt: true,
       latitude: true,
       longitude: true,
+      canonicalUrl: true,
+      source: true,
     },
   });
 

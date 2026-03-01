@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { RentalResultsList } from "@/components/rentals/RentalResultsList";
 import { RentalFilters } from "@/components/rentals/RentalFilters";
 import { Pagination } from "@/components/rentals/Pagination";
+import { HeatmapPreviewCard } from "@/components/rentals/HeatmapPreviewCard";
 import {
   buildRentalsWhere,
   buildRentalsOrderBy,
@@ -32,9 +33,9 @@ export default async function RentalsPage({ searchParams }: Props) {
   const where = buildRentalsWhere(sp);
   const orderBy = buildRentalsOrderBy(sp.sort);
 
-  // Fetch listings, total count, and distinct city / district values in parallel.
+  // Fetch listings, total count, distinct city / district values, and heatmap data in parallel.
   // Districts are scoped to the selected city when one is chosen.
-  const [listings, total, cities, districts] = await Promise.all([
+  const [listings, total, cities, districts, heatmapResult] = await Promise.all([
     prisma.rentalListing.findMany({
       where,
       select: {
@@ -83,6 +84,40 @@ export default async function RentalsPage({ searchParams }: Props) {
       .then((rows) =>
         rows.map((r) => r.district).filter((d): d is string => !!d),
       ),
+    // Lightweight heatmap aggregation for preview
+    prisma.rentalListing
+      .findMany({
+        where: { isActive: true },
+        select: {
+          district: true,
+          city: true,
+          bedrooms: true,
+          propertyType: true,
+          priceMonthlyUsd: true,
+        },
+      })
+      .then((rows) => {
+        const groups = new Map<string, { district: string | null; city: string | null; bedrooms: number | null; propertyType: string; prices: number[] }>();
+        for (const l of rows) {
+          const key = `${l.district}|${l.propertyType}|${l.bedrooms}`;
+          if (!groups.has(key)) groups.set(key, { district: l.district, city: l.city, bedrooms: l.bedrooms, propertyType: l.propertyType || "Unknown", prices: [] });
+          if (l.priceMonthlyUsd !== null) groups.get(key)!.prices.push(l.priceMonthlyUsd);
+        }
+        const data = Array.from(groups.values()).map((g) => {
+          const sorted = g.prices.sort((a, b) => a - b);
+          return {
+            district: g.district,
+            city: g.city,
+            bedrooms: g.bedrooms,
+            propertyType: g.propertyType,
+            listingCount: sorted.length,
+            medianPriceUsd: sorted.length > 0 ? sorted[Math.floor(sorted.length / 2)] : null,
+            p25PriceUsd: sorted.length >= 4 ? sorted[Math.floor(sorted.length * 0.25)] : null,
+            p75PriceUsd: sorted.length >= 4 ? sorted[Math.floor(sorted.length * 0.75)] : null,
+          };
+        });
+        return { data, totalListings: rows.length };
+      }),
   ]);
 
   const totalPages = Math.max(1, Math.ceil(total / PER_PAGE));
@@ -104,13 +139,26 @@ export default async function RentalsPage({ searchParams }: Props) {
         <RentalFilters cities={cities} districts={districts} />
       </Suspense>
 
-      <RentalResultsList listings={listings} />
+      <div className="rentals-page__grid">
+        {/* Left: results + pagination */}
+        <div className="rentals-page__main">
+          <RentalResultsList listings={listings} />
 
-      <Pagination
-        currentPage={page}
-        totalPages={totalPages}
-        buildHref={buildHref}
-      />
+          <Pagination
+            currentPage={page}
+            totalPages={totalPages}
+            buildHref={buildHref}
+          />
+        </div>
+
+        {/* Right: sticky heatmap preview */}
+        <div className="rentals-page__sidebar">
+          <HeatmapPreviewCard
+            data={heatmapResult.data}
+            totalListings={heatmapResult.totalListings}
+          />
+        </div>
+      </div>
     </main>
   );
 }

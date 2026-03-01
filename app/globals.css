@@ -9703,3 +9703,31 @@ body.menu-open {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.3; }
 }
+
+/* ── Leaflet attribution override ────────────────────────── */
+
+.leaflet-control-attribution {
+  background: rgba(0, 0, 0, 0.35) !important;
+  color: #64748b !important;
+  font-size: 10px !important;
+  padding: 1px 6px !important;
+  border-radius: 4px 0 0 0 !important;
+  backdrop-filter: blur(2px);
+}
+.leaflet-control-attribution a {
+  color: #64748b !important;
+  text-decoration: none !important;
+}
+
+/* ── Heatmap fullscreen animation ────────────────────────── */
+
+@keyframes heatmap-fs-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}

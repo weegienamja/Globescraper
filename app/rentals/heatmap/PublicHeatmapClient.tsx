@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback, useEffect } from "react";
 import dynamic from "next/dynamic";
 import type { DistrictIndexRow } from "@/components/tools/InteractiveHeatmap";
 
@@ -43,6 +43,31 @@ export function PublicHeatmapClient({
   totalListings,
 }: Props) {
   const [copied, setCopied] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  const toggleFullscreen = useCallback(() => {
+    setIsFullscreen((v) => !v);
+  }, []);
+
+  // Close fullscreen on Escape
+  useEffect(() => {
+    if (!isFullscreen) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setIsFullscreen(false);
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [isFullscreen]);
+
+  // Prevent body scroll when fullscreen
+  useEffect(() => {
+    if (isFullscreen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => { document.body.style.overflow = ""; };
+  }, [isFullscreen]);
 
   const embedCode = `<iframe src="https://globescraper.com/rentals/heatmap/embed" width="100%" height="600" style="border:none;border-radius:12px" loading="lazy" title="Cambodia Rental Heatmap — GlobeScraper"></iframe>`;
 
@@ -78,12 +103,28 @@ export function PublicHeatmapClient({
 
         {/* Map card */}
         <div style={s.mapCard}>
-          <InteractiveHeatmap
-            data={data}
-            height={520}
-            showListingPoints={false}
-            listingsLinkBase="/rentals"
-          />
+          <div style={{ position: "relative" }}>
+            <InteractiveHeatmap
+              data={data}
+              height={520}
+              showListingPoints={false}
+              listingsLinkBase="/rentals"
+            />
+            {/* Enlarge button */}
+            <button
+              onClick={toggleFullscreen}
+              style={s.enlargeBtn}
+              aria-label="View fullscreen"
+              title="Enlarge map"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="15 3 21 3 21 9" />
+                <polyline points="9 21 3 21 3 15" />
+                <line x1="21" y1="3" x2="14" y2="10" />
+                <line x1="3" y1="21" x2="10" y2="14" />
+              </svg>
+            </button>
+          </div>
 
           {/* Legend */}
           <div style={{ display: "flex", gap: "24px", flexWrap: "wrap", marginTop: "16px" }}>
@@ -100,6 +141,33 @@ export function PublicHeatmapClient({
             ))}
           </div>
         </div>
+
+        {/* Fullscreen overlay */}
+        {isFullscreen && (
+          <div style={s.fullscreenOverlay}>
+            <div style={s.fullscreenHeader}>
+              <h2 style={s.fullscreenTitle}>Cambodia Rental Heatmap</h2>
+              <button
+                onClick={toggleFullscreen}
+                style={s.fullscreenClose}
+                aria-label="Close fullscreen"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+            <div style={{ flex: 1, padding: "0 16px 16px" }}>
+              <InteractiveHeatmap
+                data={data}
+                height="calc(100vh - 72px)"
+                showListingPoints={false}
+                listingsLinkBase="/rentals"
+              />
+            </div>
+          </div>
+        )}
 
         {/* Embed section */}
         <div style={s.embedCard}>
@@ -121,6 +189,56 @@ export function PublicHeatmapClient({
             </button>
           </div>
         </div>
+
+        {/* SEO content — about this project */}
+        <article style={s.articleCard}>
+          <h2 style={s.articleHeading}>About the Cambodia Rental Heatmap</h2>
+          <p style={s.articleText}>
+            This interactive heatmap visualises median monthly rental prices
+            across Cambodia at the district level. Data is aggregated from
+            publicly available rental listings on leading property platforms
+            including{" "}
+            <a href="https://www.realestate.com.kh" target="_blank" rel="noopener noreferrer" style={s.articleLink}>
+              Realestate.com.kh
+            </a>,{" "}
+            <a href="https://www.khmer24.com" target="_blank" rel="noopener noreferrer" style={s.articleLink}>
+              Khmer24
+            </a>,{" "}
+            <a href="https://www.fazwaz.com.kh" target="_blank" rel="noopener noreferrer" style={s.articleLink}>
+              FazWaz
+            </a>, and others.
+          </p>
+
+          <h3 style={s.articleSubheading}>How It Works</h3>
+          <p style={s.articleText}>
+            New listings are collected daily and matched to their geographic
+            district using address data, coordinates, and boundary mapping.
+            Prices are normalised to US dollars per month so properties can be
+            compared consistently across sources. The map updates approximately
+            every hour as fresh data is processed.
+          </p>
+
+          <h3 style={s.articleSubheading}>Ongoing Project &amp; Data Quality</h3>
+          <p style={s.articleText}>
+            This is an ongoing, evolving project. While we work hard to keep the
+            data accurate, occasional errors may appear — a listing might be
+            mapped to the wrong district, a price could be mis-converted, or
+            duplicate entries may slip through before being detected. We are
+            continuously improving our data pipeline and resolving issues as they
+            are found.
+          </p>
+
+          <h3 style={s.articleSubheading}>Cambodia Rental Market Overview</h3>
+          <p style={s.articleText}>
+            Cambodia&apos;s rental market is concentrated in Phnom Penh, Siem Reap,
+            and Sihanoukville, but growing demand is spreading to secondary
+            cities and provincial areas. Property types range from affordable
+            local apartments under $300 per month to premium serviced apartments,
+            villas, and penthouses exceeding $1,000 per month. This heatmap helps
+            renters, investors, and researchers quickly identify price trends and
+            compare districts side by side.
+          </p>
+        </article>
 
         {/* Browse link */}
         <div style={{ textAlign: "center", marginTop: "32px" }}>
@@ -220,5 +338,89 @@ const s: Record<string, React.CSSProperties> = {
     background: "#3b82f6",
     borderRadius: "8px",
     textDecoration: "none",
+  },
+  enlargeBtn: {
+    position: "absolute",
+    top: "12px",
+    right: "12px",
+    zIndex: 1000,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "36px",
+    height: "36px",
+    background: "rgba(15, 23, 42, 0.85)",
+    border: "1px solid #334155",
+    borderRadius: "8px",
+    color: "#cbd5e1",
+    cursor: "pointer",
+    backdropFilter: "blur(4px)",
+    transition: "background 0.15s, color 0.15s",
+  },
+  fullscreenOverlay: {
+    position: "fixed",
+    inset: 0,
+    zIndex: 9999,
+    background: "#0f172a",
+    display: "flex",
+    flexDirection: "column",
+    animation: "heatmap-fs-in 0.25s ease-out",
+  },
+  fullscreenHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "12px 16px",
+    borderBottom: "1px solid #1e293b",
+    flexShrink: 0,
+  },
+  fullscreenTitle: {
+    fontSize: "1.125rem",
+    fontWeight: 600,
+    color: "#f8fafc",
+    margin: 0,
+  },
+  fullscreenClose: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "36px",
+    height: "36px",
+    background: "transparent",
+    border: "1px solid #334155",
+    borderRadius: "8px",
+    color: "#cbd5e1",
+    cursor: "pointer",
+    transition: "background 0.15s",
+  },
+  articleCard: {
+    background: "rgba(15, 23, 42, 0.4)",
+    border: "1px solid #1e293b",
+    borderRadius: "12px",
+    padding: "28px 24px",
+    marginTop: "24px",
+    lineHeight: 1.7,
+  },
+  articleHeading: {
+    fontSize: "1.25rem",
+    fontWeight: 700,
+    color: "var(--text-heading, #f8fafc)",
+    margin: "0 0 12px",
+  },
+  articleSubheading: {
+    fontSize: "1rem",
+    fontWeight: 600,
+    color: "var(--text-heading, #e2e8f0)",
+    margin: "20px 0 8px",
+  },
+  articleText: {
+    fontSize: "0.9375rem",
+    color: "var(--text-muted, #94a3b8)",
+    margin: "0 0 4px",
+  },
+  articleLink: {
+    color: "#60a5fa",
+    textDecoration: "underline",
+    textUnderlineOffset: "2px",
   },
 };

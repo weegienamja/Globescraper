@@ -8,7 +8,8 @@ interface FactsCardProps {
   district: string | null;
   saved: boolean;
   onToggleSave: () => void;
-  onEnquire: () => void;
+  sourceUrl: string;
+  sourceName: string;
 }
 
 export function ListingFactsCard({
@@ -21,7 +22,8 @@ export function ListingFactsCard({
   district,
   saved,
   onToggleSave,
-  onEnquire,
+  sourceUrl,
+  sourceName,
 }: FactsCardProps) {
   const monthly = priceMonthlyUsd ? `$${Math.round(priceMonthlyUsd).toLocaleString()}` : "Ask";
   const weekly = priceMonthlyUsd ? `$${Math.round((priceMonthlyUsd * 12) / 52).toLocaleString()} pw` : null;
@@ -47,14 +49,15 @@ export function ListingFactsCard({
         {district && <FactItem label="District" value={district} />}
       </div>
 
-      <button
-        type="button"
+      <a
+        href={sourceUrl}
+        target="_blank"
+        rel="noopener noreferrer"
         className="listing-facts__enquire"
-        onClick={onEnquire}
-        aria-label="Enquire about this property"
+        aria-label={`View on ${sourceName}`}
       >
-        Enquire
-      </button>
+        View on {sourceName}
+      </a>
 
       <button
         type="button"
