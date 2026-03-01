@@ -613,6 +613,38 @@ export function ListingsTable({ initialDistrict }: ListingsTableProps = {}) {
                             </div>
                             {/* ── Admin actions ── */}
                             <div style={{ marginTop: "10px", display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                              {/* Manual Pass button — only show if not already passed */}
+                              {(!l.aiReview || l.aiReview.confidence < 1.0) && (
+                                <button
+                                  style={{
+                                    padding: "5px 14px",
+                                    borderRadius: "6px",
+                                    border: "1px solid rgba(34, 197, 94, 0.4)",
+                                    background: "rgba(34, 197, 94, 0.1)",
+                                    color: "#4ade80",
+                                    fontSize: "12px",
+                                    fontWeight: 600,
+                                    cursor: "pointer",
+                                  }}
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    try {
+                                      const res = await fetch(`/api/tools/rentals/listings/${l.id}`, {
+                                        method: "PATCH",
+                                        headers: { "Content-Type": "application/json" },
+                                        body: JSON.stringify({ action: "pass" }),
+                                      });
+                                      if (res.ok) {
+                                        fetchListings();
+                                      } else {
+                                        alert("Failed to mark as passed");
+                                      }
+                                    } catch { alert("Network error"); }
+                                  }}
+                                >
+                                  ✅ Passed
+                                </button>
+                              )}
                               <button
                                 style={{
                                   padding: "5px 14px",

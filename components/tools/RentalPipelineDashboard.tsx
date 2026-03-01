@@ -467,6 +467,51 @@ export function RentalPipelineDashboard() {
             </svg>
             {runningJob === "AI Review" ? "Reviewing..." : "🤖 AI Review"}
           </button>
+          {/* AI Review — Run All (batch loop) */}
+          <button
+            style={{
+              ...styles.actionBtn,
+              background: runningJob ? "#1a1e2e" : "#1e1b4b",
+              borderColor: "#818cf8",
+              color: "#c7d2fe",
+              fontSize: "12px",
+              opacity: runningJob ? 0.6 : 1,
+              minWidth: "auto",
+              padding: "6px 10px",
+            }}
+            disabled={!!runningJob}
+            title="Run AI Review in continuous batches until all listings are reviewed"
+            onClick={async () => {
+              if (!confirm("Run AI Review on ALL unreviewed listings? This will loop until done.")) return;
+              setRunningJob("AI Review All");
+              let totalReviewed = 0;
+              let totalFlagged = 0;
+              let batchNum = 0;
+              try {
+                while (true) {
+                  batchNum++;
+                  setToast({ message: `AI Review batch #${batchNum} running... (${totalReviewed} done so far)`, type: "success" });
+                  const res = await fetch("/api/tools/rentals/ai-reviews", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ limit: 30, source: selectedSource }),
+                  });
+                  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                  const data = await res.json();
+                  totalReviewed += data.reviewed || 0;
+                  totalFlagged += data.flagged || 0;
+                  if (!data.reviewed || data.reviewed === 0) break;
+                }
+                setToast({ message: `AI Review complete: ${totalReviewed} reviewed, ${totalFlagged} flagged (${batchNum} batches)`, type: "success" });
+              } catch (err) {
+                setToast({ message: `AI Review failed at batch #${batchNum}: ${err instanceof Error ? err.message : err}`, type: "error" });
+              } finally {
+                setRunningJob(null);
+              }
+            }}
+          >
+            ∞
+          </button>
 
           {/* AI Rewrite button */}
           <button
@@ -505,6 +550,51 @@ export function RentalPipelineDashboard() {
               <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
             </svg>
             {runningJob === "AI Rewrite" ? "Rewriting..." : "✍️ AI Rewrite"}
+          </button>
+          {/* AI Rewrite — Run All (batch loop) */}
+          <button
+            style={{
+              ...styles.actionBtn,
+              background: runningJob ? "#1a1e2e" : "#431407",
+              borderColor: "#f97316",
+              color: "#fed7aa",
+              fontSize: "12px",
+              opacity: runningJob ? 0.6 : 1,
+              minWidth: "auto",
+              padding: "6px 10px",
+            }}
+            disabled={!!runningJob}
+            title="Run AI Rewrite in continuous batches until all descriptions are rewritten"
+            onClick={async () => {
+              if (!confirm("Run AI Rewrite on ALL unrewritten listings? This will loop until done.")) return;
+              setRunningJob("AI Rewrite All");
+              let totalRewritten = 0;
+              let totalTokens = 0;
+              let batchNum = 0;
+              try {
+                while (true) {
+                  batchNum++;
+                  setToast({ message: `AI Rewrite batch #${batchNum} running... (${totalRewritten} done so far)`, type: "success" });
+                  const res = await fetch("/api/tools/rentals/ai-rewrite", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ limit: 10, source: selectedSource }),
+                  });
+                  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                  const data = await res.json();
+                  totalRewritten += data.rewritten || 0;
+                  totalTokens += data.totalTokens || 0;
+                  if (!data.rewritten || data.rewritten === 0) break;
+                }
+                setToast({ message: `AI Rewrite complete: ${totalRewritten} descriptions (${totalTokens} tokens, ${batchNum} batches)`, type: "success" });
+              } catch (err) {
+                setToast({ message: `AI Rewrite failed at batch #${batchNum}: ${err instanceof Error ? err.message : err}`, type: "error" });
+              } finally {
+                setRunningJob(null);
+              }
+            }}
+          >
+            ∞
           </button>
 
           {/* Log toggle */}

@@ -4,6 +4,7 @@
  * Update a listing — currently supports:
  *   { action: "deactivate" }   — mark listing inactive (hides from UI)
  *   { action: "activate" }     — re-activate a deactivated listing
+ *   { action: "pass" }         — manual pass (creates 100% AI review)
  *   { propertyType: "HOUSE" }  — correct the property type
  */
 
@@ -47,6 +48,25 @@ export async function PATCH(
   if (body.propertyType && VALID_TYPES.has(body.propertyType)) {
     updates.propertyType = body.propertyType;
     changes.push(`type: ${listing.propertyType} → ${body.propertyType}`);
+  }
+
+  // Action: manual pass — create AI review at 100% confidence
+  if (body.action === "pass") {
+    await prisma.rentalAiReview.create({
+      data: {
+        listingId: id,
+        suggestedType: listing.propertyType,
+        isResidential: true,
+        confidence: 1.0,
+        reason: "Manual pass — confirmed by admin",
+        flagged: false,
+      },
+    });
+    return NextResponse.json({
+      ok: true,
+      changes: ["manually passed (100% confidence AI review created)"],
+      listing,
+    });
   }
 
   if (Object.keys(updates).length === 0) {
