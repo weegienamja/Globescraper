@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ListingImageStrip } from "./ListingImageStrip";
+import { ListingCardImageCarousel } from "./ListingCardImageCarousel";
 import { PriceBlock } from "./PriceBlock";
 import { SpecIcons } from "./SpecIcons";
 
@@ -39,7 +39,7 @@ export function RentalResultCard({
 
   return (
     <article className="rental-card">
-      <ListingImageStrip images={images} title={displayTitle} listingId={listing.id} />
+      <ListingCardImageCarousel images={images} alt={displayTitle} />
 
       <PriceBlock priceMonthlyUsd={listing.priceMonthlyUsd} />
 
