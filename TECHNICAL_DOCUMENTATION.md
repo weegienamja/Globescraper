@@ -1,7 +1,7 @@
-# GlobeScraper — Technical Documentation
+# GlobeScraper -- Technical Documentation
 
-> **Last updated:** 25 February 2026  
-> **Repository:** `weegienamja/Globescraper` — branch `main`
+> **Last updated:** 1 March 2026
+> **Repository:** `weegienamja/Globescraper` -- branch `main`
 
 ---
 
@@ -11,11 +11,16 @@
 2. [Folder & Module Structure](#2-folder--module-structure)
 3. [Data Flow](#3-data-flow)
 4. [Core Features](#4-core-features)
-5. [Database Schema](#5-database-schema)
-6. [Security Overview](#6-security-overview)
-7. [External Integrations](#7-external-integrations)
-8. [Potential Risks & Technical Debt](#8-potential-risks--technical-debt)
-9. [Suggested Improvements](#9-suggested-improvements)
+5. [Rental Data Pipeline](#5-rental-data-pipeline)
+6. [AI Blog Generator](#6-ai-blog-generator)
+7. [Email System](#7-email-system)
+8. [Database Schema](#8-database-schema)
+9. [API Routes](#9-api-routes)
+10. [Security Overview](#10-security-overview)
+11. [External Integrations](#11-external-integrations)
+12. [CLI Scripts](#12-cli-scripts)
+13. [Potential Risks & Technical Debt](#13-potential-risks--technical-debt)
+14. [Suggested Improvements](#14-suggested-improvements)
 
 ---
 
@@ -28,60 +33,66 @@
 | **Framework** | Next.js (App Router) | 14.2.5 |
 | **Language** | TypeScript | 5.5.4 |
 | **UI library** | React | 18.3.1 |
-| **Styling** | Global CSS with BEM class naming | — |
-| **State** | React server components + `useState`/`useTransition` for client interactivity | — |
+| **Styling** | Global CSS with BEM class naming | -- |
+| **State** | React Server Components + `useState`/`useTransition` for client interactivity | -- |
 | **Session client** | `next-auth/react` `<SessionProvider>` | 5.0.0-beta.30 |
 | **Schema validation** | Zod (shared client + server) | 3.23.8 |
-| **Theming** | Dark/light mode via inline `<script>` (FOUC prevention) + `data-theme` attribute | — |
-| **Analytics** | Google Analytics 4 via global site tag + typed event helpers | — |
+| **Theming** | Dark/light mode via inline `<script>` (FOUC prevention) + `data-theme` attribute | -- |
+| **Analytics** | Google Analytics 4 via global site tag + typed event helpers | -- |
+| **Maps** | Leaflet + React-Leaflet with custom GeoJSON | 1.9.4 |
+| **Markdown** | react-markdown + remark-gfm + rehype-raw/sanitize | 10.1.0 |
 
-There is no CSS framework (Tailwind, Bootstrap, etc.). All styles live in a single `app/globals.css` file using BEM-style class names (e.g., `.community-header__sub`, `.admin__modal-body`, `.msg-input__form`).
+There is no CSS framework (Tailwind, Bootstrap, etc.). All styles live in `app/globals.css` and feature-specific CSS files (e.g., `app/rentals/rentals.css`) using BEM-style class names.
 
 ### 1.2 Backend Stack
 
 | Layer | Technology | Version |
 |---|---|---|
-| **Runtime** | Node.js | ≥ 18.17.0 |
+| **Runtime** | Node.js | >=18.17.0 |
 | **Framework** | Next.js API routes + React Server Components + Server Actions | 14.2.5 |
 | **ORM** | Prisma Client | 5.18.0 |
 | **Auth** | NextAuth.js v5 (Auth.js) with JWT strategy | 5.0.0-beta.30 |
 | **Password hashing** | bcryptjs (cost factor 12) | 3.0.3 |
 | **Rate limiting** | Upstash Redis (`@upstash/ratelimit`) | 2.0.8 |
 | **File uploads** | `@vercel/blob` | 2.3.0 |
-| **HTML sanitization** | DOMPurify (for scraped content) | 3.3.1 |
+| **HTML sanitization** | DOMPurify / isomorphic-dompurify | 3.3.1 |
+| **HTTP client** | Undici (with proxy support) | 7.22.0 |
+| **HTML parsing** | Cheerio | 1.0.0 |
+| **Browser automation** | Playwright (Cloudflare bypass) | 1.58.2 |
+| **Email** | Resend | 6.9.2 |
+| **AI** | Google Gemini REST API (direct client) | -- |
 
-There is no Express, Fastify, or standalone server. The entire backend runs through Next.js's built-in routing (API route handlers + server actions).
+There is no Express, Fastify, or standalone server. The entire backend runs through Next.js's built-in routing.
 
 ### 1.3 Database
 
 | Property | Detail |
 |---|---|
 | **Engine** | MySQL (MariaDB-compatible) |
-| **Host** | `srv2112.hstgr.io:3306` (Hostinger) |
-| **Database** | `u766245977_globescraper_d` |
+| **Host** | Hostinger shared MySQL (see `.env`) |
+| **Database** | Configured via `DATABASE_URL` env var |
 | **ORM** | Prisma 5.18.0 with declarative schema |
-| **Migrations** | Prisma Migrate (10 migration files) |
+| **Schema size** | 970 lines, 30+ models, 20+ enums |
 
 ### 1.4 Auth System
 
-The application uses **NextAuth.js v5 (beta)** with a **JWT session strategy**:
-
 - **Providers:** Google OAuth 2.0 + Credentials (email/password)
-- **Adapter:** `@auth/prisma-adapter` — auto-manages `Account`, `Session`, `VerificationToken` tables
-- **Session storage:** Stateless JWT cookie (30-day max age). No server-side session store.
+- **Adapter:** `@auth/prisma-adapter`
+- **Session storage:** Stateless JWT cookie (30-day max age)
 - **Token contents:** `sub` (user ID), `role`, `hasProfile`, `avatarUrl`
 - **Cookie names:** `authjs.session-token` (HTTP) / `__Secure-authjs.session-token` (HTTPS)
 
 ### 1.5 Hosting Environment
 
-| Signal | Detail |
+| Property | Detail |
 |---|---|
-| **Platform** | Vercel (detected from `@vercel/blob`, `start` script with `-H 0.0.0.0`, remote image patterns for `*.public.blob.vercel-storage.com`) |
+| **Platform** | Vercel |
 | **Build command** | `prisma generate && prisma migrate deploy && next build` |
 | **Start command** | `next start -H 0.0.0.0 -p $PORT` |
 | **Database** | Hostinger MySQL |
-| **Redis** | Upstash Redis (serverless, for rate limiting) |
+| **Redis** | Upstash Redis (serverless, rate limiting) |
 | **File storage** | Vercel Blob Storage |
+| **Cron** | Vercel cron: daily email schedule at 08:00 UTC |
 
 ---
 
@@ -89,111 +100,134 @@ The application uses **NextAuth.js v5 (beta)** with a **JWT session strategy**:
 
 ```
 globescraper_nextjs/
-├── app/                    # Next.js App Router — pages, layouts, API routes
-│   ├── layout.tsx          # Root layout (fonts, theme script, GA4, providers)
-│   ├── page.tsx            # Homepage (scraped HTML content)
-│   ├── globals.css         # All application styles (BEM conventions)
-│   ├── not-found.tsx       # Custom 404 page
-│   ├── [slug]/             # Dynamic blog post pages (SSG)
-│   ├── about/              # Static about page
-│   ├── blog/               # Blog listing page
-│   ├── login/              # Login page + form component
-│   ├── signup/             # Signup page + form component
-│   ├── create-profile/     # Teaching profile onboarding form
-│   ├── dashboard/          # Authenticated user dashboard
-│   │   ├── requests/       # Connections & requests management (tabbed)
-│   │   └── messages/       # DM inbox + conversation views
-│   ├── community/          # Public community directory
-│   │   ├── actions.ts      # Server actions (connect, block, hide, report)
-│   │   ├── image-actions.ts# Server actions (avatar + gallery upload)
-│   │   ├── [userId]/       # Individual user profile page
-│   │   └── edit-profile/   # Community profile editor
-│   ├── meetups/            # Meetup listing, detail, creation
-│   │   ├── actions.ts      # Server actions (CRUD, RSVP)
-│   │   ├── [id]/           # Meetup detail page
-│   │   └── new/            # Create meetup form
-│   ├── admin/              # Admin dashboard & management
-│   │   ├── page.tsx        # Metrics, leads, users, reports
-│   │   ├── admin-actions.ts# Server actions (ban, suspend, hide, etc.)
-│   │   ├── admin-client-sections.tsx  # Client-side admin panels
-│   │   └── reports-section.tsx        # Reports table (server component)
-│   ├── api/                # REST API route handlers
-│   │   ├── auth/           # NextAuth.js catch-all route
-│   │   ├── signup/         # User registration
-│   │   ├── lead/           # Public lead capture
-│   │   ├── profile/        # Teaching profile CRUD
-│   │   ├── connections/    # Connection CRUD + pending count
-│   │   ├── messages/       # Conversation list, messages, unread count
-│   │   ├── health/         # Health check endpoint
-│   │   └── admin/          # Admin-only APIs (users, leads, audit, IPs)
-│   ├── how-it-works-to-teach-english/  # Static content page
-│   ├── robots.txt/         # Dynamic robots.txt route
-│   └── sitemap.xml/        # Dynamic XML sitemap route
-│
-├── components/             # Shared React components
-│   ├── SiteLayout.tsx      # Header, footer, navigation, avatar dropdown
-│   ├── Providers.tsx       # SessionProvider wrapper
-│   ├── AnalyticsProvider.tsx # Auto page-view/scroll/click tracking
-│   ├── JsonLd.tsx          # Structured data components (WebSite, Article, Breadcrumb)
-│   ├── HtmlContent.tsx     # Scraped HTML renderer
-│   ├── Lightbox.tsx        # Image gallery lightbox
-│   ├── ThemeToggle.tsx     # Dark/light mode switch
-│   ├── RevealOnScroll.tsx  # Intersection Observer animation wrapper
-│   ├── BlogCardTracker.tsx # Blog card click analytics
-│   └── SkeletonLoader.tsx  # Loading placeholder
-│
-├── lib/                    # Shared server-side utilities
-│   ├── prisma.ts           # Singleton PrismaClient (HMR-safe)
-│   ├── auth.ts             # requireAuth() / requireAdmin() guards
-│   ├── security.ts         # logSecurityEvent() / isIpBlocked()
-│   ├── rate-limit.ts       # Upstash Redis rate limiters (login, connection, DM)
-│   ├── connections.ts      # canonicalPair(), areConnected(), isBlocked(), isUserActive()
-│   ├── content.ts          # Scraped HTML content loader + cleaner
-│   ├── contentImages.ts    # Blog hero image mapping
-│   ├── site.ts             # Site config (name, URL, nav items, social links)
-│   ├── analytics.ts        # GA4 typed event helpers with dedup
-│   └── validations/        # Zod schemas + enum constants
-│       ├── profile.ts      # Signup + teaching profile schemas
-│       └── community.ts    # Community profile, connection, meetup, report, message schemas
-│
-├── prisma/
-│   ├── schema.prisma       # Database schema (27 models, 14 enums)
-│   └── migrations/         # 10 Prisma migration directories
-│
-├── content/                # Static content (scraped from Zyrosite)
-│   ├── pages.json          # Page metadata (title, description)
-│   ├── posts.json          # Blog post metadata (slug, title, dates, author)
-│   ├── pages/              # HTML files for static pages
-│   └── posts/              # HTML files for blog posts (6 articles)
-│
-├── public/                 # Static assets (images, favicon)
-├── scripts/                # CLI utilities
-│   ├── seed-admin.ts       # Create/update admin user
-│   ├── check-build.js      # Verify .next exists
-│   └── startup-log.js      # Log deployment diagnostics
-│
-├── types/
-│   └── next-auth.d.ts      # NextAuth type augmentation (role, hasProfile, avatarUrl)
-│
-├── auth.ts                 # NextAuth.js configuration (providers, callbacks)
-├── middleware.ts            # Edge middleware (rate limiting, auth cookie guard)
-├── next.config.js          # Next.js config (images, security headers)
-├── package.json            # Dependencies & scripts
-└── tsconfig.json           # TypeScript configuration
+  app/                            # Next.js App Router
+    layout.tsx                    # Root layout (fonts, theme, GA4, providers)
+    globals.css                   # Global styles (BEM)
+    page.tsx                      # Homepage
+    not-found.tsx                 # Custom 404
+    [slug]/                       # Dynamic blog posts + static pages
+    about/                        # Static about page
+    blog/                         # Blog listing (static + AI posts)
+    how-it-works-to-teach-english/# Guide page
+    rentals/                      # Public rental marketplace
+      page.tsx                    # Search with filters, pagination
+      rentals.css                 # Rental-specific styles
+      [id]/                       # Listing detail page
+      heatmap/                    # Public interactive heatmap
+        embed/                    # Embeddable heatmap (iframe-friendly)
+    community/                    # Community directory
+      actions.ts                  # Server actions (connect, block, report)
+      image-actions.ts            # Avatar + gallery upload actions
+      [userId]/                   # Individual profile
+      edit-profile/               # Profile editor
+    meetups/                      # Meetup listing + detail + creation
+      actions.ts                  # CRUD, RSVP actions
+      [id]/                       # Meetup detail
+      new/                        # Create meetup
+    dashboard/                    # User dashboard
+      messages/                   # DM inbox
+        [conversationId]/         # Conversation thread
+      requests/                   # Connection requests
+    admin/                        # Admin dashboard
+      admin-actions.ts            # Ban, suspend, hide, etc.
+      blog/                       # Blog management
+        [id]/                     # Post editor
+      content-generator/          # AI article generator
+        drafts/                   # Draft management
+      email/                      # Email campaign dashboard
+    tools/                        # Admin tools hub
+      rentals/                    # Pipeline dashboard
+        analytics/                # Rental analytics
+        heatmap/                  # Admin heatmap
+        listings/                 # Listings table
+    login/ signup/ create-profile/
+    robots.txt/                   # Dynamic robots.txt
+    sitemap.xml/                  # Dynamic XML sitemap
+    unsubscribe/                  # Email unsubscribe
+    api/                          # 55 REST endpoints (see Section 9)
+  
+  components/
+    SiteLayout.tsx                # Header, footer, nav, avatar dropdown
+    Providers.tsx                 # SessionProvider wrapper
+    AnalyticsProvider.tsx         # GA4 auto-tracking
+    ActivityTracker.tsx           # User activity tracking
+    JsonLd.tsx                    # Structured data (WebSite, Article, FAQ, Breadcrumb)
+    HtmlContent.tsx               # Sanitized HTML renderer
+    MarkdownContent.tsx           # Markdown renderer (react-markdown)
+    BlogPageClient.tsx            # Blog index with category filters + search
+    BlogCardTracker.tsx           # Blog card analytics
+    RecommendedPosts.tsx          # Related post suggestions
+    Lightbox.tsx                  # Image lightbox
+    ThemeToggle.tsx               # Dark/light switch
+    RevealOnScroll.tsx            # Intersection Observer animations
+    SkeletonLoader.tsx            # Loading placeholders
+    community/                    # ProfileHeaderCard, ActivityFeed, ConnectionsPreview,
+                                  # GallerySection, RelocationStepper, TrustPanel,
+                                  # StatCards, Chips, SidebarAccordion
+    rentals/                      # RentalFilters, RentalResultsList, RentalResultCard,
+                                  # ListingDetailClient, ListingGallery, ListingImageStrip,
+                                  # ListingCardImageCarousel, ImagePair, ListingFactsCard,
+                                  # PriceBlock, SpecIcons, AmenitiesList,
+                                  # HeatmapPreviewCard, Pagination, useSavedListings
+    analytics/                    # AnalyticsDashboardClient, KpiCards, MedianTrendChart,
+                                  # DistributionChart, MarketPressureChart,
+                                  # HistoricalHeatmap, TopMoversTable
+    tools/                        # RentalPipelineDashboard, ListingsTable,
+                                  # ListingsTableWrapper, JobRunsTable,
+                                  # InteractiveHeatmap, LiveLogViewer
+    admin/                        # AdminHeroEditor, AdminPostToolbar,
+                                  # AdminImageManager, email components
+  
+  lib/
+    prisma.ts                     # Singleton PrismaClient (HMR-safe)
+    auth.ts                       # requireAuth() / requireAdmin() guards
+    security.ts                   # logSecurityEvent(), isIpBlocked()
+    rate-limit.ts                 # Upstash Redis limiters (login, connections, DMs)
+    connections.ts                # canonicalPair(), areConnected(), isBlocked()
+    community-profile.ts          # Community profile view model (234 lines)
+    content.ts                    # Static content loader + HTML cleaner
+    contentImages.ts              # Blog hero image mapping
+    published-posts.ts            # AI-published post merger with categories
+    affiliate-links.ts            # Affiliate link registry (SafetyWing, NordVPN, Bridge, etc.)
+    site.ts                       # Site config (name, URL, nav, social)
+    analytics.ts                  # GA4 typed event helpers with dedup
+    tableMobile.ts                # Mobile table utilities
+    ai/                           # Gemini client (463 lines), prompts (263 lines),
+                                  # image generation (Imagen 4.0, 350 lines),
+                                  # image search (Serper.dev, 358 lines)
+    scrape/                       # contentDiscovery, competitorAnalysis,
+                                  # buildFactsPack, fetchPage, extractMainText
+    news/                         # searchTopicsPipeline (1,232 lines),
+                                  # coverageAnalysis (487 lines), topicRotation,
+                                  # titleSimilarity
+    newsSourcePolicy.ts           # 30+ trusted source registry
+    newsTopicTypes.ts             # Topic type definitions
+    newsTopicScoring.ts           # Composite quality scoring
+    newsTopicDiscovery.ts         # Topic discovery helpers
+    robots/                       # Robots.txt compliance checker with caching
+    email/                        # Resend client, AI prompts/schemas,
+                                  # 9 block types, 5 template presets,
+                                  # HTML + plain text rendering
+    rentals/                      # (see Section 5)
+    validations/                  # Zod schemas (profile.ts, community.ts)
+  
+  prisma/
+    schema.prisma                 # 30+ models, 20+ enums (970 lines)
+    migrations/                   # Database migrations
+  
+  scripts/                        # 45+ CLI tools (see Section 12)
+  content/                        # Static HTML + JSON manifests
+  data/                           # Cambodia GeoJSON (adm2 + adm3)
+  public/geo/                     # Processed GeoJSON for heatmap
+  tests/                          # Vitest suites
+  types/                          # next-auth.d.ts, gtag.d.ts
+  
+  auth.ts                         # NextAuth config (providers, callbacks, 128 lines)
+  middleware.ts                   # Edge middleware (rate limit, cookie guard, 96 lines)
+  next.config.js                  # Images, security headers, rewrites
+  vercel.json                     # Cron jobs
+  vitest.config.ts                # Test config
 ```
-
-### Major Modules by Responsibility
-
-| Module | Responsibility |
-|---|---|
-| **Server Actions** | `community/actions.ts`, `community/image-actions.ts`, `meetups/actions.ts`, `admin/admin-actions.ts` — All business logic for mutations |
-| **API Route Handlers** | `api/**/route.ts` — REST endpoints for CRUD, auth, admin operations |
-| **Auth** | `auth.ts` + `middleware.ts` + `lib/auth.ts` — Three-layer auth: edge → server → helper |
-| **Data Access** | `lib/prisma.ts` + `lib/connections.ts` + `lib/security.ts` — DB singleton + domain queries |
-| **Validation** | `lib/validations/*.ts` — Zod schemas shared between client forms and server handlers |
-| **Rate Limiting** | `lib/rate-limit.ts` — Three Upstash Redis limiters |
-| **Content** | `lib/content.ts` + `content/**` — Static HTML/JSON content pipeline |
-| **Analytics** | `lib/analytics.ts` + `components/AnalyticsProvider.tsx` — GA4 event system |
 
 ---
 
@@ -203,55 +237,98 @@ globescraper_nextjs/
 
 ```
 Browser GET /community
-   │
-   ├─▶ middleware.ts
-   │     ├─ Check if route matches protected paths
-   │     ├─ Verify session cookie exists
-   │     └─ Redirect to /login if missing (for sub-routes)
-   │
-   ├─▶ app/community/page.tsx  (React Server Component)
-   │     ├─ await auth()       → decode JWT → resolve session
-   │     ├─ prisma.block.findMany(...)
-   │     ├─ prisma.profile.findMany({ where: { hiddenFromCommunity: false, ... } })
-   │     └─ Return JSX (streamed to client as HTML)
-   │
-   └─▶ Browser receives rendered HTML + JS hydration bundle
+  |
+  +-> middleware.ts
+  |     +- Check if route matches protected paths
+  |     +- Verify session cookie exists
+  |     +- Redirect to /login if missing
+  |
+  +-> app/community/page.tsx  (React Server Component)
+  |     +- await auth()       -> decode JWT -> session
+  |     +- prisma.block.findMany(...)
+  |     +- prisma.profile.findMany({ where: { hiddenFromCommunity: false } })
+  |     +- Return JSX (streamed as HTML)
+  |
+  +-> Browser receives HTML + JS hydration bundle
 ```
 
 ### 3.2 API Route Request
 
 ```
 Browser POST /api/connections  (JSON body)
-   │
-   ├─▶ middleware.ts           → passes through (no special handling)
-   │
-   ├─▶ app/api/connections/route.ts  → POST handler
-   │     ├─ await auth()              → verify JWT session
-   │     ├─ Zod validation            → parse + validate body
-   │     ├─ Rate limit check          → Upstash Redis (10/24h)
-   │     ├─ Business logic checks     → isBlocked(), isUserActive()
-   │     ├─ prisma.connection.create() → insert row
-   │     ├─ prisma.connectionRequest.upsert() → legacy sync
-   │     └─ Return NextResponse.json({ ok: true })
-   │
-   └─▶ Browser receives JSON response
+  |
+  +-> middleware.ts           -> passes through
+  |
+  +-> app/api/connections/route.ts  -> POST handler
+  |     +- await auth()              -> verify JWT
+  |     +- Zod validation            -> parse body
+  |     +- Rate limit check          -> Upstash Redis (10/24h)
+  |     +- Business logic checks     -> isBlocked(), isUserActive()
+  |     +- prisma.connection.create()
+  |     +- prisma.connectionRequest.upsert()  -> legacy sync
+  |     +- Return NextResponse.json({ ok: true })
+  |
+  +-> Browser receives JSON
 ```
 
 ### 3.3 Server Action Flow
 
 ```
 Browser interaction (form submit / button click)
-   │
-   ├─▶ Client component calls server action (e.g., sendConnectionRequest)
-   │
-   ├─▶ app/community/actions.ts  → "use server"
-   │     ├─ await auth()
-   │     ├─ Rate limit check
-   │     ├─ Zod validation
-   │     ├─ Prisma queries/mutations
-   │     └─ Return { ok: true } or { error: "..." }
-   │
-   └─▶ Client receives result, calls router.refresh() if needed
+  |
+  +-> Client component calls server action
+  |
+  +-> app/community/actions.ts  -> "use server"
+  |     +- await auth()
+  |     +- Rate limit check
+  |     +- Zod validation
+  |     +- Prisma mutations
+  |     +- Return { ok: true } or { error: "..." }
+  |
+  +-> Client receives result, calls router.refresh()
+```
+
+### 3.4 Rental Pipeline Flow
+
+```
+CLI: npx tsx scripts/realestate-weekly.ts --workers 3
+  |
+  +-> Main process: discoverAll()
+  |     +- 40 query sets across 5 categories
+  |     +- Paginate JSON API, collect listing URLs
+  |     +- Enqueue new + stale URLs in ScrapeQueue
+  |
+  +-> spawnWorkers(3)  -> 3 child processes
+  |     +- Each runs --process-only --_worker
+  |     +- Atomic claiming: UPDATE ScrapeQueue SET status='PROCESSING'
+  |       WHERE status IN ('PENDING','RETRY') LIMIT N
+  |     +- Fetch listing page, parse fields
+  |     +- Upsert RentalListing + create RentalSnapshot
+  |     +- Generate reverse-geocoded title via Nominatim
+  |
+  +-> Main process (after workers finish):
+        +- buildDailyIndexJob()  -> aggregate price stats
+        +- markStaleListingsJob() -> deactivate old listings
+```
+
+### 3.5 AI Article Generation Flow
+
+```
+Admin: /admin/content-generator -> Generate
+  |
+  +-> POST /api/admin/content-generator/generate
+  |     +- Discover competitor URLs (Serper.dev)
+  |     +- Fetch competitor pages, extract outlines
+  |     +- Run gap analysis (headings, depth, coverage)
+  |     +- Build facts pack from sources
+  |     +- Generate article via Gemini 3 Flash
+  |     +- Parse structured JSON output
+  |     +- Generate images (Imagen 4.0 / Serper image search)
+  |     +- Save GeneratedArticleDraft + images + sources
+  |
+  +-> Admin reviews draft -> Publish
+        +- Slug assigned, SEO score computed
+        +- Appears in /blog alongside static posts
 ```
 
 ---
@@ -262,701 +339,710 @@ Browser interaction (form submit / button click)
 
 | Aspect | Detail |
 |---|---|
-| **What it does** | User registration (email/password), login (email/password + Google OAuth), session management, role-based access |
-| **Routes** | `POST /api/signup`, `/api/auth/[...nextauth]` (GET + POST), `/login`, `/signup` |
+| **Routes** | `POST /api/signup`, `/api/auth/[...nextauth]`, `/login`, `/signup` |
 | **Tables** | `User`, `Account`, `Session`, `VerificationToken` |
-| **Background jobs** | None — `lastLoginAt` update and `logSecurityEvent` are fire-and-forget promises |
-| **Security** | bcrypt (cost 12), JWT session (30-day), login rate limiting (5/15min), IP blocking on signup, disabled/banned/deleted user blocking in `authorize()` + `signIn()` callback |
+| **Security** | bcrypt (cost 12), JWT (30-day), login rate limiting (5/15min), IP blocking, status checks (disabled/banned/suspended/deleted) |
 
-**Registration flow:** Client-side form → POST `/api/signup` (Zod validation, IP block check, duplicate email check, bcrypt hash) → `User` record created → auto sign-in via `signIn("credentials")` → redirect to `/create-profile`.
+**Registration:** Form -> POST `/api/signup` (Zod, IP block check, dupe check, bcrypt) -> `User` created -> auto sign-in -> redirect `/create-profile`.
 
-**Login flow:** Client-side form → `signIn("credentials", { redirect: false })` → NextAuth `authorize()` (find user, bcrypt compare, status checks) → JWT minted → redirect to dashboard. Google: `signIn("google")` → OAuth flow → `signIn` callback blocks banned users → JWT minted.
+**Login:** `signIn("credentials")` -> `authorize()` (find user, bcrypt compare, status checks) -> JWT minted. Google: OAuth flow -> `signIn` callback blocks banned users.
 
 ### 4.2 User Profiles
 
-There are two profile tiers:
-
 **Teaching Profile** (created at `/create-profile`):
-| Aspect | Detail |
-|---|---|
-| **What it does** | Captures teaching qualifications, target countries, timeline, savings |
-| **Routes** | `POST /api/profile`, `GET /api/profile`, `/create-profile` |
-| **Tables** | `Profile`, `ProfileTargetCountry` |
-| **Fields** | passportCountry, degreeStatus, nativeEnglish, teachingExperience, certificationStatus, desiredStartTimeline, savingsBand, targetCountries |
+- Fields: passportCountry, degreeStatus, nativeEnglish, teachingExperience, certificationStatus, desiredStartTimeline, savingsBand, targetCountries
 
-**Community Profile** (extension via `/community/edit-profile`):
-| Aspect | Detail |
-|---|---|
-| **What it does** | Public-facing profile with display name, bio, avatar, gallery, meetup intents, visibility settings |
-| **Routes** | Server action `updateCommunityProfile`, image-actions (`uploadAvatar`, `uploadGalleryImage`, etc.), `/community/[userId]`, `/community/edit-profile` |
-| **Tables** | `Profile` (same row), `ProfileImage`, `ProfileTargetCountry` |
-| **Fields** | displayName, bio, currentCountry, currentCity, avatarUrl, visibility, meetupCoffee/CityTour/JobAdvice/StudyGroup/LanguageExchange, hiddenFromCommunity |
+**Community Profile** (extension at `/community/edit-profile`):
+- Fields: displayName, bio, currentCountry, currentCity, avatarUrl, visibility (PRIVATE/MEMBERS_ONLY/PUBLIC), meetup intents (Coffee/CityTour/JobAdvice/StudyGroup/LanguageExchange/VisaHelp/SchoolReferrals), relocationStage, certifications JSON, languages JSON, interests JSON, gallery images
 
 ### 4.3 Connections
 
-| Aspect | Detail |
-|---|---|
-| **What it does** | Send/accept/decline/remove friend-style connections between users |
-| **Routes** | `GET/POST/PATCH/DELETE /api/connections`, `GET /api/connections/pending-count`, server action `sendConnectionRequest` + `respondToConnection` in `community/actions.ts` |
-| **Tables** | `Connection` (canonical pair: userLowId < userHighId) + `ConnectionRequest` (legacy: fromUserId → toUserId) |
-| **Security** | Rate limited (10 requests/24h), block checks, active user checks, duplicate prevention |
+- **Tables:** `Connection` (canonical pair: userLowId < userHighId) + `ConnectionRequest` (legacy directional)
+- **Dual-write pattern:** Writes to both tables with try/catch on legacy. Reads prefer canonical with fallback.
+- **Rate limited:** 10 requests per 24 hours via Upstash Redis
+- **Lifecycle:** Send -> PENDING -> Accept (ACCEPTED) or Decline (DECLINED). Accepted unlocks messaging.
 
-**Dual-write pattern:** The system maintains two connection tables. The new `Connection` table uses canonical ordering (lower UUID always goes in `userLowId`). The legacy `ConnectionRequest` table uses directional sender/receiver. All writes go to both tables with try/catch on the legacy write. Reads prefer whichever table has data, with fallback to legacy.
+### 4.4 Direct Messages
 
-**Connection lifecycle:** Send → `PENDING` → Accept (`ACCEPTED`) or Decline (`DECLINED`). Accepted connections unlock messaging. Either party can remove. Declined users can re-request.
-
-### 4.4 Messaging (Direct Messages)
-
-| Aspect | Detail |
-|---|---|
-| **What it does** | 1-on-1 direct messaging between connected users |
-| **Routes** | `GET /api/messages` (conversations list), `GET/POST /api/messages/[conversationId]` (messages + send), `GET /api/messages/unread-count`, `/dashboard/messages`, `/dashboard/messages/[conversationId]` |
-| **Tables** | `Conversation`, `ConversationParticipant`, `Message` |
-| **Security** | Rate limited (30 msg/min), connection required, block check, participant verification, Zod validation |
-
-**Conversation creation:** When user A messages user B for the first time, `POST /api/messages/new` checks for an existing DM between them. If none exists, creates a `Conversation` + two `ConversationParticipant` rows. If one exists, reuses it.
-
-**Read receipts:** Each `ConversationParticipant` has a `lastReadAt` timestamp. Opening a conversation updates it. Unread status is computed by comparing `lastReadAt` against the latest message timestamp.
-
-**UI layout:** Split layout — left sidebar shows connections (quick-start new chats), right panel shows conversation list or active conversation with date-grouped messages.
+- **Tables:** `Conversation`, `ConversationParticipant`, `Message`
+- **Rate limited:** 30 messages per minute
+- **Read receipts:** `lastReadAt` on ConversationParticipant, unread computed per conversation
+- **UI:** Split layout with connection sidebar + conversation list/thread
 
 ### 4.5 Meetups
 
-| Aspect | Detail |
-|---|---|
-| **What it does** | Create, browse, RSVP to in-person meetups in SEA cities |
-| **Routes** | `/meetups`, `/meetups/[id]`, `/meetups/new`, server actions in `meetups/actions.ts` |
-| **Tables** | `Meetup`, `MeetupAttendee` |
-| **Actions** | `createMeetup`, `updateMeetup`, `cancelMeetup`, `rsvpMeetup`, `leaveMeetup` |
-| **Security** | Auth required, profile required (displayName), future date validation, max attendee enforcement, creator/admin-only cancel |
+- **Tables:** `Meetup`, `MeetupAttendee`
+- **Actions:** Create, update, cancel, RSVP (GOING/INTERESTED), leave
+- **Filters:** Country, city
+- **Security:** Auth + profile required, future date validation, max attendees, creator/admin cancel only
 
 ### 4.6 Blocking & Reporting
 
-| Aspect | Detail |
-|---|---|
-| **What it does** | Users can block others (bidirectional exclusion) and report users/meetups |
-| **Routes** | Server actions `blockUser`, `unblockUser`, `submitReport` in `community/actions.ts` |
-| **Tables** | `Block` (unique pair), `Report` (polymorphic: USER or MEETUP target, SPAM/HARASSMENT/SCAM/OTHER reason) |
-| **Effect of blocking** | Blocked users are excluded from community listing, meetup attendee lists, messaging, and connection requests |
+- **Block:** Bidirectional exclusion from community listing, messaging, connections, meetup attendee lists
+- **Report:** Polymorphic (USER or MEETUP target, SPAM/HARASSMENT/SCAM/OTHER reason)
 
 ### 4.7 Leads
 
-| Aspect | Detail |
-|---|---|
-| **What it does** | Public lead capture form for prospective teachers (pre-registration interest) |
-| **Routes** | `POST /api/lead` (public), `PATCH /api/admin/leads` (admin) |
-| **Tables** | `Lead` (email, name, message, source, status, adminNotes) |
-| **Security** | In-memory rate limiting (5/min/IP), CORS origin whitelist (globescraper.com), Zod validation |
-| **Admin workflow** | Leads appear in admin dashboard table. Admin can update status (NEW → CONTACTED → CONVERTED → CLOSED) and add notes. All changes audit-logged. |
+- **Route:** `POST /api/lead` (public, in-memory rate limit 5/min/IP, CORS whitelist)
+- **Admin:** Status tracking (NEW -> CONTACTED -> CONVERTED -> CLOSED), notes, audit log
 
 ### 4.8 Admin Panel
 
-| Aspect | Detail |
-|---|---|
-| **What it does** | Comprehensive admin dashboard for user management, moderation, analytics |
-| **Routes** | `/admin` (page), `/api/admin/users` (CRUD), `/api/admin/users/[userId]/stats`, `/api/admin/audit-log`, `/api/admin/blocked-ips`, `/api/admin/leads`, server actions in `admin-actions.ts` |
-| **Tables** | All tables (read), `AdminAuditLog` (write), `BlockedIp` (CRUD), `UserSecurityEvent` (read) |
-
 **Dashboard metrics (13 cards):**
-- Total users, new users this week, total leads, total profiles
-- Open reports, active meetups, total connections, total messages
-- Blocked IPs, banned user count, suspended user count
-- Profile completion rate
+Total users, new users this week, total leads, total profiles, open reports, active meetups, total connections, total messages, blocked IPs, banned count, suspended count, profile completion rate
 
-**User management modal features:**
-- Search by name/email with status filter + pagination
-- View user detail: email, role, status, creation date, last login, display name, location, bio, community visibility (Hidden/Visible badge)
-- Edit: name, email, bio, role, status
-- Actions: Suspend, Ban, Reactivate, Delete (soft), Hide/Unhide from Community
-- Stats: connection count, message count, recent security events table
+**User management:** Search/filter, view detail (email, role, status, creation, last login, bio, visibility), edit (name, email, bio, role, status), actions (Suspend, Ban, Reactivate, Delete, Hide/Unhide)
 
-**Admin actions (server actions):**
-- `adminDisableUser` — Suspends user, sets profile private, invalidates sessions
-- `adminBanUser` — Bans user, sets profile private, invalidates sessions, deletes connections
-- `adminReactivateUser` — Restores user to active
-- `adminToggleHideUser` — Hides/unhides user from all community views (profile stays intact)
-- `adminCancelMeetup` — Cancels a meetup
-- `adminDismissReport` — Deletes a report
-
-All admin actions are audit-logged with before/after state.
+**Admin actions:** `adminDisableUser`, `adminBanUser`, `adminReactivateUser`, `adminToggleHideUser`, `adminCancelMeetup`, `adminDismissReport` -- all audit-logged with before/after state.
 
 ### 4.9 Content & Blog
 
-| Aspect | Detail |
-|---|---|
-| **What it does** | Serves statically generated content pages and blog posts scraped from Zyrosite |
-| **Routes** | `/`, `/about`, `/blog`, `/how-it-works-to-teach-english`, `/[slug]` (blog posts) |
-| **Data source** | `content/pages.json`, `content/posts.json`, `content/pages/*.html`, `content/posts/*.html` |
-| **Processing** | `cleanScrapedHtml()` strips Zyrosite chrome, fixes `.html` links, normalizes images |
-| **SSG** | Blog posts use `generateStaticParams()` for static generation at build time |
+- **Static content:** HTML files in `content/posts/` + `content/pages/`, metadata in JSON manifests, HTML cleaning pipeline for Zyrosite migration
+- **AI content:** Published drafts served alongside static posts, category inference from keywords (Teaching, Visas, Safety, Airports, Healthcare, Digital Nomad, Travel, Border News, Rentals)
+- **Blog index:** Category filtering, search, card grid with analytics tracking
+- **SEO:** JSON-LD (WebSite, Article, FAQ, Breadcrumb, BlogCollection), dynamic sitemap (ISR @ 1h), dynamic robots.txt, OG + Twitter cards
 
-### 4.10 SEO
+### 4.10 Analytics Tracking
 
-- **JSON-LD:** `WebSiteJsonLd` (root layout), `ArticleJsonLd` + `BreadcrumbJsonLd` (blog posts)
-- **Sitemap:** Dynamic XML sitemap at `/sitemap.xml` (static pages + blog posts)
-- **Robots:** Dynamic `robots.txt` — allows all, disallows admin/api/auth routes
-- **Meta tags:** OG + Twitter cards generated per-page from content metadata
+GA4 events with dedup guard (300ms): `trackPageView`, `trackLeadSubmission`, `trackCTAClick`, `trackOutboundClick`, `trackBlogView`, `trackBlogScroll`, affiliate detection (NordVPN, SafetyWing, Anker, TEFL/TESOL)
 
 ---
 
-## 5. Database Schema
+## 5. Rental Data Pipeline
 
-### 5.1 Entity-Relationship Overview
+### 5.1 Architecture Overview
+
+A multi-source scraping and analytics pipeline for Cambodian rental listings. The system discovers listing URLs, scrapes individual pages, normalizes data, generates AI-enhanced content, and produces aggregated price analytics.
+
+### 5.2 Sources (7 adapters in `lib/rentals/sources/`)
+
+| Source | Status | Method | Notes |
+|---|---|---|---|
+| **Realestate.com.kh** | Enabled | JSON API (`/api/portal/pages/results/`) | 5 property categories, 40 overlapping query sets, ~35k listings |
+| **Khmer24** | Enabled | Playwright (headless Chromium) | Behind Cloudflare WAF, 2 categories |
+| **IPS Cambodia** | Enabled | HTTP/Cheerio | `/rent/?paging=N` pagination |
+| **CamRealty** | Enabled | HTTP/Cheerio | WordPress site, category pages |
+| **LongTermLettings** | Enabled | HTTP/Cheerio | Small site (~37 listings) |
+| **FazWaz** | Enabled | HTTP/Cheerio | Good sangkat-level location data |
+| **HomeToGo** | Disabled | -- | GBP pricing, JS SPA, poor fit |
+
+### 5.3 Pipeline Jobs (`lib/rentals/jobs/`)
+
+| Job | Purpose |
+|---|---|
+| **Discover** | Crawl category pages, extract listing URLs, enqueue in ScrapeQueue |
+| **ProcessQueue** | Atomic claiming via raw SQL (`UPDATE...LIMIT`), fetch + parse listings, upsert RentalListing + create RentalSnapshot, generate reverse-geocoded titles |
+| **BuildIndex** | Aggregate daily snapshots into RentalIndexDaily (median, mean, p25, p75 by city/district/beds/type) |
+| **MarkStaleListings** | Deactivate listings not seen in N days |
+
+### 5.4 Pipeline Infrastructure (`lib/rentals/`)
+
+| Module | Purpose |
+|---|---|
+| `config.ts` | Caps, concurrency limits (4 workers, 6 concurrent), source toggles, human-like pacing (jittered delays 1.2-2s, breathers every 40-70 pages, night idle 2-5s, skip probability 1%) |
+| `http.ts` | Concurrency-limited fetcher, exponential backoff, polite delays, proxy support (`SCRAPE_PROXY` env), night idle, breathers |
+| `playwright.ts` | Headless Chromium for Cloudflare-protected sites (Khmer24) |
+| `classify.ts` | Property type classifier (keyword-based, prioritized matching) |
+| `parse.ts` | Price parsing ($50-$50K range), beds/baths/size extraction, district/city parsing, amenity extraction |
+| `fingerprint.ts` | SHA-256 content fingerprinting for deduplication |
+| `district-geo.ts` | Cambodia district GeoJSON normalization (sangkat-level for PP inner city, khan-level otherwise), 300+ district alias mappings |
+| `title-geocode.ts` | Reverse geocoding via OpenStreetMap Nominatim for listing titles |
+| `url.ts` | URL canonicalization |
+| `api-guard.ts` | Admin API auth guard for pipeline endpoints |
+| `pipelineLogger.ts` | Pipeline logging utilities |
+
+### 5.5 Queue System
+
+- **Table:** `ScrapeQueue` with status enum: PENDING, PROCESSING, DONE, RETRY
+- **Atomic claiming:** Raw SQL `UPDATE ScrapeQueue SET status='PROCESSING', lastError=claimTag WHERE source=? AND status IN ('PENDING','RETRY') ORDER BY priority DESC, createdAt ASC LIMIT ?`
+- **Claim tags:** Unique per worker (`w{timestamp_base36}`) to prevent double-processing
+- **Retry:** Failed items set to RETRY status for future attempts
+
+### 5.6 Parallel Workers
+
+- `--workers N` CLI flag spawns N child processes via `execFile("npx", ["tsx", ...], { shell: true })`
+- Each worker runs `--process-only --_worker` mode
+- `MAX_PROCESS` divided evenly across workers
+- `Promise.allSettled` -- one worker failure doesn't kill others
+- Available in: `realestate-weekly.ts`, `scrape-realestate-full.ts`, `scrape-all-sources.ts`
+
+### 5.7 AI Enhancements
+
+| Feature | Model | Batch Size | Cost Estimate |
+|---|---|---|---|
+| **AI Review** (`ai-review.ts`) | Gemini | 15/batch | $0.02-0.05 per 3,000 listings |
+| **AI Rewrite** (`ai-rewrite.ts`) | Gemini | 5/batch | $0.05-0.15 per 3,000 listings |
+
+- **AI Review:** Classifies residential vs non-residential, suggests correct PropertyType, confidence scoring, flags problematic listings
+- **AI Rewrite:** Standardizes descriptions to professional English, stored in `descriptionAi` field
+
+### 5.8 ML Features (`lib/rentals/ml.ts`)
+
+Behind feature flags (`RENTALS_ML_ENABLED`, `RENTALS_EMBEDDINGS_ENABLED`):
+- District normalization via alias mapping
+- Near-duplicate detection via trigram similarity
+- Price outlier detection (IQR method + Z-score)
+- Embedding stubs for future clustering
+
+### 5.9 Analytics (`lib/analytics/`)
+
+| Module | Purpose |
+|---|---|
+| `calculateStats.ts` | KPI computation (median rent, 1-bed/2-bed medians, 1m/3m % changes, volatility, supply signal), district distribution, time-series, top movers |
+| `volatility.ts` | Rolling window volatility, annualized volatility, district rankings |
+
+### 5.10 Public Rental Pages
+
+| Route | Purpose |
+|---|---|
+| `/rentals` | Search with filters (city, district, beds, type, price range, sort), 7 results/page, heatmap preview card |
+| `/rentals/[id]` | Detail page: image gallery, map, amenities (Facilities + Amenities split), AI description, price, specs |
+| `/rentals/heatmap` | Interactive choropleth (Leaflet + GeoJSON), ISR @ 1h, SEO content, source links |
+| `/rentals/heatmap/embed` | Iframe-embeddable version with attribution backlink |
+
+### 5.11 Admin Rental Tools
+
+| Route | Purpose |
+|---|---|
+| `/tools/rentals` | Pipeline dashboard: trigger jobs, view stats, live log viewer |
+| `/tools/rentals/listings` | Listings table with search, filters, inline edit, delete |
+| `/tools/rentals/analytics` | KPI cards, trend charts, distribution, volatility, top movers |
+| `/tools/rentals/heatmap` | Admin heatmap tool |
+
+---
+
+## 6. AI Blog Generator
+
+### 6.1 Architecture
+
+End-to-end article generation using Google Gemini 3 Flash Preview.
+
+### 6.2 Core Components (`lib/ai/`)
+
+| Module | Lines | Purpose |
+|---|---|---|
+| `geminiClient.ts` | 463 | Direct Gemini REST API client, JSON/text modes, schema validation, retry logic |
+| `prompts.ts` | 263 | Prompt system: banned words, style rules (no em dashes, active voice, short sentences), structured JSON output |
+| `imageGen.ts` | 350 | Imagen 4.0 generation via Gemini API, Vercel Blob storage. Per article: 1 HERO (1344x768), 1 OG (1200x630), 3 INLINE |
+| `imageSearch.ts` | 358 | Hybrid image sourcing: Serper.dev for landmarks, AI-generated fallbacks |
+
+### 6.3 Research Pipeline (`lib/scrape/`)
+
+| Module | Purpose |
+|---|---|
+| `contentDiscovery.ts` | Competitor URL discovery (Serper.dev API or heuristic fallback from 16 known competitor domains) |
+| `competitorAnalysis.ts` | Outline extraction (H2/H3 headings), gap analysis, depth recommendations |
+| `buildFactsPack.ts` | Structure source data into fact bullets for prompt injection |
+| `fetchPage.ts` | Polite fetcher with 24h cache, proper User-Agent |
+| `extractMainText.ts` | HTML content extraction (strips nav, ads, scripts) |
+
+### 6.4 News Article Generator (`lib/news/`)
+
+| Module | Lines | Purpose |
+|---|---|---|
+| `searchTopicsPipeline.ts` | 1,232 | Multi-strategy topic discovery: stable query generation, priority-ordered search, multi-round fallback, Gemini variation |
+| `coverageAnalysis.ts` | 487 | Scan existing posts, map covered intents (46 vocabulary terms), identify gaps, generate candidate titles |
+| `topicRotation.ts` | 176 | Deterministic rotation (15 gap topics: airport, visa, scams, transport, etc.), exclude last 3 used |
+| `titleSimilarity.ts` | 173 | Near-duplicate detection: Jaccard word similarity + bigram overlap |
+
+### 6.5 Supporting Infrastructure
+
+- `newsSourcePolicy.ts` (175 lines) -- Trusted source registry: 30+ sources across OFFICIAL_GOV, OFFICIAL_TOURISM, INTERNATIONAL_NEWS, LOCAL_NEWS, EXPAT_COMMUNITY, TRAVEL_INFO, TEACHING. Blocked domain list.
+- `newsTopicScoring.ts` -- Composite quality scoring (source grounding, query quality, outline depth, keyword quality, audience breadth)
+- `robots/robotsCheck.ts` -- Robots.txt compliance checker with caching
+
+### 6.6 Admin Interface
+
+| Route | Purpose |
+|---|---|
+| `/admin/content-generator` | Generate articles with topic input |
+| `/admin/content-generator/drafts` | Draft management + publish workflow |
+| `/admin/blog` | Published article management |
+| `/admin/blog/[id]` | Post editor with hero image, SEO check/fix, republish |
+
+---
+
+## 7. Email System
+
+### 7.1 Architecture
+
+Full email campaign management using Resend, with AI-powered content generation via Gemini.
+
+### 7.2 Block-Based Template System (`lib/email/blocks/`)
+
+9 block types: Hero, Paragraphs, CTA, FeatureGrid3, TipsBox, AlertBanner, Divider, SectionHeading, PostList
+
+### 7.3 Template Catalog (`lib/email/templates/catalog.ts`)
+
+5 presets: `welcome_v1`, `news_alert_v1`, `weekly_digest_v1`, `visa_update_v1`, `new_places_v1`
+
+### 7.4 Rendering
+
+- `renderEmail.ts` -- HTML render from block data
+- `renderTextVersion.ts` -- Plain text version
+- Base layout with responsive helpers and design tokens
+
+### 7.5 AI Generation
+
+- `lib/email/ai/prompts.ts` -- Gemini prompt builders for template generation
+- `lib/email/ai/schemas.ts` -- Zod validation for AI-generated blocks
+
+### 7.6 Delivery & Tracking
+
+- **Provider:** Resend (`lib/email/resendClient.ts`)
+- **Webhooks:** `/api/webhooks/resend` -- delivery, bounce, open, click tracking
+- **Cron:** `/api/admin/email/schedule/run` at `0 8 * * *` (daily 08:00 UTC)
+- **Models:** `EmailCampaign` (DRAFT/SCHEDULED/SENDING/SENT), `EmailLog` (per-recipient tracking)
+
+---
+
+## 8. Database Schema
+
+### 8.1 Entity-Relationship Overview
 
 ```
-User ─────────────── Profile ─────── ProfileTargetCountry
- │                      │
- │                      └──────────── ProfileImage
- │
- ├── Account (OAuth)
- ├── Session (DB sessions — unused with JWT, kept for adapter)
- │
- ├── ConnectionRequest ◄──── Legacy connection system (directional)
- ├── Connection ◄─────────── New connection system (canonical pair)
- │
- ├── ConversationParticipant ── Conversation ── Message
- │
- ├── MeetupAttendee ── Meetup
- │
- ├── Block (blocker ↔ blocked)
- ├── Report (reporter → target)
- │
- ├── AdminAuditLog
- └── UserSecurityEvent
+User
+  +-- Account (OAuth)
+  +-- Session
+  +-- Profile
+  |     +-- ProfileTargetCountry
+  |     +-- ProfileImage
+  |     +-- ActivityEvent
+  +-- ConnectionRequest (legacy, directional)
+  +-- Connection (canonical, userLow/userHigh)
+  +-- ConversationParticipant -- Conversation -- Message
+  +-- MeetupAttendee -- Meetup
+  +-- Block (blocker <-> blocked)
+  +-- Report (reporter -> target)
+  +-- AdminAuditLog
+  +-- UserSecurityEvent
+
+AI Blog:
+  GeneratedArticleDraft
+    +-- BlogRevision
+    +-- GeneratedArticleImage
+    +-- GeneratedArticleSource
+    +-- GeneratedArticleRun
+  TitleGenerationLog
+
+Email:
+  EmailCampaign
+  EmailLog
+
+Rentals:
+  RentalListing
+    +-- RentalSnapshot
+    +-- RentalAiReview
+  RentalIndexDaily
+  RentalIndexMonthly
+  ScrapeQueue
+  JobRun
 
 Standalone:
- ├── Lead
- ├── WaitlistEntry
- ├── BlockedIp
- └── VerificationToken
+  Lead, WaitlistEntry, BlockedIp, VerificationToken
 ```
 
-### 5.2 All Tables
+### 8.2 Key Models
 
-#### `User`
-| Column | Type | Constraints | Notes |
-|---|---|---|---|
-| id | UUID | PK, default uuid() | |
-| name | String? | | |
-| email | String | Unique, VARCHAR(255) | |
-| emailVerified | DateTime? | | OAuth-based verification |
-| passwordHash | String? | VARCHAR(255) | bcrypt hash (cost 12) |
-| role | Enum(USER, ADMIN) | Default USER | |
-| status | Enum(ACTIVE, SUSPENDED, BANNED, DELETED) | Default ACTIVE | |
-| disabled | Boolean | Default false | Quick toggle for blocking login |
-| image | String? | | OAuth avatar URL |
-| lastLoginAt | DateTime? | | Updated on each login |
-| deletedAt | DateTime? | | Soft delete timestamp |
-| createdAt | DateTime | Default now() | |
-| updatedAt | DateTime | Auto-updated | |
-
-#### `Account`
-| Column | Type | Constraints |
+#### Auth & User
+| Model | Key Fields | Notes |
 |---|---|---|
-| id | UUID | PK |
-| userId | String | FK → User, Cascade delete |
-| type | String | |
-| provider | String | |
-| providerAccountId | String | |
-| refresh_token | Text? | |
-| access_token | Text? | |
-| expires_at | Int? | |
-| token_type | String? | |
-| scope | String? | |
-| id_token | Text? | |
-| session_state | String? | |
+| **User** | id, email, passwordHash, role (USER/ADMIN), status (ACTIVE/SUSPENDED/BANNED/DELETED), disabled, lastLoginAt | Central identity |
+| **Account** | provider, providerAccountId, access_token | OAuth (Google) |
+| **Profile** | 40+ fields: passport, degree, experience, bio, avatar, visibility, meetup intents, relocation stage, certifications/languages/interests JSON | Single row per user |
 
-Indexes: Unique(`provider`, `providerAccountId`), Index(`userId`)
-
-#### `Session`
-| Column | Type | Constraints |
+#### Community
+| Model | Key Fields | Notes |
 |---|---|---|
-| id | UUID | PK |
-| sessionToken | String | Unique |
-| userId | String | FK → User |
-| expires | DateTime | |
+| **Connection** | userLowId, userHighId, requestedByUserId, status (PENDING/ACCEPTED/REJECTED) | Canonical pair ordering |
+| **ConnectionRequest** | fromUserId, toUserId, status (PENDING/ACCEPTED/DECLINED/BLOCKED) | Legacy, dual-write |
+| **Conversation** | type (DM) | Container for messages |
+| **Message** | conversationId, senderId, body, deletedAt | Soft delete |
+| **Meetup** | title, country, city, dateTime, maxAttendees, status (ACTIVE/CANCELLED) | |
+| **MeetupAttendee** | status (GOING/INTERESTED/LEFT) | |
+| **Block** | blockerUserId, blockedUserId | Unique pair |
+| **Report** | targetType (USER/MEETUP), reason (SPAM/HARASSMENT/SCAM/OTHER) | Polymorphic |
 
-Index: `userId`. Note: With JWT strategy, this table is mostly unused but maintained for the PrismaAdapter.
-
-#### `VerificationToken`
-| Column | Type | Constraints |
+#### AI Blog
+| Model | Key Fields | Notes |
 |---|---|---|
-| identifier | String | |
-| token | String | Unique |
-| expires | DateTime | |
+| **GeneratedArticleDraft** | title, slug, markdown, html, heroImage, ogImage, status (DRAFT/PUBLISHED), confidence, seoScore, contentHash, category | Main article storage |
+| **BlogRevision** | revision history | |
+| **GeneratedArticleImage** | kind (HERO/OG/INLINE), prompt, altText, storageUrl | Imagen 4.0 + Serper |
+| **GeneratedArticleSource** | Source citations | |
+| **GeneratedArticleRun** | model, tokens, status | Generation tracking |
+| **TitleGenerationLog** | Topic rotation tracking | |
 
-Unique: (`identifier`, `token`)
-
-#### `Lead`
-| Column | Type | Constraints |
+#### Email
+| Model | Key Fields | Notes |
 |---|---|---|
-| id | UUID | PK |
-| email | VARCHAR(255) | Indexed |
-| name | String? | |
-| message | Text? | |
-| source | String? | |
-| status | Enum(NEW, CONTACTED, CONVERTED, CLOSED) | Default NEW, Indexed |
-| adminNotes | Text? | |
-| deleted | Boolean | Default false |
-| createdAt | DateTime | Indexed |
-| updatedAt | DateTime | Auto |
+| **EmailCampaign** | subject, html, text, segment, status (DRAFT/SCHEDULED/SENDING/SENT), delivery metrics | |
+| **EmailLog** | type (TRANSACTIONAL/MARKETING), delivery status, open/click tracking | Per-recipient |
 
-#### `WaitlistEntry`
-| Column | Type | Constraints |
+#### Rentals
+| Model | Key Fields | Notes |
 |---|---|---|
-| id | UUID | PK |
-| email | String | Unique |
-| createdAt | DateTime | Default now() |
+| **RentalListing** | source, title, description, city, district, propertyType, beds/baths/sqm, priceMonthlyUsd, images JSON, amenities JSON, lat/lng, active, contentFingerprint, descriptionAi, titleGeocoded | Central listing |
+| **RentalSnapshot** | listingId, priceMonthlyUsd, scrapedAt | Price history |
+| **RentalAiReview** | residential classification, suggested type, confidence, flagged | Gemini output |
+| **RentalIndexDaily** | date, city, district, beds, type, median/mean/p25/p75 | Aggregated stats |
+| **RentalIndexMonthly** | Monthly aggregation | |
+| **ScrapeQueue** | url, source, status (PENDING/PROCESSING/DONE/RETRY), priority, lastError | Atomic claiming |
+| **JobRun** | type (DISCOVER/PROCESS_QUEUE/BUILD_INDEX), counts, timing, errors | Pipeline tracking |
 
-#### `AdminAuditLog`
-| Column | Type | Constraints |
-|---|---|---|
-| id | UUID | PK |
-| adminUserId | String | FK → User, Indexed |
-| actionType | VARCHAR(50) | e.g., BAN_USER, HIDE_USER, UPDATE_LEAD |
-| targetType | VARCHAR(50) | e.g., USER, LEAD, MEETUP, REPORT |
-| targetId | VARCHAR(191) | |
-| targetUserId | VARCHAR(191)? | Indexed |
-| metadata | Text? | |
-| beforeJson | Text? | JSON snapshot of pre state |
-| afterJson | Text? | JSON snapshot of post state |
-| createdAt | DateTime | Indexed |
+### 8.3 Enums (20+)
 
-#### `Profile`
-| Column | Type | Constraints |
-|---|---|---|
-| id | UUID | PK |
-| userId | String | Unique, FK → User |
-| passportCountry | VARCHAR(100)? | |
-| degreeStatus | Enum | Default NONE |
-| nativeEnglish | Boolean | Default false |
-| teachingExperience | Enum | Default NONE |
-| certificationStatus | Enum | Default NONE |
-| desiredStartTimeline | Enum | Default RESEARCHING |
-| savingsBand | Enum | Default MEDIUM |
-| displayName | VARCHAR(50)? | |
-| bio | Text? | |
-| currentCountry | VARCHAR(100)? | Indexed |
-| currentCity | VARCHAR(100)? | Indexed |
-| avatarUrl | VARCHAR(500)? | |
-| visibility | Enum(PRIVATE, MEMBERS_ONLY, PUBLIC) | Default MEMBERS_ONLY, Indexed |
-| meetupCoffee | Boolean | Default false |
-| meetupCityTour | Boolean | Default false |
-| meetupJobAdvice | Boolean | Default false |
-| meetupStudyGroup | Boolean | Default false |
-| meetupLanguageExchange | Boolean | Default false |
-| hiddenFromCommunity | Boolean | Default false |
-| createdAt | DateTime | |
-| updatedAt | DateTime | Indexed |
-
-#### `ProfileTargetCountry`
-| Column | Type | Constraints |
-|---|---|---|
-| id | UUID | PK |
-| profileId | String | FK → Profile, Indexed |
-| country | Enum(VIETNAM, THAILAND, CAMBODIA, INDONESIA, PHILIPPINES, MALAYSIA) | |
-
-Unique: (`profileId`, `country`)
-
-#### `ProfileImage`
-| Column | Type | Constraints |
-|---|---|---|
-| id | UUID | PK |
-| profileId | String | FK → Profile, Indexed |
-| url | VARCHAR(500) | |
-| sortOrder | Int | Default 0 |
-| createdAt | DateTime | |
-
-#### `ConnectionRequest` (Legacy)
-| Column | Type | Constraints |
-|---|---|---|
-| id | UUID | PK |
-| fromUserId | String | FK → User |
-| toUserId | String | FK → User, Indexed |
-| status | Enum(PENDING, ACCEPTED, DECLINED, BLOCKED) | Default PENDING, Indexed |
-| message | VARCHAR(300)? | |
-| createdAt | DateTime | Indexed |
-| updatedAt | DateTime | |
-
-Unique: (`fromUserId`, `toUserId`)
-
-#### `Connection` (New, Canonical)
-| Column | Type | Constraints |
-|---|---|---|
-| id | UUID | PK |
-| userLowId | String | FK → User |
-| userHighId | String | FK → User, Indexed |
-| requestedByUserId | String | Indexed |
-| status | Enum(PENDING, ACCEPTED, REJECTED) | Default PENDING, Indexed |
-| createdAt | DateTime | |
-| acceptedAt | DateTime? | |
-| updatedAt | DateTime | |
-
-Unique: (`userLowId`, `userHighId`)
-
-#### `Conversation`
-| Column | Type | Constraints |
-|---|---|---|
-| id | UUID | PK |
-| type | Enum(DM) | Default DM |
-| createdAt | DateTime | |
-
-#### `ConversationParticipant`
-| Column | Type | Constraints |
-|---|---|---|
-| id | UUID | PK |
-| conversationId | String | FK → Conversation |
-| userId | String | FK → User, Indexed |
-| lastReadAt | DateTime? | |
-
-Unique: (`conversationId`, `userId`)
-
-#### `Message`
-| Column | Type | Constraints |
-|---|---|---|
-| id | UUID | PK |
-| conversationId | String | Indexed with createdAt |
-| senderId | String | FK → User, Indexed |
-| body | Text | |
-| createdAt | DateTime | |
-| deletedAt | DateTime? | Soft delete |
-
-#### `Meetup`
-| Column | Type | Constraints |
-|---|---|---|
-| id | UUID | PK |
-| createdByUserId | String | FK → User, Indexed |
-| title | VARCHAR(200) | |
-| description | Text | |
-| country | VARCHAR(100) | Indexed |
-| city | VARCHAR(100) | Indexed |
-| dateTime | DateTime | Indexed |
-| locationHint | VARCHAR(200)? | |
-| maxAttendees | Int? | |
-| visibility | Enum(MEMBERS_ONLY, PUBLIC) | Default MEMBERS_ONLY |
-| status | Enum(ACTIVE, CANCELLED) | Default ACTIVE, Indexed |
-| createdAt | DateTime | |
-| updatedAt | DateTime | |
-
-#### `MeetupAttendee`
-| Column | Type | Constraints |
-|---|---|---|
-| id | UUID | PK |
-| meetupId | String | FK → Meetup |
-| userId | String | FK → User, Indexed |
-| status | Enum(GOING, INTERESTED, LEFT) | Default GOING |
-| createdAt | DateTime | |
-
-Unique: (`meetupId`, `userId`)
-
-#### `Block`
-| Column | Type | Constraints |
-|---|---|---|
-| id | UUID | PK |
-| blockerUserId | String | FK → User |
-| blockedUserId | String | FK → User, Indexed |
-| createdAt | DateTime | |
-
-Unique: (`blockerUserId`, `blockedUserId`)
-
-#### `Report`
-| Column | Type | Constraints |
-|---|---|---|
-| id | UUID | PK |
-| reporterUserId | String | FK → User, Indexed |
-| targetType | Enum(USER, MEETUP) | |
-| targetId | VARCHAR(191) | Indexed with targetType |
-| reason | Enum(SPAM, HARASSMENT, SCAM, OTHER) | |
-| details | VARCHAR(1000)? | |
-| createdAt | DateTime | Indexed |
-
-#### `UserSecurityEvent`
-| Column | Type | Constraints |
-|---|---|---|
-| id | UUID | PK |
-| userId | String | FK → User, Indexed |
-| eventType | VARCHAR(50) | Indexed (e.g., "login", "signup") |
-| ipAddress | VARCHAR(45)? | IPv4 + IPv6 support |
-| userAgent | VARCHAR(500)? | |
-| createdAt | DateTime | Indexed |
-
-#### `BlockedIp`
-| Column | Type | Constraints |
-|---|---|---|
-| id | UUID | PK |
-| ipCidr | VARCHAR(50) | Indexed |
-| reason | VARCHAR(500)? | |
-| createdAt | DateTime | |
-| expiresAt | DateTime? | Indexed (null = permanent) |
-
-### 5.3 Enums (14 total)
-
-| Enum | Values |
+| Category | Enums |
 |---|---|
-| Role | USER, ADMIN |
-| UserStatus | ACTIVE, SUSPENDED, BANNED, DELETED |
-| LeadStatus | NEW, CONTACTED, CONVERTED, CLOSED |
-| DegreeStatus | NONE, IN_PROGRESS, BACHELORS, MASTERS |
-| TeachingExperience | NONE, LT1_YEAR, ONE_TO_THREE, THREE_PLUS |
-| CertificationStatus | NONE, IN_PROGRESS, COMPLETED |
-| TargetCountry | VIETNAM, THAILAND, CAMBODIA, INDONESIA, PHILIPPINES, MALAYSIA |
-| DesiredStartTimeline | ASAP, ONE_TO_THREE_MONTHS, THREE_TO_SIX_MONTHS, RESEARCHING |
-| SavingsBand | LOW, MEDIUM, HIGH |
-| ProfileVisibility | PRIVATE, MEMBERS_ONLY, PUBLIC |
-| ConnectionStatus | PENDING, ACCEPTED, DECLINED, BLOCKED |
-| CanonicalConnectionStatus | PENDING, ACCEPTED, REJECTED |
-| MeetupVisibility | MEMBERS_ONLY, PUBLIC |
-| MeetupStatus | ACTIVE, CANCELLED |
-| AttendeeStatus | GOING, INTERESTED, LEFT |
-| ReportTargetType | USER, MEETUP |
-| ReportReason | SPAM, HARASSMENT, SCAM, OTHER |
-| ConversationType | DM |
+| **Auth** | Role, UserStatus |
+| **Profile** | DegreeStatus, TeachingExperience, CertificationStatus, TargetCountry, DesiredStartTimeline, SavingsBand, RelocationStage, LookingFor, ReplyTimeHint, ProfileVisibility |
+| **Community** | ConnectionStatus, CanonicalConnectionStatus, MeetupVisibility, MeetupStatus, AttendeeStatus, ReportTargetType, ReportReason, ConversationType, ActivityEventType |
+| **Blog** | ArticleStatus, ArticleConfidence, ArticleRunStatus, ArticleImageKind |
+| **Email** | CampaignStatus, EmailLogType, EmailLogStatus |
+| **Rentals** | RentalSource, PropertyType, JobType, JobStatus, QueueStatus |
+| **Leads** | LeadStatus |
 
 ---
 
-## 6. Security Overview
+## 9. API Routes
 
-### 6.1 Password Hashing
+### 9.1 Auth (2 endpoints)
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `GET/POST` | `/api/auth/[...nextauth]` | -- | NextAuth route handler |
+| `POST` | `/api/signup` | No | User registration |
 
-- **Algorithm:** bcrypt via `bcryptjs` (pure JavaScript, no native addon)
-- **Cost factor:** 12 (used in signup route and seed script)
-- **Storage:** `User.passwordHash` column (VARCHAR 255)
-- **Comparison:** `bcrypt.compare()` in NextAuth `authorize()` callback
-- **Note:** Migrated from argon2 to bcryptjs for Vercel serverless compatibility
+### 9.2 User-Facing (5 endpoints)
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `GET/POST` | `/api/profile` | Yes | Profile CRUD |
+| `GET/POST` | `/api/connections` | Yes | Connection management |
+| `GET` | `/api/connections/pending-count` | Yes | Pending request count |
+| `GET/POST` | `/api/messages` | Yes | Conversations and sending |
+| `GET` | `/api/messages/[conversationId]` | Yes | Thread messages |
+| `GET` | `/api/messages/unread-count` | Yes | Unread count |
 
-### 6.2 Session Management
+### 9.3 Admin -- User Management (6 endpoints)
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `GET` | `/api/admin/users` | Admin | List users with filters |
+| `GET/PATCH` | `/api/admin/users/[userId]` | Admin | User detail + edit |
+| `GET` | `/api/admin/users/[userId]/stats` | Admin | User activity stats |
+| `GET` | `/api/admin/leads` | Admin | Lead management |
+| `GET` | `/api/admin/audit-log` | Admin | Audit log |
+| `GET/POST/DELETE` | `/api/admin/blocked-ips` | Admin | IP blocking |
 
-- **Strategy:** Stateless JWT (not database sessions)
-- **Max age:** 30 days
-- **Cookie:** `authjs.session-token` (HTTP) / `__Secure-authjs.session-token` (HTTPS)
-- **Token payload:** `sub` (user ID), `role`, `hasProfile`, `avatarUrl`
-- **Invalidation:** Banning/suspending a user deletes `Session` table rows (belt-and-suspenders) and blocks login in `authorize()` + `signIn()` callback. JWT itself cannot be forcibly revoked before expiry.
+### 9.4 Admin -- Blog (8 endpoints)
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `GET/PATCH/DELETE` | `/api/admin/blog/[id]` | Admin | Article CRUD |
+| `GET` | `/api/admin/blog/by-slug/[slug]` | Admin | Lookup by slug |
+| `POST` | `/api/admin/blog/[id]/hero-image` | Admin | Hero image |
+| `POST` | `/api/admin/blog/[id]/images` | Admin | Image management |
+| `POST` | `/api/admin/blog/[id]/republish` | Admin | Republish |
+| `GET` | `/api/admin/blog/[id]/seo-check` | Admin | SEO audit |
+| `POST` | `/api/admin/blog/[id]/seo-fix` | Admin | Auto SEO fix |
 
-### 6.3 Rate Limiting
+### 9.5 Admin -- Content Generator (7 endpoints)
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `POST` | `/api/admin/content-generator/generate` | Admin | Generate AI article |
+| `GET/DELETE` | `/api/admin/content-generator/drafts/[id]` | Admin | Draft management |
+| `POST` | `/api/admin/content-generator/drafts/[id]/publish` | Admin | Publish draft |
+| `POST` | `/api/admin/content-generator/drafts/[id]/regenerate-images` | Admin | Regenerate images |
+| `POST` | `/api/admin/content-generator/drafts/regenerate-all-images` | Admin | Batch image regen |
+| `POST` | `/api/admin/content-generator/news/search` | Admin | Discover news topics |
+| `POST` | `/api/admin/content-generator/news/generate-title` | Admin | Generate title from gap |
+| `POST` | `/api/admin/content-generator/news/generate` | Admin | Generate news article |
+
+### 9.6 Admin -- Email (9 endpoints)
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `GET/POST` | `/api/admin/email/campaigns` | Admin | Campaign CRUD |
+| `GET/PATCH` | `/api/admin/email/campaigns/[id]` | Admin | Campaign management |
+| `POST` | `/api/admin/email/generate-with-ai` | Admin | AI content generation |
+| `POST` | `/api/admin/email/send-campaign` | Admin | Send campaign |
+| `POST` | `/api/admin/email/send-single` | Admin | Send single email |
+| `GET` | `/api/admin/email/subscribers` | Admin | Subscriber list |
+| `PATCH` | `/api/admin/email/subscribers/update` | Admin | Update preferences |
+| `POST` | `/api/admin/email/templates/generate-options` | Admin | AI template options |
+| `POST` | `/api/admin/email/templates/render` | Admin | Render template |
+| `GET` | `/api/admin/email/schedule/run` | Cron | Scheduled execution |
+
+### 9.7 Rental Pipeline (14 endpoints)
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `POST` | `/api/tools/rentals/discover` | Admin | Run discovery job |
+| `POST` | `/api/tools/rentals/process-queue` | Admin | Process scrape queue |
+| `POST` | `/api/tools/rentals/build-index` | Admin | Build daily index |
+| `POST` | `/api/tools/rentals/run` | Admin | Full pipeline |
+| `POST` | `/api/tools/rentals/cleanup` | Admin | Cleanup stale |
+| `POST` | `/api/tools/rentals/ai-reviews` | Admin | AI review batch |
+| `POST` | `/api/tools/rentals/ai-rewrite` | Admin | AI rewrite batch |
+| `GET` | `/api/tools/rentals/summary` | Admin | Pipeline stats |
+| `GET` | `/api/tools/rentals/listings` | Admin | Paginated listings |
+| `GET/PATCH/DELETE` | `/api/tools/rentals/listings/[id]` | Admin | Single listing |
+| `GET` | `/api/tools/rentals/listings/[id]/snapshots` | Admin | Price history |
+| `GET` | `/api/tools/rentals/job-runs` | Admin | Job history |
+| `GET` | `/api/tools/rentals/job-runs/[id]/logs` | Admin | Job logs |
+| `GET` | `/api/tools/rentals/heatmap-data` | Public | Heatmap aggregation |
+| `GET` | `/api/tools/rentals/listing-points` | Public | Map lat/lng points |
+| `GET` | `/api/tools/rentals/analytics` | Admin | Analytics time-series |
+
+### 9.8 Infrastructure (4 endpoints)
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `GET` | `/api/health` | No | Health check |
+| `GET` | `/api/heartbeat` | No | Heartbeat |
+| `POST` | `/api/lead` | No | Lead capture |
+| `POST` | `/api/webhooks/resend` | Webhook | Email delivery tracking |
+
+---
+
+## 10. Security Overview
+
+### 10.1 Password Hashing
+- **Algorithm:** bcrypt via bcryptjs (cost factor 12)
+- **Storage:** `User.passwordHash` (VARCHAR 255)
+
+### 10.2 Session Management
+- **Strategy:** Stateless JWT (30-day max age)
+- **Token payload:** `sub`, `role`, `hasProfile`, `avatarUrl`
+- **Invalidation:** Ban/suspend deletes Session rows + blocks in authorize/signIn callbacks
+
+### 10.3 Rate Limiting
 
 | Limiter | Scope | Limit | Window | Backing |
 |---|---|---|---|---|
-| Login attempts | Per IP | 5 | 15 minutes (sliding) | Upstash Redis |
+| Login attempts | Per IP | 5 | 15 min (sliding) | Upstash Redis |
 | Connection requests | Per user | 10 | 24 hours (sliding) | Upstash Redis |
 | Direct messages | Per user | 30 | 1 minute (sliding) | Upstash Redis |
 | Lead submissions | Per IP | 5 | 1 minute | In-memory Map |
 
-All Redis-backed limiters gracefully degrade to no-op if Upstash credentials are missing (local development).
+### 10.4 Role-Based Authorization (3 layers)
 
-### 6.4 Role-Based Authorization
+1. **Edge middleware** (`middleware.ts`): Cookie presence check, fast rejection
+2. **Server-side auth** (`auth()`): JWT decode -> session with user ID + role
+3. **Helper guards** (`lib/auth.ts`): `requireAuth()` redirects to `/login`; `requireAdmin()` checks role
 
-Three-layer model:
+### 10.5 Input Validation
+- Zod schemas on all user input (signup, profile, connections, meetups, reports, messages, admin, leads)
+- Server-side enforcement only (never trusted from client)
+- Prisma parameterized queries (no raw SQL in application code, except atomic queue claiming)
+- DOMPurify for HTML sanitization
 
-1. **Edge middleware** (`middleware.ts`): Cookie presence check. Fast rejection before app code runs. Protects `/admin`, `/dashboard`, `/create-profile`, community/meetup sub-routes.
-2. **Server-side auth** (`auth()` from NextAuth): Decodes JWT to get session with user ID and role. Used in every server component and API route handler.
-3. **Helper guards** (`lib/auth.ts`): `requireAuth()` redirects to `/login`; `requireAdmin()` additionally checks `role === "ADMIN"` and redirects to `/`.
-
-Admin-only routes (`/api/admin/*`) additionally check `session.user.role !== "ADMIN"` and return 403.
-
-### 6.5 Input Validation
-
-- **Zod schemas** for all user input: signup, profile creation, community profile, connection requests, meetups, reports, messages, admin edits, lead submissions
-- **Server-side enforcement:** All Zod validation runs server-side (in API routes and server actions), never trusted from client alone
-- **SQL injection:** Mitigated by Prisma's parameterized queries (no raw SQL in application code)
-- **XSS:** Scraped HTML content is cleaned by `cleanScrapedHtml()` in `lib/content.ts`; DOMPurify is available as a dependency
-- **Path traversal:** `lib/content.ts` validates resolved paths against content directory
-
-### 6.6 HTTP Security Headers
-
-Applied globally via `next.config.js`:
+### 10.6 HTTP Security Headers
 
 | Header | Value |
 |---|---|
 | X-Content-Type-Options | nosniff |
-| X-Frame-Options | DENY |
+| X-Frame-Options | DENY (except embeddable heatmap) |
 | Referrer-Policy | strict-origin-when-cross-origin |
 | Strict-Transport-Security | max-age=63072000; includeSubDomains; preload |
 | X-XSS-Protection | 1; mode=block |
 | Permissions-Policy | camera=(), microphone=(), geolocation=(), interest-cohort=() |
 
-### 6.7 Additional Security Measures
-
-- **IP blocking:** Admin can block IPs (with optional expiry). Checked on signup. Stored in `BlockedIp` table.
-- **Security event logging:** Login and signup events logged to `UserSecurityEvent` with IP + user agent. Visible in admin user detail modal.
-- **Audit trail:** All admin actions logged to `AdminAuditLog` with before/after state diffs.
-- **CORS:** Lead API explicitly whitelists `globescraper.com` origins only.
-- **User blocking:** Bidirectional block system excludes blocked users from all social features.
-- **Admin hide:** `hiddenFromCommunity` flag hides users from community listing without their knowledge. Admin-only toggle.
-
----
-
-## 7. External Integrations
-
-### 7.1 Google OAuth 2.0
-
-- **Purpose:** Social login
-- **Config:** `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` environment variables
-- **Library:** NextAuth.js Google provider
-- **Data flow:** Google redirects with authorization code → NextAuth exchanges for tokens → Creates/links `Account` record → Mints JWT
-
-### 7.2 Upstash Redis
-
-- **Purpose:** Distributed rate limiting
-- **Config:** `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN`
-- **Library:** `@upstash/ratelimit` + `@upstash/redis`
-- **Usage:** Three sliding window rate limiters (login, connections, DMs)
-- **Graceful degradation:** All limiters return null if credentials missing
-
-### 7.3 Vercel Blob Storage
-
-- **Purpose:** User-uploaded images (avatars, gallery)
-- **Config:** Automatic via Vercel environment (no explicit env vars needed)
-- **Library:** `@vercel/blob` (`put`, `del`)
-- **File paths:** `avatars/{userId}/{timestamp}.{ext}`, `gallery/{userId}/{timestamp}.{ext}`
-- **Validation:** JPEG/PNG/WebP only, 5MB max per file, max 5 gallery images per user
-
-### 7.4 Google Analytics 4
-
-- **Purpose:** Website analytics and event tracking
-- **Config:** GA4 measurement ID in layout script tags
-- **Library:** Custom typed helpers in `lib/analytics.ts`
-- **Events tracked:** Page views, lead submissions, CTA clicks, outbound clicks, scroll depth (25/50/75/100%), affiliate clicks, blog card clicks, nav clicks
-- **Auto-tracking:** `AnalyticsProvider` component captures route changes, outbound links, scroll milestones
-- **Affiliate detection:** NordVPN, SafetyWing, Anker, TEFL/TESOL link patterns
-
-### 7.5 Hostinger MySQL
-
-- **Purpose:** Primary relational database
-- **Connection:** `DATABASE_URL` environment variable
-- **Shadow DB:** `SHADOW_DATABASE_URL` for Prisma migrations in development
+### 10.7 Additional Measures
+- **IP blocking** with optional expiration (admin-managed)
+- **Security event logging** (login/signup with IP + user agent)
+- **Audit trail** for all admin actions (before/after state)
+- **CORS whitelist** on lead API
+- **Bidirectional blocking** for all social features
+- **Admin hide** (`hiddenFromCommunity`) for stealth moderation
 
 ---
 
-## 8. Potential Risks & Technical Debt
+## 11. External Integrations
 
-### 8.1 Dual Connection Table System
-
-**Risk: High**
-
-Two tables (`Connection` and `ConnectionRequest`) serve the same purpose. Every write goes to both with try/catch on the legacy path. Reads fall back between them. This creates:
-- Data inconsistency if one write succeeds and the other fails
-- Complex query logic with fallback patterns
-- Double storage cost
-- Confusion for future developers
-
-**Recommendation:** Migrate all data to the canonical `Connection` table and drop `ConnectionRequest`.
-
-### 8.2 JWT Revocation Gap
-
-**Risk: Medium**
-
-JWTs have a 30-day max age and cannot be forcibly revoked. When an admin bans a user, the `Session` table rows are deleted, but since the session strategy is JWT (not database), the user's existing JWT remains valid until natural expiry. The `signIn` callback blocks new logins, but an existing token could theoretically be used for API calls.
-
-**Recommendation:** Either switch to database session strategy, or add a server-side JWT blocklist (Redis-backed) for banned users.
-
-### 8.3 In-Memory Rate Limiting (Lead API)
-
-**Risk: Medium**
-
-The lead API uses an in-memory `Map` for rate limiting. In a serverless environment (Vercel), each instance has its own memory space, making this ineffective — requests may hit different instances. The Map also resets on cold starts.
-
-**Recommendation:** Use Upstash Redis (already available) for the lead rate limiter to match the other limiters.
-
-### 8.4 No CIDR Parsing for IP Blocking
-
-**Risk: Low**
-
-`isIpBlocked()` does exact string matching on the `ipCidr` field instead of actual CIDR range matching. Blocking `192.168.1.0/24` would not match `192.168.1.50`.
-
-**Recommendation:** Implement proper CIDR matching or clarify that only exact IPs are supported.
-
-### 8.5 NextAuth.js Beta
-
-**Risk: Medium**
-
-The application uses `next-auth@5.0.0-beta.30`. Beta software may have breaking changes, security patches, or API modifications before stable release.
-
-**Recommendation:** Pin the version (already done) and plan for migration when v5 stabilizes.
-
-### 8.6 Unread Count Performance
-
-**Risk: Low-Medium**
-
-`/api/messages/unread-count` iterates all conversation participants for the user, then counts messages after `lastReadAt` for each conversation individually. This is O(n) queries where n = number of conversations.
-
-**Recommendation:** Add a denormalized `unreadCount` field on `ConversationParticipant`, maintained via triggers or application-level increment/reset, to make unread count O(1).
-
-### 8.7 No Email Service
-
-**Risk: Low**
-
-There is no email integration (no password reset, no email verification for credentials signup, no notification emails). Password recovery and email verification are absent.
-
-### 8.8 IP Block Check Only on Signup
-
-**Risk: Low**
-
-`isIpBlocked()` is only called during user registration. Blocked IPs can still log in with existing accounts and use the API.
-
-**Recommendation:** Add IP block check to the login middleware or the `authorize()` callback.
-
-### 8.9 Single CSS File
-
-**Risk: Low (DX)**
-
-All styles live in a single `globals.css` file. As the application grows, this becomes harder to maintain, review, and avoid naming collisions.
-
-### 8.10 No Automated Tests
-
-**Risk: Medium**
-
-There are no test files (unit, integration, or E2E). Manual testing is the only safety net for regressions.
-
-### 8.11 Scraped HTML Content
-
-**Risk: Low**
-
-Blog/page content is scraped HTML from Zyrosite, cleaned at runtime. This is fragile — changes to the source site's HTML structure could break the cleaning logic. The content is also not editable through any CMS.
+| Service | Purpose | Config |
+|---|---|---|
+| **Google OAuth 2.0** | Social login | `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` |
+| **Upstash Redis** | Distributed rate limiting | `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` |
+| **Vercel Blob** | Image storage (avatars, gallery, AI images) | Automatic via Vercel env |
+| **Google Analytics 4** | Website analytics | GA4 measurement ID in layout |
+| **Google Gemini** | AI article + email generation | `GEMINI_API_KEY` |
+| **Imagen 4.0** | AI image generation (via Gemini API) | Same key |
+| **Serper.dev** | Web search + image search for research | `SERPER_API_KEY` |
+| **Resend** | Email delivery + webhooks | `RESEND_API_KEY` |
+| **OpenStreetMap Nominatim** | Reverse geocoding for listing titles | Free API (rate-limited) |
+| **Hostinger MySQL** | Primary database | `DATABASE_URL` |
 
 ---
 
-## 9. Suggested Improvements
+## 12. CLI Scripts
 
-### 9.1 Architecture
+### 12.1 Scraper Scripts
+
+| Script | Purpose | Usage |
+|---|---|---|
+| `realestate-daily.ts` | Daily new-listing scraper (5-15 min) | `npx tsx scripts/realestate-daily.ts` |
+| `realestate-weekly.ts` | Weekly full scrape (2-6h, parallel workers) | `npx tsx scripts/realestate-weekly.ts --workers 3` |
+| `scrape-realestate-full.ts` | Full discovery (40 query sets) | `npx tsx scripts/scrape-realestate-full.ts --workers 3` |
+| `scrape-all-sources.ts` | Multi-source parallel launcher | `npx tsx scripts/scrape-all-sources.ts --workers 2` |
+
+### 12.2 AI Scripts
+
+| Script | Purpose |
+|---|---|
+| `ai-review-listings.ts` | Gemini batch classification (residential/non-residential) |
+| `ai-rewrite-descriptions.ts` | Gemini batch description rewriting |
+| `generate-tefl-blog.ts` | TEFL blog post generation |
+
+### 12.3 Data Backfill Scripts
+
+| Script | Purpose |
+|---|---|
+| `backfill-amenities.ts` | Re-extract amenities from descriptions |
+| `backfill-districts.ts` | Normalize district names |
+| `backfill-titles.ts` | Generate geocoded titles for existing listings |
+| `backfill-sr-sangkats.ts` | Siem Reap sangkat normalization |
+| `backfill-email-verified.ts` | Backfill email verification status |
+
+### 12.4 Data Cleaning Scripts
+
+| Script | Purpose |
+|---|---|
+| `fix-bad-prices.ts` | Correct pricing anomalies |
+| `fix-broken-images.ts` | Remove broken image references |
+| `fix-city-contamination.ts` | Clean cross-city data leakage |
+| `fix-post-images.ts` | Fix blog post images |
+| `delete-no-price.ts` | Remove listings without prices |
+| `deactivate-listing.ts` | Manually deactivate a listing |
+| `purge-khmer24-data.ts` | Remove Khmer24 data |
+| `reclassify-listings.ts` | Re-run property type classification |
+
+### 12.5 Pipeline Scripts
+
+| Script | Purpose |
+|---|---|
+| `rentals_discover.ts` | Run discovery only |
+| `rentals_process_queue.ts` | Run queue processing only |
+| `rentals_build_index.ts` | Build daily index |
+| `rentals_bulk_scrape.ts` | Bulk scraping |
+| `rentals_daily_scrape.ts` | Daily scrape orchestration |
+| `build-monthly-index.ts` | Monthly price aggregation |
+| `build-cambodia-geojson.ts` | Process Cambodia GeoJSON boundaries |
+
+### 12.6 Blog Scripts
+
+| Script | Purpose |
+|---|---|
+| `add-banners-to-ai-posts.ts` | Add promotional banners to AI articles |
+| `add-bridge-banners-to-ai-posts.ts` | Add Bridge TEFL banners |
+
+### 12.7 Utility Scripts
+
+| Script | Purpose |
+|---|---|
+| `seed-admin.ts` | Create/update admin user |
+| `check-build.js` | Verify .next build exists |
+
+---
+
+## 13. Potential Risks & Technical Debt
+
+### 13.1 Dual Connection Table System -- HIGH
+
+Two tables (`Connection` and `ConnectionRequest`) serve the same purpose with dual-write pattern. Risk of data inconsistency.
+
+**Recommendation:** Migrate to single `Connection` table.
+
+### 13.2 JWT Revocation Gap -- MEDIUM
+
+30-day JWTs cannot be forcibly revoked. Banned users retain valid tokens until expiry.
+
+**Recommendation:** Add Redis-backed JWT blocklist or switch to database sessions.
+
+### 13.3 In-Memory Lead Rate Limiting -- MEDIUM
+
+In-memory Map doesn't work across Vercel serverless instances.
+
+**Recommendation:** Use Upstash Redis (already available).
+
+### 13.4 NextAuth.js Beta -- MEDIUM
+
+Using `next-auth@5.0.0-beta.30`. Beta software may have breaking changes.
+
+**Recommendation:** Pin version (done), plan migration when v5 stabilizes.
+
+### 13.5 No CIDR Parsing -- LOW
+
+IP blocking uses exact string match, not CIDR range matching.
+
+### 13.6 Unread Count Performance -- LOW-MEDIUM
+
+O(n) queries per conversation for unread counts.
+
+**Recommendation:** Denormalize to `unreadCount` field on `ConversationParticipant`.
+
+### 13.7 IP Block Only on Signup -- LOW
+
+Blocked IPs can still log in with existing accounts.
+
+### 13.8 Single Global CSS File -- LOW
+
+`globals.css` is large. Feature-specific CSS files (e.g., `rentals.css`) are a good pattern to continue.
+
+---
+
+## 14. Suggested Improvements
+
+### Architecture
 
 | Priority | Improvement | Reason |
 |---|---|---|
-| **High** | Consolidate to single `Connection` table | Eliminate dual-write complexity and inconsistency risk |
-| **Medium** | Add a proper CMS or Markdown-based content system | Replace scraped HTML with maintainable, editable content |
-| **Medium** | Split `globals.css` into CSS modules per component/feature | Improve maintainability and prevent style collisions |
-| **Low** | Add WebSocket or SSE for real-time messaging | Current polling-based approach doesn't scale for active conversations |
+| **High** | Consolidate to single Connection table | Eliminate dual-write complexity |
+| **Medium** | Add WebSocket/SSE for real-time messaging | Polling doesn't scale for active conversations |
+| **Low** | Split remaining global CSS into feature modules | Continue the rentals.css pattern |
 
-### 9.2 Security
-
-| Priority | Improvement | Reason |
-|---|---|---|
-| **High** | Add password reset flow (email-based) | Users with credentials login have no recovery mechanism |
-| **High** | Add email verification on signup | Prevent account creation with unowned email addresses |
-| **High** | Move to database sessions or add JWT blocklist | Enable immediate session invalidation on ban/suspend |
-| **Medium** | Add IP block check on login (not just signup) | Blocked IPs can still use existing accounts |
-| **Medium** | Add CSRF protection to API routes | Server actions have built-in CSRF protection, but plain API routes may need additional headers |
-| **Low** | Implement proper CIDR matching | Make IP blocking more flexible |
-
-### 9.3 Scalability
+### Security
 
 | Priority | Improvement | Reason |
 |---|---|---|
-| **High** | Replace in-memory lead rate limiter with Upstash Redis | In-memory doesn't work across serverless instances |
-| **Medium** | Denormalize unread message counts | Current N+1 query pattern won't scale with many conversations |
-| **Medium** | Add database connection pooling | Vercel serverless can exhaust MySQL connections under load |
-| **Low** | Add pagination to community profile listing | Currently capped at 50 results with no next page |
-| **Low** | Add full-text search index | Current `contains` queries do full table scans |
+| **High** | Password reset flow (email-based) | No recovery mechanism |
+| **High** | Email verification on signup | Prevent unowned email accounts |
+| **High** | JWT blocklist or database sessions | Enable immediate session invalidation |
+| **Medium** | IP block check on login | Currently only on signup |
 
-### 9.4 Developer Experience
+### Scalability
 
 | Priority | Improvement | Reason |
 |---|---|---|
-| **High** | Add automated test suite (Vitest + Playwright) | No test coverage creates regression risk |
-| **High** | Add CI/CD pipeline with build/lint/test checks | Prevent broken code from reaching production |
-| **Medium** | Add API documentation (OpenAPI/Swagger) | Document API contracts for future development |
-| **Medium** | Add error monitoring (Sentry or similar) | Server-side exceptions are only visible in Vercel logs |
-| **Low** | Add Storybook for component development | Isolated component development and visual testing |
-| **Low** | Add Prettier for consistent formatting | Currently no auto-formatting configured |
+| **High** | Redis-based lead rate limiter | In-memory doesn't work serverless |
+| **Medium** | Denormalize unread counts | N+1 query pattern |
+| **Medium** | Database connection pooling | Serverless can exhaust connections |
+
+### Developer Experience
+
+| Priority | Improvement | Reason |
+|---|---|---|
+| **High** | Expand test suite (Vitest + Playwright) | Limited test coverage |
+| **High** | CI/CD with build/lint/test checks | Prevent broken deployments |
+| **Medium** | API documentation (OpenAPI) | Document contracts |
+| **Medium** | Error monitoring (Sentry) | Server errors only in Vercel logs |
+
+---
+
+## Summary Statistics
+
+| Metric | Value |
+|---|---|
+| Source files | ~335 |
+| Prisma schema lines | 970 |
+| Prisma models | 30+ |
+| Prisma enums | 20+ |
+| API routes | 55 |
+| App pages/routes | 30+ |
+| React components | 50+ |
+| CLI scripts | 45+ |
+| Rental sources | 7 (6 active) |
+| Email templates | 5 |
+| Email block types | 9 |
+| Trusted news sources | 30+ |
+| Affiliate partners | 10+ |
+| GeoJSON district aliases | 300+ |
+| Total commits | 259 |
+| Project started | 22 February 2026 |
 
 ---
 

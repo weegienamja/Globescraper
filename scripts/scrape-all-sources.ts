@@ -60,6 +60,7 @@ function runScript(src: SourceConfig): Promise<{ label: string; ok: boolean }> {
       cwd: process.cwd(),
       env: { ...process.env },
       maxBuffer: 50 * 1024 * 1024,
+      shell: true,
     }, (err) => {
       if (err) {
         console.error(`[${tag}] FAILED: ${err.message}`);

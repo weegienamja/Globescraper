@@ -18,6 +18,7 @@
  *   npx tsx scripts/realestate-weekly.ts --batch-cooldown 10000
  *   npx tsx scripts/realestate-weekly.ts --discover-only
  *   npx tsx scripts/realestate-weekly.ts --process-only
+ *   npx tsx scripts/realestate-weekly.ts --workers 3
  */
 
 /* ── CLI args ────────────────────────────────────────────── */
@@ -33,8 +34,10 @@ const MAX_PROCESS = getArg("--max-process", 99999);
 const BATCH_SIZE = getArg("--batch-size", 200);
 const RESCRAPE_DAYS = getArg("--rescrape-days", 7);
 const CONCURRENCY = getArg("--concurrency", 1);
+const WORKERS = getArg("--workers", 1);
 const DISCOVER_ONLY = hasFlag("--discover-only");
 const PROCESS_ONLY = hasFlag("--process-only");
+const IS_WORKER = hasFlag("--_worker");
 
 /** Cooling period between batches (ms) — gives DB + target site breathing room. */
 const BATCH_COOLDOWN_MS = getArg("--batch-cooldown", 15_000);
@@ -58,6 +61,8 @@ import type { PipelineLogFn, PipelineProgressFn } from "../lib/rentals/pipelineL
 import { USER_AGENT } from "../lib/rentals/config";
 import { nightIdleDelay, maybeBreather } from "../lib/rentals/http";
 import { ProxyAgent } from "undici";
+import { execFile } from "child_process";
+import path from "path";
 
 /* ── Proxy ────────────────────────────────────────────────── */
 
@@ -438,6 +443,58 @@ async function enqueueNewUrls(discovered: DiscoveredUrl[]): Promise<{ newCount: 
   return { newCount: brandNew.length, rescrapeCount: stale.length };
 }
 
+/* ── Spawn parallel workers ───────────────────────────────── */
+
+function spawnWorkers(n: number): Promise<void> {
+  console.log(`\nSpawning ${n} workers for parallel processing...\n`);
+  const script = path.resolve(__dirname, "realestate-weekly.ts");
+
+  const workers = Array.from({ length: n }, (_, i) => {
+    return new Promise<void>((resolve, reject) => {
+      const args = [
+        "tsx",
+        script,
+        "--process-only",
+        "--_worker",
+        "--concurrency",
+        String(CONCURRENCY),
+        "--batch-size",
+        String(BATCH_SIZE),
+        "--max-process",
+        String(Math.ceil(MAX_PROCESS / n)),
+        "--batch-cooldown",
+        String(BATCH_COOLDOWN_MS),
+        "--rescrape-days",
+        String(RESCRAPE_DAYS),
+      ];
+
+      console.log(`[worker-${i}] starting`);
+      const child = execFile("npx", args, { maxBuffer: 50 * 1024 * 1024, shell: true });
+
+      child.stdout?.on("data", (d: Buffer) =>
+        process.stdout.write(`[w${i}] ${d}`)
+      );
+      child.stderr?.on("data", (d: Buffer) =>
+        process.stderr.write(`[w${i}] ${d}`)
+      );
+
+      child.on("close", (code) => {
+        console.log(`[worker-${i}] exited with code ${code}`);
+        code === 0 ? resolve() : reject(new Error(`Worker ${i} exited ${code}`));
+      });
+      child.on("error", reject);
+    });
+  });
+
+  return Promise.allSettled(workers).then((results) => {
+    const failed = results.filter((r) => r.status === "rejected");
+    if (failed.length) {
+      console.warn(`${failed.length}/${n} workers failed`);
+    }
+    console.log("All workers finished.\n");
+  });
+}
+
 /* ── Phase 3: Process queue ──────────────────────────────── */
 
 async function processAllBatches(): Promise<void> {
@@ -565,7 +622,12 @@ async function main() {
     }
   }
 
-  await processAllBatches();
+  // If --workers > 1 and this is the main process, spawn children
+  if (WORKERS > 1 && !IS_WORKER) {
+    await spawnWorkers(WORKERS);
+  } else {
+    await processAllBatches();
+  }
 
   // Phase 4: Rebuild daily index
   console.log("\n╔══════════════════════════════════════════════╗");
