@@ -31,6 +31,7 @@ export interface ListingForRewrite {
 
 interface RewriteResult {
   listingId: string;
+  rewrittenTitle: string;
   rewritten: string;
 }
 
@@ -66,28 +67,37 @@ function buildBatchPrompt(listings: ListingForRewrite[]): string {
 
   return `You are a professional property listing editor for Cambodia real estate.
 
-Rewrite each listing description below to be:
+For each listing below, rewrite BOTH the title and description.
+
+TITLE rules:
+- Format: "[Property Type] — [Key Feature] — [District], [City]" (e.g. "2-Bedroom Apartment — River View — BKK1, Phnom Penh")
+- Short and scannable: max 80 characters
+- Include bedroom count if available, property type, district/area
+- Remove ALL CAPS, emojis, excessive punctuation, agent names, phone numbers
+- Do NOT include price in the title
+- If the original title is already clean and follows this format, keep it as-is
+
+DESCRIPTION rules:
 1. Clear, professional English — fix grammar, spelling, and awkward phrasing
 2. Well-structured with key details first (property type, size, bedrooms, location)
 3. Factually accurate — preserve ALL details from the original (prices, amenities, features, contact info)
 4. Concise — remove excessive emojis, ALL CAPS shouting, and repetitive filler text
 5. Uniform format across all listings
-
-Rules:
 - Keep the same language tone (professional but warm, suitable for expat renters)
 - Preserve specific details: exact prices, room counts, floor numbers, building names, addresses
 - Convert confusing formatting (bullet points with emojis, mixed Khmer/English) into clean English paragraphs
 - If the original mentions amenities (pool, gym, parking), list them clearly
 - If the original is already good English, make minimal changes
-- If description is empty or "(no description)", write a brief 2-sentence summary based on the title and metadata provided
+- If description is empty or "(no description)", write a brief 2-sentence summary based on the title and metadata
 - Do NOT invent details that aren't in the original
 - Do NOT add marketing fluff or superlatives not in the original
-- Maximum 200 words per rewrite
+- Maximum 200 words per description
 
 Return your response in this EXACT format — one block per listing:
 
 [LISTING_<id>]
-<rewritten description>
+TITLE: <rewritten title>
+DESCRIPTION: <rewritten description>
 [/LISTING_<id>]
 
 LISTINGS TO REWRITE:
@@ -112,9 +122,17 @@ function parseRewriteResponse(
 
   while ((match = blockRegex.exec(responseText)) !== null) {
     const id = match[1];
-    const rewritten = match[2].trim();
+    const content = match[2].trim();
+
+    // Extract TITLE: and DESCRIPTION: from the block
+    const titleMatch = content.match(/^TITLE:\s*(.+)/m);
+    const descMatch = content.match(/DESCRIPTION:\s*([\s\S]*)/m);
+
+    const rewrittenTitle = titleMatch ? titleMatch[1].trim() : "";
+    const rewritten = descMatch ? descMatch[1].trim() : content;
+
     if (idSet.has(id) && rewritten.length > 10) {
-      results.push({ listingId: id, rewritten });
+      results.push({ listingId: id, rewrittenTitle, rewritten });
     }
   }
 
@@ -137,12 +155,16 @@ export async function saveRewrites(results: RewriteResult[]): Promise<number> {
   let saved = 0;
 
   for (const r of results) {
+    const data: Record<string, unknown> = {
+      descriptionRewritten: r.rewritten,
+      descriptionRewrittenAt: now,
+    };
+    if (r.rewrittenTitle && r.rewrittenTitle.length > 5) {
+      data.titleRewritten = r.rewrittenTitle;
+    }
     await prisma.rentalListing.update({
       where: { id: r.listingId },
-      data: {
-        descriptionRewritten: r.rewritten,
-        descriptionRewrittenAt: now,
-      },
+      data,
     });
     saved++;
   }

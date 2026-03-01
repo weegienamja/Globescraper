@@ -823,6 +823,7 @@ model RentalListing {
   contentFingerprint String?      @db.VarChar(64)
   descriptionRewritten   String?  @db.Text
   descriptionRewrittenAt DateTime?
+  titleRewritten         String?  @db.VarChar(500)
 
   snapshots          RentalSnapshot[]
   aiReviews          RentalAiReview[]

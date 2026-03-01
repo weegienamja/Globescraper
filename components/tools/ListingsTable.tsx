@@ -25,6 +25,7 @@ interface Listing {
   amenitiesJson: string | null;
   descriptionRewritten: string | null;
   descriptionRewrittenAt: string | null;
+  titleRewritten: string | null;
   _count: { snapshots: number };
   snapshots: Snapshot[];
   priceChange: {
@@ -401,15 +402,27 @@ export function ListingsTable({ initialDistrict }: ListingsTableProps = {}) {
                           style={s.titleLink}
                           onClick={(e) => e.stopPropagation()}
                         >
-                          {l.title.length > 60
-                            ? l.title.substring(0, 60) + "..."
-                            : l.title}
+                          {(() => {
+                            const displayTitle = l.titleRewritten || l.title;
+                            return displayTitle.length > 60
+                              ? displayTitle.substring(0, 60) + "..."
+                              : displayTitle;
+                          })()}
                         </a>
+                        {l.titleRewritten && (
+                          <span title="AI-rewritten title" style={{ color: "#818cf8", fontSize: "11px", marginLeft: "4px" }}>✏️</span>
+                        )}
                         {expanded && (
                           <div style={s.expandedInfo}>
+                            {l.titleRewritten && (
+                              <div style={s.expandRow}>
+                                <span style={s.expandLabel}>Original Title:</span>
+                                <span style={{ ...s.expandValue, color: "#64748b", fontStyle: "italic" }}>{l.title}</span>
+                              </div>
+                            )}
                             <div style={s.expandRow}>
-                              <span style={s.expandLabel}>Full Title:</span>
-                              <span style={s.expandValue}>{l.title}</span>
+                              <span style={s.expandLabel}>{l.titleRewritten ? "Rewritten Title:" : "Full Title:"}</span>
+                              <span style={s.expandValue}>{l.titleRewritten || l.title}</span>
                             </div>
                             {l.sizeSqm && (
                               <div style={s.expandRow}>

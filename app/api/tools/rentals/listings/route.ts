@@ -106,6 +106,7 @@ export async function GET(req: NextRequest) {
           postedAt: true,
           descriptionRewritten: true,
           descriptionRewrittenAt: true,
+          titleRewritten: true,
           _count: { select: { snapshots: true } },
           snapshots: {
             orderBy: { scrapedAt: "desc" as const },
