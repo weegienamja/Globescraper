@@ -238,11 +238,11 @@ export async function scrapeListingRealestateKh(
       .text()
       .trim() || null;
 
-  // Classify — use title + description + URL slug for best accuracy
-  // The URL slug on realestate.com.kh often contains the type:
-  // e.g. /rent/bkk-1/3-bed-4-bath-villa-259490/
+  // Classify — use title + URL slug (NOT description, which can contain
+  // amenity/nearby-place words like "commercial" or "restaurant" that
+  // would false-positive the non-residential filter).
   const urlSlug = url.toLowerCase();
-  const classifyHint = `${title} ${description ?? ""} ${urlSlug}`;
+  const classifyHint = `${title} ${urlSlug}`;
   const propertyType = classifyPropertyType(classifyHint);
 
   // Reject non-residential listings

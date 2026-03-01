@@ -188,9 +188,29 @@ export async function processQueueJob(
                 })
               : null;
 
-            const existing = await prisma.rentalListing.findUnique({
+            // Look up existing listing — try canonicalUrl first, then
+            // fall back to source + sourceListingId (handles trailing-slash
+            // mismatches or URL normalization differences).
+            let existing = await prisma.rentalListing.findUnique({
               where: { canonicalUrl: item.canonicalUrl },
             });
+
+            if (!existing) {
+              const sid = scraped.sourceListingId ?? item.sourceListingId;
+              if (sid) {
+                existing = await prisma.rentalListing.findUnique({
+                  where: { source_sourceListingId: { source, sourceListingId: sid } },
+                });
+              }
+            }
+
+            // If the canonical URL changed (e.g. trailing slash), update it
+            if (existing && existing.canonicalUrl !== item.canonicalUrl) {
+              await prisma.rentalListing.update({
+                where: { id: existing.id },
+                data: { canonicalUrl: item.canonicalUrl },
+              });
+            }
 
             let listingId: string;
             let wasInserted = false;

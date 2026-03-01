@@ -33,13 +33,18 @@ const HOUSE_KEYWORDS = [
   "house", "borey", "detached",
 ];
 
-/** Non-residential keywords — used to reject listings. */
+/** Non-residential keywords — used to reject listings.
+ *  Must be specific enough to avoid false-positives on amenity or
+ *  nearby-place text (e.g. "near commercial area", "close to restaurants").
+ */
 const NON_RESIDENTIAL_KEYWORDS = [
   "shophouse", "shop house", "shop-house",
   "warehouse", "factory", "workshop",
-  "office space", "office", "co-working",
-  "commercial", "retail", "restaurant", "hotel", "guesthouse", "guest house",
-  "flat land", "land for", "land ", "plot", "lot for",
+  "office space", "office for rent", "office for sale", "co-working",
+  "commercial space", "commercial property", "commercial building", "commercial for",
+  "retail space", "retail shop", "retail for",
+  "restaurant for", "hotel for", "guesthouse", "guest house",
+  "flat land", "land for", "plot for", "lot for",
 ];
 
 /**
