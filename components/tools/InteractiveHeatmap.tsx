@@ -21,6 +21,18 @@ export interface DistrictIndexRow {
   p75PriceUsd: number | null;
 }
 
+interface ListingPoint {
+  id: string;
+  latitude: number;
+  longitude: number;
+  title: string;
+  district: string | null;
+  propertyType: string;
+  bedrooms: number | null;
+  priceMonthlyUsd: number | null;
+  source: string;
+}
+
 /** Per-district aggregated data for colouring the choropleth. */
 interface DistrictSummary {
   district: string;
@@ -122,6 +134,93 @@ export function InteractiveHeatmap({ data, height = 450 }: Props) {
   };
 
   const selectAllTypes = () => setSelectedTypes(new Set(allTypes));
+
+  /* ── Listing point markers (exact coordinates) ──────── */
+  const [showPoints, setShowPoints] = useState(false);
+  const [listingPoints, setListingPoints] = useState<ListingPoint[]>([]);
+  const [pointsLoading, setPointsLoading] = useState(false);
+  const [pointsFetched, setPointsFetched] = useState(false);
+  const markersLayerRef = useRef<L.LayerGroup | null>(null);
+
+  // Fetch listing points on first toggle
+  useEffect(() => {
+    if (!showPoints || pointsFetched) return;
+    setPointsLoading(true);
+    fetch("/api/tools/rentals/listing-points")
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
+      .then((pts: ListingPoint[]) => {
+        setListingPoints(pts);
+        setPointsFetched(true);
+      })
+      .catch(() => { /* silently fail — points are optional */ })
+      .finally(() => setPointsLoading(false));
+  }, [showPoints, pointsFetched]);
+
+  // Filter points by selected property types
+  const filteredPoints = useMemo(
+    () => listingPoints.filter((p) => selectedTypes.has(p.propertyType)),
+    [listingPoints, selectedTypes],
+  );
+
+  // Sync marker layer with map
+  useEffect(() => {
+    const map = leafletMap.current;
+    if (!map) return;
+
+    // Remove existing markers
+    if (markersLayerRef.current) {
+      map.removeLayer(markersLayerRef.current);
+      markersLayerRef.current = null;
+    }
+
+    if (!showPoints || filteredPoints.length === 0) return;
+
+    const markerGroup = L.layerGroup();
+
+    for (const pt of filteredPoints) {
+      const priceLabel = pt.priceMonthlyUsd
+        ? `$${pt.priceMonthlyUsd.toLocaleString()}/mo`
+        : "N/A";
+      const color = pt.priceMonthlyUsd === null ? "#64748b"
+        : pt.priceMonthlyUsd < 300 ? "#22c55e"
+        : pt.priceMonthlyUsd < 600 ? "#f59e0b"
+        : pt.priceMonthlyUsd < 1000 ? "#f97316"
+        : "#ef4444";
+
+      const marker = L.circleMarker([pt.latitude, pt.longitude], {
+        radius: 5,
+        fillColor: color,
+        fillOpacity: 0.85,
+        color: "#0f172a",
+        weight: 1,
+      });
+
+      marker.bindPopup(
+        `<div style="font-size:12px;line-height:1.5">
+          <strong>${pt.title.slice(0, 80)}</strong><br/>
+          <span style="color:${color};font-weight:600">${priceLabel}</span>
+          ${pt.bedrooms ? ` · ${pt.bedrooms} bed` : ""}
+          ${pt.district ? ` · ${pt.district}` : ""}<br/>
+          <span style="color:#94a3b8;font-size:11px">${pt.source.replace(/_/g, " ")}</span>
+        </div>`,
+        { maxWidth: 280 },
+      );
+      marker.addTo(markerGroup);
+    }
+
+    markerGroup.addTo(map);
+    markersLayerRef.current = markerGroup;
+
+    return () => {
+      if (markersLayerRef.current) {
+        map.removeLayer(markersLayerRef.current);
+        markersLayerRef.current = null;
+      }
+    };
+  }, [showPoints, filteredPoints]);
 
   /* Filtered data based on selected property types */
   const filteredData = useMemo(
@@ -558,6 +657,26 @@ export function InteractiveHeatmap({ data, height = 450 }: Props) {
               Select All
             </button>
           )}
+          {/* Divider */}
+          <span style={{ color: "#1e293b", fontSize: "12px", margin: "0 2px" }}>|</span>
+          <button
+            onClick={() => setShowPoints((v) => !v)}
+            style={{
+              padding: "4px 10px",
+              fontSize: "12px",
+              fontWeight: 600,
+              borderRadius: "6px",
+              border: showPoints ? "1px solid #10b981" : "1px solid #334155",
+              background: showPoints ? "#064e3b" : "#0f172a",
+              color: showPoints ? "#6ee7b7" : "#64748b",
+              cursor: "pointer",
+              transition: "all 0.15s ease",
+            }}
+          >
+            {pointsLoading ? "Loading\u2026" : showPoints
+              ? `Pins ON (${filteredPoints.length})`
+              : "Show Pins"}
+          </button>
         </div>
       )}
       <div

@@ -51,6 +51,8 @@ export interface ScrapedListing {
   description: string | null;
   city: string;
   district: string | null;
+  latitude: number | null;
+  longitude: number | null;
   propertyType: PropertyType;
   bedrooms: number | null;
   bathrooms: number | null;
@@ -377,13 +379,54 @@ export async function scrapeListingRealestateKh(
 
   // Posted date — try structured data first, then parse relative "Listed: X days ago"
   let postedAt: Date | null = null;
+  let latitude: number | null = null;
+  let longitude: number | null = null;
+
   const jsonLd = $('script[type="application/ld+json"]').first().html();
   if (jsonLd) {
     try {
       const data = JSON.parse(jsonLd);
       if (data.datePosted) postedAt = new Date(data.datePosted);
+      // Extract geo coordinates from schema.org Residence / Place
+      if (data?.geo?.latitude && data?.geo?.longitude) {
+        latitude = parseFloat(data.geo.latitude);
+        longitude = parseFloat(data.geo.longitude);
+      }
     } catch {
       /* ignore invalid JSON-LD */
+    }
+  }
+
+  // Fallback: extract coordinates from __NEXT_DATA__ (Next.js SSR payload)
+  if (latitude === null || longitude === null) {
+    const nextDataScript = $('script#__NEXT_DATA__').html();
+    if (nextDataScript) {
+      try {
+        const nextData = JSON.parse(nextDataScript);
+        const schemaOrg = nextData?.props?.pageProps?.cacheData?.listing?.data?.seo?.head?.schemaOrg;
+        if (Array.isArray(schemaOrg)) {
+          for (const item of schemaOrg) {
+            if (item?.geo?.latitude && item?.geo?.longitude) {
+              latitude = parseFloat(item.geo.latitude);
+              longitude = parseFloat(item.geo.longitude);
+              break;
+            }
+          }
+        }
+      } catch {
+        /* ignore invalid __NEXT_DATA__ */
+      }
+    }
+  }
+
+  // Validate coordinates are within Cambodia bounds (lat ~10-14, lng ~102-108)
+  if (latitude !== null && longitude !== null) {
+    if (latitude < 10 || latitude > 14 || longitude < 102 || longitude > 108) {
+      log("debug", `Discarding out-of-bounds coordinates: ${latitude}, ${longitude}`);
+      latitude = null;
+      longitude = null;
+    } else {
+      log("debug", `Coordinates: ${latitude}, ${longitude}`);
     }
   }
 
@@ -407,6 +450,8 @@ export async function scrapeListingRealestateKh(
     description,
     city,
     district,
+    latitude,
+    longitude,
     propertyType,
     bedrooms,
     bathrooms,

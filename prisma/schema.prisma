@@ -816,10 +816,14 @@ model RentalListing {
   postedAt           DateTime?
   firstSeenAt        DateTime     @default(now())
   lastSeenAt         DateTime
+  latitude           Float?
+  longitude          Float?
   isActive           Boolean      @default(true)
   contentFingerprint String?      @db.VarChar(64)
 
   snapshots          RentalSnapshot[]
+
+  @@index([latitude, longitude])
 
   @@unique([source, sourceListingId])
   @@index([source, sourceListingId])

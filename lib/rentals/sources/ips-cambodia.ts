@@ -41,6 +41,8 @@ export interface ScrapedListing {
   description: string | null;
   city: string;
   district: string | null;
+  latitude: number | null;
+  longitude: number | null;
   propertyType: PropertyType;
   bedrooms: number | null;
   bathrooms: number | null;
@@ -268,6 +270,8 @@ export async function scrapeListingIpsCambodia(
     description,
     city,
     district,
+    latitude: null,
+    longitude: null,
     propertyType,
     bedrooms,
     bathrooms,
