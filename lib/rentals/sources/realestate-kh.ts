@@ -13,6 +13,7 @@ import * as cheerio from "cheerio";
 import { fetchHtml, politeDelay } from "../http";
 import { canonicalizeUrl } from "../url";
 import { classifyPropertyType } from "../classify";
+import { isDescriptionHeadlineNonResidential, getDescriptionHeadlineType } from "../classify";
 import { parsePriceMonthlyUsd, parseBedsBathsSize, parseDistrict, parseCity, parseAmenities } from "../parse";
 import { USER_AGENT } from "../config";
 import type { PropertyType } from "@prisma/client";
@@ -245,12 +246,31 @@ export async function scrapeListingRealestateKh(
       .text()
       .trim() || null;
 
-  // Classify — use title + URL slug (NOT description, which can contain
+  // Classify — use title + URL slug (NOT full description, which can contain
   // amenity/nearby-place words like "commercial" or "restaurant" that
   // would false-positive the non-residential filter).
   const urlSlug = url.toLowerCase();
   const classifyHint = `${title} ${urlSlug}`;
-  const propertyType = classifyPropertyType(classifyHint);
+  let propertyType = classifyPropertyType(classifyHint);
+
+  // Also scan the first few lines of the description ("headline") for
+  // strong non-residential signals. Many listings use a generic title
+  // like "Apartment for Rent" but reveal the truth in the description
+  // (e.g. "Warehouse for Rent at Chhouk Va 2").
+  if (propertyType && isDescriptionHeadlineNonResidential(description)) {
+    log("debug", `Description headline reveals non-residential: ${description?.slice(0, 100)}`);
+    propertyType = null;
+  }
+
+  // Check if description headline suggests a different residential type
+  // (e.g. title says "Apartment" but description says "Villa for Rent")
+  if (propertyType && description) {
+    const descType = getDescriptionHeadlineType(description);
+    if (descType && descType !== propertyType) {
+      log("debug", `Description headline overrides type: ${propertyType} → ${descType}`);
+      propertyType = descType;
+    }
+  }
 
   // Reject non-residential listings
   if (!propertyType) {

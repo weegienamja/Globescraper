@@ -137,14 +137,95 @@ export function isTitleNonResidential(title: string): boolean {
   return STRONG_NONRES_TITLE_KEYWORDS.some((kw) => t.includes(kw));
 }
 
+/* ── Description headline scanner ────────────────────────── */
+
+/**
+ * Many realestate.com.kh listings use a generic title ("Apartment for Rent")
+ * but reveal the true property type in the first line of the description
+ * (e.g. "Warehouse for Rent at Chhouk Va 2"). This function scans just the
+ * opening ~200 characters of the description — essentially the "headline" —
+ * for strong non-residential signals without scanning the full body where
+ * amenity text like "near commercial area" would cause false positives.
+ *
+ * Returns the detected non-residential type keyword, or null if none found.
+ */
+/** Regex-based non-residential headline patterns.
+ *  "land/plot/lot" intentionally omitted — too many false positives from
+ *  building names like "Park Land for rent". Those are caught by the
+ *  title-based STRONG_NONRES_TITLE_KEYWORDS instead.
+ */
+const DESC_HEADLINE_NONRES: RegExp[] = [
+  /\bwarehouse\s+for\s+(?:rent|sale|lease)\b/i,
+  /\bfactory\s+for\s+(?:rent|sale)\b/i,
+  /\bworkshop\s+for\s+(?:rent|sale)\b/i,
+  /\boffice\s+(?:for\s+(?:rent|sale)|space\s+for\s+rent)\b/i,
+  /\bcommercial\s+(?:for\s+(?:rent|sale)|property\s+for|space\s+for)\b/i,
+  /\bshop\s*house\s+for\s+(?:rent|sale)\b/i,
+  /\bretail\s+(?:for\s+(?:rent|sale)|space\s+for\s+rent)\b/i,
+  /\brestaurant\s+for\s+(?:rent|sale)\b/i,
+  /\bhotel\s+for\s+(?:rent|sale)\b/i,
+  /\bguest\s*house\s+for\s+(?:rent|sale)\b/i,
+];
+
+/**
+ * Scan the first ~200 chars of description for non-residential headline.
+ * Only checks the opening "headline" section to avoid amenity false positives.
+ */
+export function isDescriptionHeadlineNonResidential(description: string | null | undefined): boolean {
+  if (!description) return false;
+
+  // Take just the first ~200 chars — the "headline" portion.
+  // Split on newlines and take the first meaningful line(s).
+  const lines = description.split(/[\n\r]+/).filter(l => l.trim().length > 0);
+  const headline = lines.slice(0, 3).join(" ").toLowerCase().slice(0, 300);
+
+  // Check for strong non-residential signals in the headline
+  return DESC_HEADLINE_NONRES.some((re) => re.test(headline));
+}
+
+/**
+ * Full description-aware classification. Checks:
+ * 1. Title for strong non-residential phrases
+ * 2. Description headline (first ~200 chars) for non-residential signals
+ * 3. Standard classifier on title + URL slug for residential type
+ *
+ * Also detects type corrections: if title says "Apartment" but description
+ * headline says "Villa for Rent", the description wins.
+ */
+const DESC_HEADLINE_TYPE_PATTERNS: Array<{ re: RegExp; type: PropertyType }> = [
+  { re: /\bpenthouse\s+for\s+(?:rent|sale|lease)/i, type: PropertyType.PENTHOUSE },
+  { re: /\bserviced?\s+apartment\s+for\s+(?:rent|sale|lease)/i, type: PropertyType.SERVICED_APARTMENT },
+  { re: /\btown\s*house\s+for\s+(?:rent|sale|lease)/i, type: PropertyType.TOWNHOUSE },
+  { re: /\bvillas?\s+for\s+(?:rent|sale|lease)/i, type: PropertyType.VILLA },
+  { re: /\bhouse\s+for\s+(?:rent|sale|lease)/i, type: PropertyType.HOUSE },
+  { re: /\bcondo(?:minium)?\s+for\s+(?:rent|sale|lease)/i, type: PropertyType.CONDO },
+  { re: /\bapartment\s+for\s+(?:rent|sale|lease)/i, type: PropertyType.APARTMENT },
+];
+
+/**
+ * Extract the real property type from the description headline if it
+ * contradicts the title. Returns null if no clear type is found.
+ */
+export function getDescriptionHeadlineType(description: string | null | undefined): PropertyType | null {
+  if (!description) return null;
+  const lines = description.split(/[\n\r]+/).filter(l => l.trim().length > 0);
+  const headline = lines.slice(0, 3).join(" ").slice(0, 300);
+
+  for (const { re, type } of DESC_HEADLINE_TYPE_PATTERNS) {
+    if (re.test(headline)) return type;
+  }
+  return null;
+}
+
 /**
  * Reclassify based on title + description with smarter context handling.
  * Returns the corrected PropertyType, or null if the listing is non-residential.
  *
- * Unlike classifyPropertyType, this function:
- * - Checks title for strong non-residential phrases first
- * - Then applies the standard classifier on title only (no description
- *   to avoid amenity false positives)
+ * This function:
+ * 1. Checks title for strong non-residential phrases
+ * 2. Checks description headline for non-residential signals
+ * 3. Checks if description headline reveals a different residential type
+ * 4. Falls back to standard title + URL classifier
  */
 export function reclassifyPropertyType(
   title: string,
@@ -154,7 +235,20 @@ export function reclassifyPropertyType(
   // 1. Strong title-based non-residential check
   if (isTitleNonResidential(title)) return null;
 
-  // 2. Standard classifier on title + URL slug
+  // 2. Description headline non-residential check
+  if (isDescriptionHeadlineNonResidential(description)) return null;
+
+  // 3. Check if description reveals a different residential type
+  const descType = getDescriptionHeadlineType(description);
+
+  // 4. Standard classifier on title + URL slug
   const hint = `${title} ${urlSlug ?? ""}`;
-  return classifyPropertyType(hint);
+  const titleType = classifyPropertyType(hint);
+
+  // If title says one thing but description says another, trust description
+  if (descType && titleType && descType !== titleType) {
+    return descType;
+  }
+
+  return titleType;
 }
