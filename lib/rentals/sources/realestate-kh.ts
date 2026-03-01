@@ -370,7 +370,7 @@ export async function scrapeListingRealestateKh(
   imageUrls.push(...imageSet);
   log("debug", `Found ${imageUrls.length} images`);
 
-  // Posted date (often in meta or structured data)
+  // Posted date — try structured data first, then parse relative "Listed: X days ago"
   let postedAt: Date | null = null;
   const jsonLd = $('script[type="application/ld+json"]').first().html();
   if (jsonLd) {
@@ -379,6 +379,17 @@ export async function scrapeListingRealestateKh(
       if (data.datePosted) postedAt = new Date(data.datePosted);
     } catch {
       /* ignore invalid JSON-LD */
+    }
+  }
+
+  // Fallback: parse relative dates from the page text
+  // realestate.com.kh shows "Listed: 2 days ago", "Listed: a day ago",
+  // "Listed: 3 weeks ago", "Listed: a month ago", etc.
+  if (!postedAt) {
+    const pageText = $.text();
+    postedAt = parseRelativeDate(pageText);
+    if (postedAt) {
+      log("debug", `Parsed postedAt from relative date: ${postedAt.toISOString()}`);
     }
   }
 
@@ -438,4 +449,53 @@ function extractDistrictFromUrl(url: string): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Parse relative date strings like "Listed: 2 days ago", "Listed: a day ago",
+ * "Listed: 3 weeks ago", "Listed: a month ago", "Listed: a year ago", etc.
+ * Returns an absolute Date by subtracting from now.
+ */
+function parseRelativeDate(text: string): Date | null {
+  // Match patterns like "Listed2 days ago", "Listed: 2 days ago", "Listed: a day ago"
+  // The site sometimes omits whitespace/colon between "Listed" and the number
+  const match = text.match(
+    /Listed\s*:?\s*(an?\s+|\d+\s*)(second|minute|hour|day|week|month|year)s?\s+ago/i
+  );
+  if (!match) return null;
+
+  const rawNum = match[1].trim();
+  const num = rawNum.startsWith("a") ? 1 : parseInt(rawNum, 10);
+  if (isNaN(num) || num < 0) return null;
+
+  const unit = match[2].toLowerCase();
+  const now = new Date();
+
+  switch (unit) {
+    case "second":
+      now.setSeconds(now.getSeconds() - num);
+      break;
+    case "minute":
+      now.setMinutes(now.getMinutes() - num);
+      break;
+    case "hour":
+      now.setHours(now.getHours() - num);
+      break;
+    case "day":
+      now.setDate(now.getDate() - num);
+      break;
+    case "week":
+      now.setDate(now.getDate() - num * 7);
+      break;
+    case "month":
+      now.setMonth(now.getMonth() - num);
+      break;
+    case "year":
+      now.setFullYear(now.getFullYear() - num);
+      break;
+    default:
+      return null;
+  }
+
+  return now;
 }
