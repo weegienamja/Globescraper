@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 
 /* ── Types ───────────────────────────────────────────────── */
 
@@ -83,9 +83,11 @@ export function ListingsTable({ initialDistrict }: ListingsTableProps = {}) {
   const [order, setOrder] = useState<"asc" | "desc">("desc");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [aiStatus, setAiStatus] = useState("");
+  const initialLoadDone = useRef(false);
 
   const fetchListings = useCallback(async () => {
-    setLoading(true);
+    // Only show loading spinner on first load, not background polls
+    if (!initialLoadDone.current) setLoading(true);
     try {
       const params = new URLSearchParams();
       params.set("page", String(page));
@@ -102,6 +104,7 @@ export function ListingsTable({ initialDistrict }: ListingsTableProps = {}) {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
       setData(json);
+      initialLoadDone.current = true;
     } catch {
       setData(null);
     } finally {
