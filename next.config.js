@@ -15,6 +15,14 @@ const nextConfig = {
         protocol: "https",
         hostname: "*.public.blob.vercel-storage.com",
       },
+      {
+        protocol: "https",
+        hostname: "images.realestate.com.kh",
+      },
+      {
+        protocol: "https",
+        hostname: "www.realestate.com.kh",
+      },
     ],
   },
 
@@ -66,7 +74,7 @@ const nextConfig = {
               "default-src 'self'",
               "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://www.google-analytics.com https://vercel.live",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com",
-              "img-src 'self' data: blob: https://assets.zyrosite.com https://images.unsplash.com https://*.public.blob.vercel-storage.com https://www.google-analytics.com https://lh3.googleusercontent.com https://*.basemaps.cartocdn.com",
+              "img-src 'self' data: blob: https://assets.zyrosite.com https://images.unsplash.com https://*.public.blob.vercel-storage.com https://www.google-analytics.com https://lh3.googleusercontent.com https://*.basemaps.cartocdn.com https://images.realestate.com.kh https://www.realestate.com.kh",
               "font-src 'self' https://fonts.gstatic.com",
               "connect-src 'self' https://www.google-analytics.com https://analytics.google.com https://vercel.live https://*.tile.openstreetmap.org",
               "frame-src 'self' https://www.youtube.com https://vercel.live",
