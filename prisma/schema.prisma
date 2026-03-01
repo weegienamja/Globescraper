@@ -823,6 +823,7 @@ model RentalListing {
   contentFingerprint String?      @db.VarChar(64)
 
   snapshots          RentalSnapshot[]
+  aiReviews          RentalAiReview[]
 
   @@index([latitude, longitude])
 
@@ -846,6 +847,26 @@ model RentalSnapshot {
 
   @@index([listingId, scrapedAt])
   @@index([scrapedAt])
+}
+
+// ─── AI Review (Gemini) ─────────────────────────────────────
+
+model RentalAiReview {
+  id              String        @id @default(cuid())
+  listingId       String
+  reviewedAt      DateTime      @default(now())
+  suggestedType   PropertyType?
+  isResidential   Boolean
+  confidence      Float         // 0.0 – 1.0
+  reason          String?       @db.VarChar(500)
+  flagged         Boolean       @default(false)
+  tokenCount      Int?
+
+  listing         RentalListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@index([listingId])
+  @@index([flagged])
+  @@index([reviewedAt])
 }
 
 model RentalIndexDaily {

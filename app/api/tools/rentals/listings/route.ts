@@ -102,6 +102,19 @@ export async function GET(req: NextRequest) {
               priceOriginal: true,
             },
           },
+          aiReviews: {
+            orderBy: { reviewedAt: "desc" as const },
+            take: 1,
+            select: {
+              id: true,
+              reviewedAt: true,
+              suggestedType: true,
+              isResidential: true,
+              confidence: true,
+              reason: true,
+              flagged: true,
+            },
+          },
         },
       }),
       prisma.rentalListing.count({ where }),
@@ -128,6 +141,7 @@ export async function GET(req: NextRequest) {
 
       return {
         ...l,
+        aiReview: l.aiReviews[0] ?? null,
         priceChange: {
           hasPriceChange,
           latestPrice,

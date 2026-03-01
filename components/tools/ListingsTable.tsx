@@ -32,6 +32,7 @@ interface Listing {
     priceDirection: "up" | "down" | "same" | null;
     uniquePriceCount: number;
   };
+  aiReview: AiReview | null;
 }
 
 interface Snapshot {
@@ -39,6 +40,16 @@ interface Snapshot {
   scrapedAt: string;
   priceMonthlyUsd: number | null;
   priceOriginal: string | null;
+}
+
+interface AiReview {
+  id: string;
+  reviewedAt: string;
+  suggestedType: string | null;
+  isResidential: boolean;
+  confidence: number;
+  reason: string | null;
+  flagged: boolean;
 }
 
 interface ListingsData {
@@ -325,6 +336,7 @@ export function ListingsTable({ initialDistrict }: ListingsTableProps = {}) {
                 >
                   Last Seen{sortIcon("lastSeenAt")}
                 </th>
+                <th style={s.th}>AI</th>
                 <th style={s.th}>Status</th>
               </tr>
             </thead>
@@ -493,6 +505,56 @@ export function ListingsTable({ initialDistrict }: ListingsTableProps = {}) {
                                 </div>
                               </div>
                             )}
+                            {/* ── AI Review Details ── */}
+                            {l.aiReview && (
+                              <div style={s.expandRow}>
+                                <span style={s.expandLabel}>AI Review:</span>
+                                <span style={s.expandValue}>
+                                  <span style={{
+                                    display: "inline-block",
+                                    padding: "2px 8px",
+                                    borderRadius: "4px",
+                                    fontSize: "12px",
+                                    fontWeight: 600,
+                                    marginRight: "8px",
+                                    background: l.aiReview.flagged
+                                      ? "rgba(251, 191, 36, 0.15)"
+                                      : "rgba(34, 197, 94, 0.1)",
+                                    color: l.aiReview.flagged ? "#fbbf24" : "#4ade80",
+                                  }}>
+                                    {l.aiReview.flagged ? "⚠ Flagged" : "✓ OK"} — {(l.aiReview.confidence * 100).toFixed(0)}% confidence
+                                  </span>
+                                  {!l.aiReview.isResidential && (
+                                    <span style={{
+                                      padding: "2px 8px",
+                                      borderRadius: "4px",
+                                      fontSize: "12px",
+                                      background: "rgba(239, 68, 68, 0.15)",
+                                      color: "#f87171",
+                                      marginRight: "8px",
+                                    }}>
+                                      Non-residential
+                                    </span>
+                                  )}
+                                  {l.aiReview.suggestedType && l.aiReview.suggestedType !== l.propertyType && (
+                                    <span style={{
+                                      padding: "2px 8px",
+                                      borderRadius: "4px",
+                                      fontSize: "12px",
+                                      background: "rgba(99, 102, 241, 0.15)",
+                                      color: "#a5b4fc",
+                                    }}>
+                                      Suggests: {l.aiReview.suggestedType}
+                                    </span>
+                                  )}
+                                  {l.aiReview.reason && (
+                                    <div style={{ marginTop: "4px", color: "#94a3b8", fontSize: "12px" }}>
+                                      {l.aiReview.reason}
+                                    </div>
+                                  )}
+                                </span>
+                              </div>
+                            )}
                             <div style={s.expandRow}>
                               <span style={s.expandLabel}>URL:</span>
                               <a
@@ -615,6 +677,26 @@ export function ListingsTable({ initialDistrict }: ListingsTableProps = {}) {
                     </td>
                     <td style={{ ...s.td, color: "#94a3b8", fontSize: "13px", whiteSpace: "nowrap" }}>
                       {formatDate(l.lastSeenAt)}
+                    </td>
+                    <td style={s.td}>
+                      {l.aiReview ? (
+                        <span
+                          title={l.aiReview.reason || "AI reviewed"}
+                          style={{
+                            ...s.badge,
+                            background: l.aiReview.flagged
+                              ? "rgba(251, 191, 36, 0.15)"
+                              : "rgba(34, 197, 94, 0.1)",
+                            color: l.aiReview.flagged ? "#fbbf24" : "#4ade80",
+                            fontSize: "11px",
+                            cursor: "help",
+                          }}
+                        >
+                          {l.aiReview.flagged ? "⚠" : "✓"} {(l.aiReview.confidence * 100).toFixed(0)}%
+                        </span>
+                      ) : (
+                        <span style={{ color: "#334155", fontSize: "12px" }}>—</span>
+                      )}
                     </td>
                     <td style={s.td}>
                       <span style={{
