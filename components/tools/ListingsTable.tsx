@@ -505,6 +505,40 @@ export function ListingsTable({ initialDistrict }: ListingsTableProps = {}) {
                                 {l.canonicalUrl}
                               </a>
                             </div>
+                            {/* ── Admin actions ── */}
+                            <div style={{ marginTop: "10px", display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                              <button
+                                style={{
+                                  padding: "5px 14px",
+                                  borderRadius: "6px",
+                                  border: "1px solid rgba(239, 68, 68, 0.4)",
+                                  background: "rgba(239, 68, 68, 0.1)",
+                                  color: "#f87171",
+                                  fontSize: "12px",
+                                  fontWeight: 600,
+                                  cursor: "pointer",
+                                }}
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  if (!confirm(`Remove "${l.title.slice(0, 60)}" from listings?`)) return;
+                                  try {
+                                    const res = await fetch(`/api/tools/rentals/listings/${l.id}`, {
+                                      method: "PATCH",
+                                      headers: { "Content-Type": "application/json" },
+                                      body: JSON.stringify({ action: "deactivate" }),
+                                    });
+                                    if (res.ok) {
+                                      fetchListings();
+                                      setExpandedId(null);
+                                    } else {
+                                      alert("Failed to deactivate listing");
+                                    }
+                                  } catch { alert("Network error"); }
+                                }}
+                              >
+                                🚫 Remove Listing
+                              </button>
+                            </div>
                           </div>
                         )}
                       </div>
