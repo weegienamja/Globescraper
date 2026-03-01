@@ -82,6 +82,10 @@ interface Props {
   showListingPoints?: boolean;
   /** Base path for "View listings" links in popups (default "/tools/rentals/listings"). */
   listingsLinkBase?: string;
+  /** Hide the property-type filter bar entirely (default false). */
+  hideFilters?: boolean;
+  /** Wrap filters in a collapsible dropdown on mobile (default false). */
+  compactFilters?: boolean;
 }
 
 /** Human-readable labels for property type enum values */
@@ -95,11 +99,12 @@ const TYPE_LABELS: Record<string, string> = {
   TOWNHOUSE: "Townhouse",
 };
 
-export function InteractiveHeatmap({ data, height = 450, showListingPoints = true, listingsLinkBase = "/tools/rentals/listings" }: Props) {
+export function InteractiveHeatmap({ data, height = 450, showListingPoints = true, listingsLinkBase = "/tools/rentals/listings", hideFilters = false, compactFilters = false }: Props) {
   const mapRef = useRef<HTMLDivElement>(null);
   const leafletMap = useRef<L.Map | null>(null);
   const [geoJson, setGeoJson] = useState<GeoJSON.FeatureCollection | null>(null);
   const [geoError, setGeoError] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   /* ── Property type filter state ──────────────────────── */
   const allTypes = useMemo(() => {
@@ -604,14 +609,52 @@ export function InteractiveHeatmap({ data, height = 450, showListingPoints = tru
         }
       `}</style>
       {/* Property type checkbox filter bar */}
-      {allTypes.length > 1 && (
-        <div style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: "8px",
-          marginBottom: "10px",
-          alignItems: "center",
-        }}>
+      {!hideFilters && allTypes.length > 1 && (
+        <>
+          {/* Compact mode: mobile dropdown toggle */}
+          {compactFilters && (
+            <button
+              onClick={() => setFiltersOpen((v) => !v)}
+              className="heatmap-filter-toggle"
+              style={{
+                display: "none", /* shown via CSS media query */
+                alignItems: "center",
+                gap: "6px",
+                padding: "6px 12px",
+                fontSize: "12px",
+                fontWeight: 600,
+                borderRadius: "6px",
+                border: "1px solid #334155",
+                background: "#0f172a",
+                color: "#94a3b8",
+                cursor: "pointer",
+                marginBottom: "8px",
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                <line x1="4" y1="6" x2="20" y2="6" />
+                <line x1="4" y1="12" x2="20" y2="12" />
+                <line x1="4" y1="18" x2="20" y2="18" />
+              </svg>
+              Filters
+              <svg
+                width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+                style={{ transition: "transform 0.2s", transform: filtersOpen ? "rotate(180deg)" : "rotate(0)" }}
+              >
+                <path d="m6 9 6 6 6-6" />
+              </svg>
+            </button>
+          )}
+          <div
+            className={compactFilters ? "heatmap-filter-bar heatmap-filter-bar--compact" + (filtersOpen ? " heatmap-filter-bar--open" : "") : "heatmap-filter-bar"}
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: "8px",
+              marginBottom: "10px",
+              alignItems: "center",
+            }}
+          >
           <span style={{ color: "#94a3b8", fontSize: "12px", fontWeight: 600, marginRight: "4px" }}>
             Filter:
           </span>
@@ -692,6 +735,7 @@ export function InteractiveHeatmap({ data, height = 450, showListingPoints = tru
             </>
           )}
         </div>
+        </>
       )}
       <div
         ref={mapRef}

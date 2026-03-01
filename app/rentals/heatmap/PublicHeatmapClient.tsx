@@ -109,6 +109,7 @@ export function PublicHeatmapClient({
               height={520}
               showListingPoints={false}
               listingsLinkBase="/rentals"
+              compactFilters
             />
             {/* Enlarge button */}
             <button
@@ -164,6 +165,7 @@ export function PublicHeatmapClient({
                 height="calc(100vh - 72px)"
                 showListingPoints={false}
                 listingsLinkBase="/rentals"
+                compactFilters
               />
             </div>
           </div>

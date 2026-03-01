@@ -277,26 +277,31 @@ export function RentalFilters({ cities, districts }: RentalFiltersProps) {
             <circle cx="10" cy="18" r="2" fill="currentColor" />
           </svg>
           {/* Show count only when advanced filters are active */}
-          {advancedFilterCount > 0 ? `Filters (${advancedFilterCount})` : "Filters"}
+          Filters
+          {advancedFilterCount > 0 && (
+            <span className="rentals-filters__badge">{advancedFilterCount}</span>
+          )}
           <svg className="rentals-filters__chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
             <path d="m6 9 6 6 6-6" />
           </svg>
         </button>
+      </div>
 
-        {/* Actions: right-aligned on desktop */}
-        <div className="rentals-filters__actions">
-          <button
-            type="button"
-            className="rentals-filters__clear"
-            onClick={clearAll}
-            aria-label="Clear all filters"
-          >
-            Clear All
-          </button>
-          <button type="submit" className="rentals-filters__btn" aria-label="Apply filters">
-            Search
-          </button>
-        </div>
+      {/* ============================================================
+          ROW 3: Actions (Clear All + Search) — always visible
+          ============================================================ */}
+      <div className="rentals-filters__action-row">
+        <button
+          type="button"
+          className="rentals-filters__clear"
+          onClick={clearAll}
+          aria-label="Clear all filters"
+        >
+          Clear All
+        </button>
+        <button type="submit" className="rentals-filters__btn" aria-label="Apply filters">
+          Search
+        </button>
       </div>
 
       {/* ============================================================

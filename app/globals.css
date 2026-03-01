@@ -9731,3 +9731,17 @@ body.menu-open {
     transform: scale(1);
   }
 }
+
+/* ── Heatmap compact filter toggle (mobile) ──────────────── */
+
+@media (max-width: 640px) {
+  .heatmap-filter-toggle {
+    display: flex !important;
+  }
+  .heatmap-filter-bar--compact {
+    display: none !important;
+  }
+  .heatmap-filter-bar--compact.heatmap-filter-bar--open {
+    display: flex !important;
+  }
+}
