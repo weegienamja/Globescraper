@@ -14,6 +14,8 @@
  *   npx tsx scripts/realestate-weekly.ts
  *   npx tsx scripts/realestate-weekly.ts --rescrape-days 5
  *   npx tsx scripts/realestate-weekly.ts --max-process 5000
+ *   npx tsx scripts/realestate-weekly.ts --concurrency 3
+ *   npx tsx scripts/realestate-weekly.ts --batch-cooldown 10000
  *   npx tsx scripts/realestate-weekly.ts --discover-only
  *   npx tsx scripts/realestate-weekly.ts --process-only
  */
@@ -30,11 +32,19 @@ const hasFlag = (name: string) => process.argv.includes(name);
 const MAX_PROCESS = getArg("--max-process", 99999);
 const BATCH_SIZE = getArg("--batch-size", 200);
 const RESCRAPE_DAYS = getArg("--rescrape-days", 7);
+const CONCURRENCY = getArg("--concurrency", 3);
 const DISCOVER_ONLY = hasFlag("--discover-only");
 const PROCESS_ONLY = hasFlag("--process-only");
 
+/** Cooling period between batches (ms) — gives DB + target site breathing room. */
+const BATCH_COOLDOWN_MS = getArg("--batch-cooldown", 5_000);
+
+/** Max consecutive batch failures before aborting. */
+const MAX_CONSECUTIVE_FAILURES = 5;
+
 // Lift pipeline caps
 process.env.RENTALS_MAX_PROCESS = String(BATCH_SIZE);
+process.env.RENTALS_CONCURRENCY = String(CONCURRENCY);
 
 /* ── Imports ─────────────────────────────────────────────── */
 
@@ -54,6 +64,23 @@ const API_BASE = "https://www.realestate.com.kh/api/portal/pages/results/";
 const API_PAGE_SIZE = 100;
 const API_MAX_PAGE = 50;
 const ORIGIN = "https://www.realestate.com.kh";
+
+/* ── Graceful shutdown ───────────────────────────────────── */
+
+let shutdownRequested = false;
+
+function setupGracefulShutdown() {
+  const handler = (signal: string) => {
+    if (shutdownRequested) {
+      console.log(`\n⚠️  Second ${signal} — forcing exit`);
+      process.exit(1);
+    }
+    shutdownRequested = true;
+    console.log(`\n⚠️  ${signal} received — finishing current batch then exiting gracefully…`);
+  };
+  process.on("SIGINT", () => handler("SIGINT"));
+  process.on("SIGTERM", () => handler("SIGTERM"));
+}
 
 const CATEGORIES = [
   { pathname: "/rent/apartment/", label: "apartment" },
@@ -393,6 +420,7 @@ async function enqueueNewUrls(discovered: DiscoveredUrl[]): Promise<{ newCount: 
 async function processAllBatches(): Promise<void> {
   console.log("\n╔══════════════════════════════════════════════╗");
   console.log("║  Phase 3 — Process queue (scrape listings)   ║");
+  console.log(`║  Concurrency: ${CONCURRENCY}  Batch: ${BATCH_SIZE}  Cooldown: ${BATCH_COOLDOWN_MS}ms  ║`);
   console.log("╚══════════════════════════════════════════════╝\n");
 
   let totalProcessed = 0;
@@ -400,14 +428,36 @@ async function processAllBatches(): Promise<void> {
   let totalUpdated = 0;
   let totalFailed = 0;
   let batchNum = 0;
+  let consecutiveFailures = 0;
 
   while (totalProcessed < MAX_PROCESS) {
-    const pendingCount = await prisma.scrapeQueue.count({
-      where: {
-        source: SOURCE,
-        status: { in: [QueueStatus.PENDING, QueueStatus.RETRY] },
-      },
-    });
+    // ── Graceful shutdown check ──
+    if (shutdownRequested) {
+      log("warn", "Shutdown requested — stopping after current batch");
+      break;
+    }
+
+    let pendingCount: number;
+    try {
+      pendingCount = await prisma.scrapeQueue.count({
+        where: {
+          source: SOURCE,
+          status: { in: [QueueStatus.PENDING, QueueStatus.RETRY] },
+        },
+      });
+    } catch (dbErr) {
+      const msg = dbErr instanceof Error ? dbErr.message : String(dbErr);
+      log("error", `DB error counting pending items: ${msg}`);
+      consecutiveFailures++;
+      if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+        log("error", `${MAX_CONSECUTIVE_FAILURES} consecutive failures — aborting`);
+        break;
+      }
+      const backoff = Math.min(consecutiveFailures * 10_000, 60_000);
+      log("warn", `Waiting ${backoff / 1000}s before retry…`);
+      await new Promise((r) => setTimeout(r, backoff));
+      continue;
+    }
 
     if (pendingCount === 0) {
       log("info", "Queue empty — all done!");
@@ -418,16 +468,42 @@ async function processAllBatches(): Promise<void> {
     const batchMax = Math.min(BATCH_SIZE, MAX_PROCESS - totalProcessed);
     log("info", `\n── Batch ${batchNum}: processing up to ${batchMax} (${pendingCount} pending) ──`);
 
-    const result = await processQueueJob(SOURCE, { maxItems: batchMax }, log, progress);
+    try {
+      const result = await processQueueJob(SOURCE, { maxItems: batchMax }, log, progress);
 
-    totalProcessed += result.processed;
-    totalInserted += result.inserted;
-    totalUpdated += result.updated;
-    totalFailed += result.failed;
+      totalProcessed += result.processed;
+      totalInserted += result.inserted;
+      totalUpdated += result.updated;
+      totalFailed += result.failed;
 
-    log("info", `Batch ${batchNum} done — cumulative: ${totalProcessed} processed, ${totalInserted} inserted, ${totalUpdated} updated, ${totalFailed} failed`);
+      log("info", `Batch ${batchNum} done — cumulative: ${totalProcessed} processed, ${totalInserted} inserted, ${totalUpdated} updated, ${totalFailed} failed`);
 
-    if (result.processed === 0) break;
+      if (result.processed === 0) break;
+
+      // Reset failure counter on success
+      consecutiveFailures = 0;
+    } catch (batchErr) {
+      const msg = batchErr instanceof Error ? batchErr.message : String(batchErr);
+      log("error", `Batch ${batchNum} crashed: ${msg}`);
+      consecutiveFailures++;
+
+      if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+        log("error", `${MAX_CONSECUTIVE_FAILURES} consecutive batch failures — aborting run`);
+        break;
+      }
+
+      // Exponential backoff: 10s, 20s, 30s, 40s…
+      const backoff = Math.min(consecutiveFailures * 10_000, 60_000);
+      log("warn", `Will retry in ${backoff / 1000}s (failure ${consecutiveFailures}/${MAX_CONSECUTIVE_FAILURES})…`);
+      await new Promise((r) => setTimeout(r, backoff));
+      continue;
+    }
+
+    // ── Cooling period between batches ──
+    if (totalProcessed < MAX_PROCESS && !shutdownRequested) {
+      log("debug", `Cooling ${BATCH_COOLDOWN_MS / 1000}s before next batch…`);
+      await new Promise((r) => setTimeout(r, BATCH_COOLDOWN_MS));
+    }
   }
 
   console.log("\n┌────────────────────────────────────────┐");
@@ -441,9 +517,12 @@ async function processAllBatches(): Promise<void> {
 /* ── Main ────────────────────────────────────────────────── */
 
 async function main() {
+  setupGracefulShutdown();
+
   console.log("\n╔══════════════════════════════════════════════════════╗");
   console.log("║  realestate.com.kh — Weekly Full Scrape               ║");
   console.log("║  All categories • 40 query sets • Re-scrape stale     ║");
+  console.log(`║  Concurrency: ${CONCURRENCY}  Batch: ${BATCH_SIZE}  Cooldown: ${BATCH_COOLDOWN_MS / 1000}s`);
   console.log("╚══════════════════════════════════════════════════════╝\n");
 
   const start = Date.now();

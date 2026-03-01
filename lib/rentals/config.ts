@@ -34,16 +34,16 @@ export const DISCOVER_MAX_URLS = parseInt(process.env.RENTALS_MAX_URLS ?? "500",
 export const PROCESS_QUEUE_MAX = parseInt(process.env.RENTALS_MAX_PROCESS ?? "50", 10);
 
 /** How many listings to scrape in parallel within a batch */
-export const PROCESS_QUEUE_CONCURRENCY = parseInt(process.env.RENTALS_CONCURRENCY ?? "5", 10);
+export const PROCESS_QUEUE_CONCURRENCY = parseInt(process.env.RENTALS_CONCURRENCY ?? "3", 10);
 
 /** HTTP concurrency limit for outbound requests */
-export const CONCURRENCY_LIMIT = 6;
+export const CONCURRENCY_LIMIT = 4;
 
 /** Base delay between HTTP requests (ms) */
-export const REQUEST_DELAY_BASE_MS = 600;
+export const REQUEST_DELAY_BASE_MS = 1_000;
 
 /** Random jitter range added to base delay (ms) */
-export const REQUEST_DELAY_JITTER_MS = 400;
+export const REQUEST_DELAY_JITTER_MS = 500;
 
 /** Max retries for transient network errors */
 export const MAX_RETRIES = 3;

@@ -24,7 +24,8 @@ const APARTMENT_KEYWORDS = [
 ];
 
 const VILLA_KEYWORDS = [
-  "twin villa", "villa", "villas",
+  "twin villa",
+  // "villa" is matched via regex below to avoid "village" false positives
 ];
 
 const TOWNHOUSE_KEYWORDS = ["townhouse", "town house", "link house"];
@@ -32,6 +33,9 @@ const TOWNHOUSE_KEYWORDS = ["townhouse", "town house", "link house"];
 const HOUSE_KEYWORDS = [
   "house", "borey", "detached",
 ];
+
+/** Match "villa" / "villas" as whole words, excluding "village". */
+const VILLA_WORD_RE = /\bvillas?\b/i;
 
 /** Non-residential keywords — used to reject listings.
  *  Must be specific enough to avoid false-positives on amenity or
@@ -78,6 +82,8 @@ export function classifyPropertyType(
   for (const kw of VILLA_KEYWORDS) {
     if (text.includes(kw)) return PropertyType.VILLA;
   }
+  // Regex match for standalone "villa"/"villas" (avoids "village" false positive)
+  if (VILLA_WORD_RE.test(text)) return PropertyType.VILLA;
   for (const kw of HOUSE_KEYWORDS) {
     if (text.includes(kw)) return PropertyType.HOUSE;
   }
@@ -98,4 +104,57 @@ export function classifyPropertyType(
  */
 export function shouldIngest(type: PropertyType | null): boolean {
   return type !== null;
+}
+
+/* ── Title-only non-residential detector ─────────────────── */
+
+/**
+ * Strong non-residential signals that are safe to match even in
+ * description text (highly specific phrases, not just single words
+ * like "commercial" which appear in amenity/nearby-place text).
+ */
+const STRONG_NONRES_TITLE_KEYWORDS = [
+  "warehouse for", "warehouse space",
+  "factory for", "factory space",
+  "workshop for", "workshop space",
+  "office for rent", "office for sale", "office space for",
+  "commercial property for", "commercial space for", "commercial building for",
+  "retail shop for", "retail space for",
+  "shophouse for", "shop house for",
+  "restaurant for rent", "restaurant for sale",
+  "hotel for rent", "hotel for sale",
+  "guesthouse for", "guest house for",
+  "land for rent", "land for sale", "plot for rent", "lot for rent",
+];
+
+/**
+ * Check if a listing's TITLE alone contains strong non-residential signals.
+ * More conservative than classifyPropertyType (only checks title, with
+ * high-specificity phrases) — safe for bulk reclassification.
+ */
+export function isTitleNonResidential(title: string): boolean {
+  const t = title.toLowerCase();
+  return STRONG_NONRES_TITLE_KEYWORDS.some((kw) => t.includes(kw));
+}
+
+/**
+ * Reclassify based on title + description with smarter context handling.
+ * Returns the corrected PropertyType, or null if the listing is non-residential.
+ *
+ * Unlike classifyPropertyType, this function:
+ * - Checks title for strong non-residential phrases first
+ * - Then applies the standard classifier on title only (no description
+ *   to avoid amenity false positives)
+ */
+export function reclassifyPropertyType(
+  title: string,
+  description?: string | null,
+  urlSlug?: string | null
+): PropertyType | null {
+  // 1. Strong title-based non-residential check
+  if (isTitleNonResidential(title)) return null;
+
+  // 2. Standard classifier on title + URL slug
+  const hint = `${title} ${urlSlug ?? ""}`;
+  return classifyPropertyType(hint);
 }
