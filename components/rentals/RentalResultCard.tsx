@@ -20,6 +20,7 @@ export interface RentalCardData {
   descriptionRewritten: string | null;
   postedAt: Date | null;
   firstSeenAt: Date;
+  canonicalUrl: string;
 }
 
 export function RentalResultCard({
@@ -62,18 +63,21 @@ export function RentalResultCard({
         <span className="rental-card__meta">Added on {dateStr}</span>
 
         <div className="rental-card__actions">
-          <button
-            type="button"
+          <a
+            href={listing.canonicalUrl}
+            target="_blank"
+            rel="noopener noreferrer"
             className="rental-card__contact-btn"
-            aria-label="Contact about this listing"
+            aria-label="View original listing"
             onClick={(e) => e.stopPropagation()}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-              <rect x="2" y="4" width="20" height="16" rx="2" />
-              <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+              <polyline points="15 3 21 3 21 9" />
+              <line x1="10" y1="14" x2="21" y2="3" />
             </svg>
             Contact
-          </button>
+          </a>
           <button
             type="button"
             className={"rental-card__save-btn" + (saved ? " rental-card__save-btn--active" : "")}

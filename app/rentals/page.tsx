@@ -54,6 +54,7 @@ export default async function RentalsPage({ searchParams }: Props) {
         descriptionRewritten: true,
         postedAt: true,
         firstSeenAt: true,
+        canonicalUrl: true,
       },
       orderBy,
       skip: (page - 1) * PER_PAGE,
