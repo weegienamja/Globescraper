@@ -948,6 +948,7 @@
   max-width: 1200px;
   margin: 0 auto;
   padding: 24px 16px 64px;
+  overflow-x: hidden;
 }
 
 .listing-detail__back {
@@ -974,7 +975,7 @@
 
 @media (max-width: 900px) {
   .listing-detail__grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -1195,6 +1196,8 @@
   line-height: 1.7;
   color: var(--text);
   white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 /* Amenities - split by Facilities / Amenities */
