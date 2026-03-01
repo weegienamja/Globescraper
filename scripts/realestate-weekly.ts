@@ -56,6 +56,17 @@ import { buildDailyIndexJob } from "../lib/rentals/jobs/buildIndex";
 import { markStaleListingsJob } from "../lib/rentals/jobs/markStaleListings";
 import type { PipelineLogFn, PipelineProgressFn } from "../lib/rentals/pipelineLogger";
 import { USER_AGENT } from "../lib/rentals/config";
+import { ProxyAgent } from "undici";
+
+/* ── Proxy ────────────────────────────────────────────────── */
+
+const PROXY_URL = process.env.SCRAPE_PROXY || "";
+let proxyDispatcher: ProxyAgent | undefined;
+
+if (PROXY_URL) {
+  proxyDispatcher = new ProxyAgent(PROXY_URL);
+  console.log(`\n🌏 Proxy enabled: ${PROXY_URL.replace(/\/\/[^:]+:[^@]+@/, "//***:***@")}`);
+}
 
 /* ── Constants ───────────────────────────────────────────── */
 
@@ -150,6 +161,8 @@ async function fetchApiPage(params: {
           "Accept-Currency": "usd",
         },
         signal: controller.signal,
+        // @ts-expect-error — undici dispatcher is valid at runtime but not in DOM fetch types
+        dispatcher: proxyDispatcher,
       });
       clearTimeout(timeout);
 

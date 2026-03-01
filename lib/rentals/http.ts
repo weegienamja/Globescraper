@@ -4,6 +4,7 @@
  * - Concurrency-limited fetcher
  * - Exponential backoff with jitter
  * - Polite delay between requests
+ * - Optional proxy support via SCRAPE_PROXY env var
  */
 
 import {
@@ -13,6 +14,23 @@ import {
   MAX_RETRIES,
   USER_AGENT,
 } from "./config";
+import { ProxyAgent } from "undici";
+
+/* ── Proxy support ───────────────────────────────────────── */
+
+/**
+ * If SCRAPE_PROXY is set, all scraper HTTP requests route through it.
+ * Supports HTTP/HTTPS proxies, e.g.:
+ *   SCRAPE_PROXY=http://user:pass@cambodia-proxy.example.com:8080
+ *   SCRAPE_PROXY=http://123.456.789.0:3128
+ */
+const PROXY_URL = process.env.SCRAPE_PROXY || "";
+let proxyDispatcher: ProxyAgent | undefined;
+
+if (PROXY_URL) {
+  proxyDispatcher = new ProxyAgent(PROXY_URL);
+  console.log(`[http] 🌏 Proxy enabled: ${PROXY_URL.replace(/\/\/[^:]+:[^@]+@/, "//***:***@")}`);
+}
 
 /* ── Semaphore for concurrency ───────────────────────────── */
 
@@ -100,6 +118,8 @@ export async function throttledFetch(
         },
         signal: controller.signal,
         redirect: "follow",
+        // @ts-expect-error — undici dispatcher is valid at runtime but not in DOM fetch types
+        dispatcher: proxyDispatcher,
       });
 
       clearTimeout(timeout);
