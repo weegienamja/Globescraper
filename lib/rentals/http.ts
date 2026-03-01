@@ -13,6 +13,16 @@ import {
   REQUEST_DELAY_JITTER_MS,
   MAX_RETRIES,
   USER_AGENT,
+  BREATHER_EVERY_MIN,
+  BREATHER_EVERY_MAX,
+  BREATHER_PAUSE_MIN_MS,
+  BREATHER_PAUSE_MAX_MS,
+  SCROLL_DELAY_MIN_MS,
+  SCROLL_DELAY_MAX_MS,
+  NIGHT_IDLE_START_HOUR_UTC,
+  NIGHT_IDLE_END_HOUR_UTC,
+  NIGHT_IDLE_EXTRA_MIN_MS,
+  NIGHT_IDLE_EXTRA_MAX_MS,
 } from "./config";
 import { ProxyAgent } from "undici";
 
@@ -58,9 +68,81 @@ function releaseSemaphore(): void {
 
 /* ── Polite delay ────────────────────────────────────────── */
 
+/**
+ * Inconsistent pacing: occasionally doubles or triples the delay
+ * to mimic a human who sometimes gets distracted.
+ */
 export function politeDelay(): Promise<void> {
-  const ms = REQUEST_DELAY_BASE_MS + Math.random() * REQUEST_DELAY_JITTER_MS;
+  let ms = REQUEST_DELAY_BASE_MS + Math.random() * REQUEST_DELAY_JITTER_MS;
+
+  // ~12% chance of a longer-than-usual pause ("reading" the page)
+  if (Math.random() < 0.12) {
+    ms += 2_000 + Math.random() * 4_000;
+  }
+
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Simulate scroll/read time after fetching a page.
+ * Adds a short variable delay as if a user is scrolling through content.
+ */
+export function scrollDelay(): Promise<void> {
+  const ms = SCROLL_DELAY_MIN_MS + Math.random() * (SCROLL_DELAY_MAX_MS - SCROLL_DELAY_MIN_MS);
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Returns true if the current UTC hour falls within the night-time window.
+ * During night hours, scrapers should add extra idle time.
+ */
+export function isNightTime(): boolean {
+  const hour = new Date().getUTCHours();
+  return hour >= NIGHT_IDLE_START_HOUR_UTC || hour < NIGHT_IDLE_END_HOUR_UTC;
+}
+
+/**
+ * Extra delay applied during night-time hours to simulate
+ * a user who is less active.
+ */
+export function nightIdleDelay(): Promise<void> {
+  if (!isNightTime()) return Promise.resolve();
+  const ms = NIGHT_IDLE_EXTRA_MIN_MS + Math.random() * (NIGHT_IDLE_EXTRA_MAX_MS - NIGHT_IDLE_EXTRA_MIN_MS);
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Counter for breather logic — tracks listings since last breather. */
+let listingsSinceBreather = 0;
+let nextBreatherAt = randomInt(BREATHER_EVERY_MIN, BREATHER_EVERY_MAX);
+
+function randomInt(min: number, max: number): number {
+  return Math.floor(min + Math.random() * (max - min + 1));
+}
+
+/**
+ * Call after each listing is processed.  Occasionally triggers a long
+ * 20-40s "breather" pause to look less bot-like.
+ * Returns true if a breather was taken.
+ */
+export async function maybeBreather(logFn?: (msg: string) => void): Promise<boolean> {
+  listingsSinceBreather++;
+  if (listingsSinceBreather < nextBreatherAt) return false;
+
+  const pauseMs = BREATHER_PAUSE_MIN_MS + Math.random() * (BREATHER_PAUSE_MAX_MS - BREATHER_PAUSE_MIN_MS);
+  if (logFn) logFn(`☕ Breather pause — ${(pauseMs / 1000).toFixed(0)}s (after ${listingsSinceBreather} listings)`);
+  await new Promise((resolve) => setTimeout(resolve, pauseMs));
+
+  listingsSinceBreather = 0;
+  nextBreatherAt = randomInt(BREATHER_EVERY_MIN, BREATHER_EVERY_MAX);
+  return true;
+}
+
+/**
+ * Probability-based skip check — returns true if this listing should
+ * be skipped to simulate random navigation depth.
+ */
+export function shouldSkipListing(): boolean {
+  return Math.random() < 0.03;
 }
 
 /* ── Retry with backoff ──────────────────────────────────── */

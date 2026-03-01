@@ -56,6 +56,7 @@ import { buildDailyIndexJob } from "../lib/rentals/jobs/buildIndex";
 import { markStaleListingsJob } from "../lib/rentals/jobs/markStaleListings";
 import type { PipelineLogFn, PipelineProgressFn } from "../lib/rentals/pipelineLogger";
 import { USER_AGENT } from "../lib/rentals/config";
+import { nightIdleDelay, maybeBreather } from "../lib/rentals/http";
 import { ProxyAgent } from "undici";
 
 /* ── Proxy ────────────────────────────────────────────────── */
@@ -190,7 +191,12 @@ async function fetchApiPage(params: {
 }
 
 function apiDelay(): Promise<void> {
-  return new Promise((r) => setTimeout(r, 1500 + Math.random() * 1500));
+  // Base: 1.5–3s, with ~10% chance of a longer 6–12s pause
+  let ms = 1500 + Math.random() * 1500;
+  if (Math.random() < 0.10) {
+    ms += 4500 + Math.random() * 6000;
+  }
+  return new Promise((r) => setTimeout(r, ms));
 }
 
 /* ── Helpers ─────────────────────────────────────────────── */
@@ -343,6 +349,10 @@ async function discoverAll(): Promise<DiscoveredUrl[]> {
 
     const queryTotal = urls.length - beforeCount;
     log("info", `  → query added ${queryTotal} new URLs (total: ${urls.length})`);
+
+    // Night-time idle + occasional breather between query sets
+    await nightIdleDelay();
+    await maybeBreather((msg) => log("info", msg));
   }
 
   log("info", `\nDiscovery complete: ${urls.length} unique listing URLs from ${totalApiCalls} API calls`);

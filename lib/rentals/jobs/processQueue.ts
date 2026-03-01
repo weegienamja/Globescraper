@@ -18,7 +18,7 @@ import { scrapeListingFazWaz } from "../sources/fazwaz";
 import { scrapeListingHomeToGo } from "../sources/hometogo";
 import { computeFingerprint } from "../fingerprint";
 import { generateTitleForListing } from "../title-geocode";
-import { politeDelay } from "../http";
+import { politeDelay, scrollDelay, nightIdleDelay, maybeBreather, shouldSkipListing } from "../http";
 import { type PipelineLogFn, type PipelineProgressFn, noopLogger, noopProgress } from "../pipelineLogger";
 
 export interface ProcessQueueOptions {
@@ -111,6 +111,14 @@ export async function processQueueJob(
         batch.map(async (item) => {
           const idx = batchStart + batch.indexOf(item) + 1;
           const shortUrl = item.canonicalUrl.replace(/^https?:\/\/[^/]+/, "");
+
+          // ── Random skip (simulate inconsistent navigation depth) ──
+          if (shouldSkipListing()) {
+            log("debug", `[${idx}/${items.length}] ↷ Randomly skipped: ${shortUrl}`);
+            // Don't mark as DONE — leave it PENDING for a future batch
+            return { type: "skipped" as const };
+          }
+
           log("info", `[${idx}/${items.length}] Fetching: ${shortUrl}`);
 
           try {
@@ -344,6 +352,7 @@ export async function processQueueJob(
 
       /* Tally batch results */
       for (const r of results) {
+        if (r.status === "fulfilled" && r.value.type === "skipped") continue;
         processed++;
         if (r.status === "fulfilled") {
           if (r.value.type === "inserted") { inserted++; snapshots++; }
@@ -360,9 +369,12 @@ export async function processQueueJob(
       progress({ phase: "process", percent: pct, label: `Scraped ${processed}/${items.length} listings (${inserted} new, ${updated} updated, ${deactivated} inactive, ${failed} failed)` });
       log("info", `Batch ${batchNum} done — running totals: ${processed}/${items.length} processed, ${inserted} new, ${updated} updated, ${deactivated} deactivated, ${failed} failed`);
 
-      /* Brief pause between batches (not between each item) */
+      /* Brief pause between batches — variable pacing + night idle */
       if (batchStart + BATCH_SIZE < items.length) {
         await politeDelay();
+        await scrollDelay();
+        await nightIdleDelay();
+        await maybeBreather((msg) => log("info", msg));
       }
     }
 

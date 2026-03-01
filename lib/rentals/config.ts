@@ -48,6 +48,31 @@ export const REQUEST_DELAY_JITTER_MS = 2_000;
 /** Max retries for transient network errors */
 export const MAX_RETRIES = 3;
 
+/* ── Human-like pacing ───────────────────────────────────── */
+
+/** Every N listings, take a long "breather" pause */
+export const BREATHER_EVERY_MIN = 15;
+export const BREATHER_EVERY_MAX = 30;
+
+/** Duration of breather pauses (ms) */
+export const BREATHER_PAUSE_MIN_MS = 20_000;
+export const BREATHER_PAUSE_MAX_MS = 40_000;
+
+/** Probability (0-1) of skipping a listing entirely (simulates random navigation depth) */
+export const SKIP_PROBABILITY = 0.03;
+
+/** Extra "scroll/read" delay after fetching a page (ms) — simulates user reading time */
+export const SCROLL_DELAY_MIN_MS = 800;
+export const SCROLL_DELAY_MAX_MS = 3_000;
+
+/** Night-time idle: UTC hours considered "night" — adds extra pause */
+export const NIGHT_IDLE_START_HOUR_UTC = 17; // 00:00 ICT (UTC+7)
+export const NIGHT_IDLE_END_HOUR_UTC = 23;   // 06:00 ICT (UTC+7)
+
+/** Extra delay range during night hours (ms) */
+export const NIGHT_IDLE_EXTRA_MIN_MS = 5_000;
+export const NIGHT_IDLE_EXTRA_MAX_MS = 15_000;
+
 /* ── User-Agent ──────────────────────────────────────────── */
 
 export const USER_AGENT =
