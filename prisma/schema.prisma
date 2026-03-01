@@ -596,6 +596,7 @@ model GeneratedArticleDraft {
   canonicalUrl       String?            @db.VarChar(2000)
   schemaJson         Json?
   contentHash        String?            @db.VarChar(64)
+  category           String?            @db.VarChar(50)
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 

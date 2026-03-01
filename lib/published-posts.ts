@@ -1,5 +1,25 @@
 import { prisma } from "@/lib/prisma";
 
+/* ── Category inference from title/description keywords ──── */
+const CATEGORY_RULES: [string, RegExp][] = [
+  ["Teaching", /teach|tefl|esl|efl|instructor|classroom/i],
+  ["Visas", /visa|immigration|work permit|extension|overstay/i],
+  ["Safety", /safety|scam|crime|danger|secure|warning/i],
+  ["Airports", /airport|flight|airline|terminal|techo/i],
+  ["Healthcare", /health|hospital|clinic|medical|doctor|pharmacy|dentist/i],
+  ["Digital Nomad", /digital nomad|remote work|cowork|freelanc/i],
+  ["Travel", /travel|backpack|siem reap|angkor|island|beach|sihanoukville/i],
+  ["Border News", /border|thailand.*cambodia|crossing|checkpoint/i],
+  ["Rentals", /rental|rent|apartment|condo|landlord|lease|housing/i],
+];
+
+export function inferCategory(text: string): string {
+  for (const [cat, re] of CATEGORY_RULES) {
+    if (re.test(text)) return cat;
+  }
+  return "Travel";
+}
+
 export interface PublishedAiPost {
   slug: string;
   title: string;
@@ -11,6 +31,7 @@ export interface PublishedAiPost {
   city: string;
   heroImageUrl: string | null;
   ogImageUrl: string | null;
+  category: string | null;
   isAiGenerated: true;
 }
 
@@ -30,6 +51,7 @@ export async function getPublishedAiPosts(): Promise<PublishedAiPost[]> {
       city: true,
       heroImageUrl: true,
       ogImageUrl: true,
+      category: true,
       createdAt: true,
       updatedAt: true,
     },
@@ -46,6 +68,7 @@ export async function getPublishedAiPosts(): Promise<PublishedAiPost[]> {
     city: d.city,
     heroImageUrl: d.heroImageUrl,
     ogImageUrl: d.ogImageUrl,
+    category: d.category || inferCategory(d.title + " " + d.metaDescription),
     isAiGenerated: true as const,
   }));
 }
@@ -65,6 +88,7 @@ export async function getPublishedAiPost(slug: string): Promise<PublishedAiPost 
       city: true,
       heroImageUrl: true,
       ogImageUrl: true,
+      category: true,
       createdAt: true,
       updatedAt: true,
     },
@@ -83,6 +107,7 @@ export async function getPublishedAiPost(slug: string): Promise<PublishedAiPost 
     city: draft.city,
     heroImageUrl: draft.heroImageUrl,
     ogImageUrl: draft.ogImageUrl,
+    category: draft.category || inferCategory(draft.title + " " + draft.metaDescription),
     isAiGenerated: true as const,
   };
 }

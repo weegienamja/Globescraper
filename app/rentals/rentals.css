@@ -568,6 +568,123 @@
   opacity: 0.4;
 }
 
+/* ==========================================================
+   Image Strip (horizontal scroll carousel)
+   ========================================================== */
+.image-strip {
+  grid-row: 1 / 3;
+  position: relative;
+  min-height: 200px;
+  background: var(--bg-elevated);
+  overflow: hidden;
+}
+
+.image-strip--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 200px;
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.image-strip--empty svg {
+  width: 32px;
+  height: 32px;
+  opacity: 0.4;
+}
+
+.image-strip--single {
+  grid-row: 1 / 3;
+  position: relative;
+  min-height: 200px;
+  background: var(--bg-elevated);
+}
+
+.image-strip--single img {
+  object-fit: cover;
+}
+
+.image-strip__scroll {
+  display: flex;
+  overflow-x: auto;
+  scroll-behavior: smooth;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  height: 100%;
+  min-height: 200px;
+  scrollbar-width: none;
+}
+
+.image-strip__scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.image-strip__item {
+  flex: 0 0 100%;
+  position: relative;
+  min-height: 200px;
+  scroll-snap-align: start;
+}
+
+.image-strip__item img {
+  object-fit: cover;
+}
+
+.image-strip__badge {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  z-index: 2;
+}
+
+.image-strip__arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.image-strip:hover .image-strip__arrow {
+  opacity: 1;
+}
+
+.image-strip__arrow--left {
+  left: 6px;
+}
+
+.image-strip__arrow--right {
+  right: 6px;
+}
+
+.image-strip__arrow:hover {
+  background: rgba(0, 0, 0, 0.8);
+}
+
 /* Price block (below images) */
 .rental-card__price-block {
   grid-column: 1;
@@ -794,7 +911,10 @@
     grid-template-rows: auto auto auto;
   }
 
-  .rental-card__images {
+  .rental-card__images,
+  .rental-card > .image-strip,
+  .rental-card > .image-strip--single,
+  .rental-card > .image-strip--empty {
     grid-row: 1;
     grid-column: 1;
     max-height: 220px;
