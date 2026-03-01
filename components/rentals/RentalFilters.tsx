@@ -125,12 +125,7 @@ export function RentalFilters({ cities, districts }: RentalFiltersProps) {
     }
     // Advanced filters
     for (const key of ADVANCED_PARAM_KEYS) {
-      // Checkboxes: present in FormData only when checked
-      if (key === "available" || key === "photos" || key === "geo") {
-        overrides[key] = fd.has(key) ? "1" : "";
-      } else {
-        overrides[key] = (fd.get(key) as string) || "";
-      }
+      overrides[key] = (fd.get(key) as string) || "";
     }
     // Amenity / facility checkboxes (each is a separate param key)
     for (const key of AMENITY_PARAM_KEYS) {
@@ -335,6 +330,17 @@ export function RentalFilters({ cities, districts }: RentalFiltersProps) {
                 </div>
               </div>
 
+              {/* Date added: dateAdded -> firstSeenAt >= cutoff */}
+              <div className="rentals-filters__section">
+                <h4 className="rentals-filters__section-title">Date added</h4>
+                <select name="dateAdded" className="rentals-filters__select" defaultValue={sp.get("dateAdded") ?? ""} aria-label="Date added filter">
+                  {DATE_ADDED_OPTIONS.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
+                </select>
+              </div>
+            </div>
+
+            {/* ---------- Right column ---------- */}
+            <div className="rentals-filters__adv-col">
               {/* Size (sqm): sizeMin / sizeMax -> sizeSqm range */}
               <div className="rentals-filters__section">
                 <h4 className="rentals-filters__section-title">Size (sqm)</h4>
@@ -361,36 +367,6 @@ export function RentalFilters({ cities, districts }: RentalFiltersProps) {
                   />
                   <span className="rentals-filters__pair-sep">sqm</span>
                 </div>
-              </div>
-
-              {/* Date added: dateAdded -> firstSeenAt >= cutoff */}
-              <div className="rentals-filters__section">
-                <h4 className="rentals-filters__section-title">Date added</h4>
-                <select name="dateAdded" className="rentals-filters__select" defaultValue={sp.get("dateAdded") ?? ""} aria-label="Date added filter">
-                  {DATE_ADDED_OPTIONS.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
-                </select>
-              </div>
-            </div>
-
-            {/* ---------- Right column ---------- */}
-            <div className="rentals-filters__adv-col">
-              {/* Availability and quality toggles */}
-              <div className="rentals-filters__section">
-                <h4 className="rentals-filters__section-title">Availability and quality toggles</h4>
-                <label className="rentals-filters__checkbox">
-                  <input type="checkbox" name="available" value="1" defaultChecked={sp.get("available") === "1"} />
-                  Available only
-                </label>
-                {/* photos=1 -> imageUrlsJson contains at least one URL */}
-                <label className="rentals-filters__checkbox">
-                  <input type="checkbox" name="photos" value="1" defaultChecked={sp.get("photos") === "1"} />
-                  Has photos only
-                </label>
-                {/* geo=1 -> latitude and longitude both not null */}
-                <label className="rentals-filters__checkbox">
-                  <input type="checkbox" name="geo" value="1" defaultChecked={sp.get("geo") === "1"} />
-                  Has exact location only
-                </label>
               </div>
             </div>
           </div>

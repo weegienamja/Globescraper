@@ -236,6 +236,19 @@
   gap: 6px;
 }
 
+/* Spacing between the 2-col grid and the must-have sections */
+.rentals-filters__section + .rentals-filters__section {
+  margin-top: 8px;
+}
+
+.rentals-filters__adv-grid + .rentals-filters__section {
+  margin-top: 16px;
+}
+
+.rentals-filters__section + .rentals-filters__adv-actions {
+  margin-top: 16px;
+}
+
 .rentals-filters__section-title {
   font-size: 0.75rem;
   font-weight: 600;

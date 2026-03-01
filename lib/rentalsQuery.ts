@@ -17,9 +17,7 @@
  *   sizeMin      -> RentalListing.sizeSqm >= N    (advanced)
  *   sizeMax      -> RentalListing.sizeSqm <= N    (advanced)
  *   dateAdded    -> RentalListing.firstSeenAt >= cutoff (advanced)
- *   available    -> RentalListing.isActive = true  (advanced, default anyway)
- *   photos       -> imageUrlsJson is non-empty JSON array (advanced)
- *   geo          -> latitude AND longitude not null (advanced)
+ *   f_*          -> amenitiesJson contains (advanced, must-haves)
  */
 
 import type { Prisma } from "@prisma/client";
@@ -70,9 +68,6 @@ export interface RentalSearchParams {
   sizeMin?: string;
   sizeMax?: string;
   dateAdded?: string;
-  available?: string;
-  photos?: string;
-  geo?: string;
   // Amenity / facility must-haves (dynamic f_* keys)
   [key: string]: string | undefined;
 }
@@ -88,9 +83,6 @@ export const ADVANCED_PARAM_KEYS = [
   "sizeMin",
   "sizeMax",
   "dateAdded",
-  "available",
-  "photos",
-  "geo",
   ...AMENITY_PARAM_KEYS,
 ] as const;
 
@@ -166,18 +158,6 @@ export function buildRentalsWhere(
   const cutoff = dateCutoff(sp.dateAdded);
   if (cutoff) {
     where.firstSeenAt = { gte: cutoff };
-  }
-
-  // photos=1: imageUrlsJson parses to a non-empty array.
-  // We approximate this with a simple "contains at least one URL" check.
-  if (sp.photos === "1") {
-    where.imageUrlsJson = { contains: "http" };
-  }
-
-  // geo=1: latitude and longitude both present
-  if (sp.geo === "1") {
-    where.latitude = { not: null };
-    where.longitude = { not: null };
   }
 
   // Amenity / facility must-haves: each active f_* param requires
