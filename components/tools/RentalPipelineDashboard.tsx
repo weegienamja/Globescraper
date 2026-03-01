@@ -727,7 +727,7 @@ export function RentalPipelineDashboard() {
         </div>
 
         {/* Scraped Listings Browser */}
-        <ListingsTable />
+        <ListingsTable polling={!!runningJob} />
       </div>
     </div>
   );
