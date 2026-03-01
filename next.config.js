@@ -52,38 +52,51 @@ const nextConfig = {
   },
 
   async headers() {
+    const securityHeaders = [
+      { key: "X-Content-Type-Options", value: "nosniff" },
+      { key: "X-Frame-Options", value: "DENY" },
+      { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+      {
+        key: "Strict-Transport-Security",
+        value: "max-age=63072000; includeSubDomains; preload",
+      },
+      { key: "X-XSS-Protection", value: "1; mode=block" },
+      {
+        key: "Permissions-Policy",
+        value: "camera=(), microphone=(), geolocation=(), interest-cohort=()",
+      },
+      {
+        key: "Content-Security-Policy",
+        value: [
+          "default-src 'self'",
+          "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://www.google-analytics.com https://vercel.live",
+          "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com",
+          "img-src 'self' data: blob: https://assets.zyrosite.com https://images.unsplash.com https://*.public.blob.vercel-storage.com https://www.google-analytics.com https://lh3.googleusercontent.com https://*.basemaps.cartocdn.com https://images.realestate.com.kh https://www.realestate.com.kh",
+          "font-src 'self' https://fonts.gstatic.com",
+          "connect-src 'self' https://www.google-analytics.com https://analytics.google.com https://vercel.live https://*.tile.openstreetmap.org",
+          "frame-src 'self' https://www.youtube.com https://vercel.live",
+          "object-src 'none'",
+          "base-uri 'self'",
+          "form-action 'self'",
+        ].join("; "),
+      },
+    ];
+
     return [
       {
+        // Embeddable heatmap — allow framing from any origin for blog embeds
+        source: "/rentals/heatmap/embed",
+        headers: securityHeaders
+          .filter((h) => h.key !== "X-Frame-Options")
+          .map((h) =>
+            h.key === "Content-Security-Policy"
+              ? { ...h, value: h.value.replace("frame-src", "frame-ancestors *; frame-src") }
+              : h,
+          ),
+      },
+      {
         source: "/(.*)",
-        headers: [
-          { key: "X-Content-Type-Options", value: "nosniff" },
-          { key: "X-Frame-Options", value: "DENY" },
-          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-          {
-            key: "Strict-Transport-Security",
-            value: "max-age=63072000; includeSubDomains; preload",
-          },
-          { key: "X-XSS-Protection", value: "1; mode=block" },
-          {
-            key: "Permissions-Policy",
-            value: "camera=(), microphone=(), geolocation=(), interest-cohort=()",
-          },
-          {
-            key: "Content-Security-Policy",
-            value: [
-              "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://www.google-analytics.com https://vercel.live",
-              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com",
-              "img-src 'self' data: blob: https://assets.zyrosite.com https://images.unsplash.com https://*.public.blob.vercel-storage.com https://www.google-analytics.com https://lh3.googleusercontent.com https://*.basemaps.cartocdn.com https://images.realestate.com.kh https://www.realestate.com.kh",
-              "font-src 'self' https://fonts.gstatic.com",
-              "connect-src 'self' https://www.google-analytics.com https://analytics.google.com https://vercel.live https://*.tile.openstreetmap.org",
-              "frame-src 'self' https://www.youtube.com https://vercel.live",
-              "object-src 'none'",
-              "base-uri 'self'",
-              "form-action 'self'",
-            ].join("; "),
-          },
-        ],
+        headers: securityHeaders,
       },
     ];
   },

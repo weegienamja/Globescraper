@@ -78,6 +78,10 @@ interface Props {
   data: DistrictIndexRow[];
   /** Height in pixels (default 450) */
   height?: number;
+  /** Show the "Show Pins" toggle for individual listing markers (default true). */
+  showListingPoints?: boolean;
+  /** Base path for "View listings" links in popups (default "/tools/rentals/listings"). */
+  listingsLinkBase?: string;
 }
 
 /** Human-readable labels for property type enum values */
@@ -91,7 +95,7 @@ const TYPE_LABELS: Record<string, string> = {
   TOWNHOUSE: "Townhouse",
 };
 
-export function InteractiveHeatmap({ data, height = 450 }: Props) {
+export function InteractiveHeatmap({ data, height = 450, showListingPoints = true, listingsLinkBase = "/tools/rentals/listings" }: Props) {
   const mapRef = useRef<HTMLDivElement>(null);
   const leafletMap = useRef<L.Map | null>(null);
   const [geoJson, setGeoJson] = useState<GeoJSON.FeatureCollection | null>(null);
@@ -374,7 +378,7 @@ export function InteractiveHeatmap({ data, height = 450 }: Props) {
 
           // Build the link to filtered listings page
           const linkDistrict = isFallback ? (district || name) : name;
-          const listingsUrl = `/tools/rentals/listings?district=${encodeURIComponent(linkDistrict)}`;
+          const listingsUrl = `${listingsLinkBase}?district=${encodeURIComponent(linkDistrict)}`;
           const viewLink =
             `<a href="${listingsUrl}" style="display:inline-block;margin-top:8px;padding:5px 12px;` +
             `background:#3b82f6;color:#fff;border-radius:6px;text-decoration:none;font-size:12px;font-weight:600;" ` +
@@ -658,25 +662,29 @@ export function InteractiveHeatmap({ data, height = 450 }: Props) {
             </button>
           )}
           {/* Divider */}
-          <span style={{ color: "#1e293b", fontSize: "12px", margin: "0 2px" }}>|</span>
-          <button
-            onClick={() => setShowPoints((v) => !v)}
-            style={{
-              padding: "4px 10px",
-              fontSize: "12px",
-              fontWeight: 600,
-              borderRadius: "6px",
-              border: showPoints ? "1px solid #10b981" : "1px solid #334155",
-              background: showPoints ? "#064e3b" : "#0f172a",
-              color: showPoints ? "#6ee7b7" : "#64748b",
-              cursor: "pointer",
-              transition: "all 0.15s ease",
-            }}
-          >
-            {pointsLoading ? "Loading\u2026" : showPoints
-              ? `Pins ON (${filteredPoints.length})`
-              : "Show Pins"}
-          </button>
+          {showListingPoints && (
+            <>
+              <span style={{ color: "#1e293b", fontSize: "12px", margin: "0 2px" }}>|</span>
+              <button
+                onClick={() => setShowPoints((v) => !v)}
+                style={{
+                  padding: "4px 10px",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  borderRadius: "6px",
+                  border: showPoints ? "1px solid #10b981" : "1px solid #334155",
+                  background: showPoints ? "#064e3b" : "#0f172a",
+                  color: showPoints ? "#6ee7b7" : "#64748b",
+                  cursor: "pointer",
+                  transition: "all 0.15s ease",
+                }}
+              >
+                {pointsLoading ? "Loading\u2026" : showPoints
+                  ? `Pins ON (${filteredPoints.length})`
+                  : "Show Pins"}
+              </button>
+            </>
+          )}
         </div>
       )}
       <div

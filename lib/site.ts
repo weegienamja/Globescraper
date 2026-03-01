@@ -18,6 +18,7 @@ export const siteConfig = {
   navItems: [
     { label: "Home", href: "/" },
     { label: "Blog", href: "/blog" },
+    { label: "Rentals", href: "/rentals" },
     { label: "Community", href: "/community" },
     { label: "Meetups", href: "/meetups" },
     { label: "How it works", href: "/how-it-works-to-teach-english" },

@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useSession, signOut } from "next-auth/react";
+import { usePathname } from "next/navigation";
 import { siteConfig } from "@/lib/site";
 import { trackNavClick, trackCTAClick } from "@/lib/analytics";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -362,6 +363,13 @@ function Header() {
 }
 
 export function SiteLayout({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+
+  // Bare render for embeddable pages — no nav, footer, or chrome
+  if (pathname === "/rentals/heatmap/embed") {
+    return <>{children}</>;
+  }
+
   return (
     <div className="site-wrapper">
       <a href="#main-content" className="skip-nav">Skip to content</a>
