@@ -32,12 +32,12 @@ const hasFlag = (name: string) => process.argv.includes(name);
 const MAX_PROCESS = getArg("--max-process", 99999);
 const BATCH_SIZE = getArg("--batch-size", 200);
 const RESCRAPE_DAYS = getArg("--rescrape-days", 7);
-const CONCURRENCY = getArg("--concurrency", 3);
+const CONCURRENCY = getArg("--concurrency", 1);
 const DISCOVER_ONLY = hasFlag("--discover-only");
 const PROCESS_ONLY = hasFlag("--process-only");
 
 /** Cooling period between batches (ms) — gives DB + target site breathing room. */
-const BATCH_COOLDOWN_MS = getArg("--batch-cooldown", 5_000);
+const BATCH_COOLDOWN_MS = getArg("--batch-cooldown", 15_000);
 
 /** Max consecutive batch failures before aborting. */
 const MAX_CONSECUTIVE_FAILURES = 5;
@@ -190,7 +190,7 @@ async function fetchApiPage(params: {
 }
 
 function apiDelay(): Promise<void> {
-  return new Promise((r) => setTimeout(r, 300 + Math.random() * 200));
+  return new Promise((r) => setTimeout(r, 1500 + Math.random() * 1500));
 }
 
 /* ── Helpers ─────────────────────────────────────────────── */
