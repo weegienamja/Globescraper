@@ -186,10 +186,15 @@ export async function discoverRealestateKh(log: PipelineLogFn = noopLogger): Pro
 function addResult(result: ApiListingResult, seen: Set<string>, out: DiscoveredUrl[]): void {
   if (result.url) {
     const full = result.url.startsWith("http") ? result.url : `${ORIGIN}${result.url}`;
-    const canonical = canonicalizeUrl(full);
-    if (!seen.has(canonical)) {
-      seen.add(canonical);
-      out.push({ url: canonical, sourceListingId: extractListingId(full) ?? String(result.id) });
+    // Skip parent project pages (/new-developments/project-name/) which have
+    // no listing ID — only individual unit URLs with a numeric suffix are valid.
+    const listingId = extractListingId(full);
+    if (listingId) {
+      const canonical = canonicalizeUrl(full);
+      if (!seen.has(canonical)) {
+        seen.add(canonical);
+        out.push({ url: canonical, sourceListingId: listingId });
+      }
     }
   }
   if (result.nested) {

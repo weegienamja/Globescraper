@@ -188,16 +188,20 @@ function extractUrlsFromApiResponse(
 ): number {
   let added = 0;
   for (const result of response.results) {
-    // Main listing
+    // Main listing — skip parent project pages (/new-developments/project-name/)
+    // which have no listing ID. Only individual unit URLs have a numeric suffix.
     if (result.url) {
       const fullUrl = result.url.startsWith("http")
         ? result.url
         : `${ORIGIN}${result.url}`;
-      const canonical = canonicalizeUrl(fullUrl);
-      if (!seen.has(canonical)) {
-        seen.add(canonical);
-        out.push({ url: canonical, sourceListingId: extractListingId(fullUrl) ?? String(result.id) });
-        added++;
+      const listingId = extractListingId(fullUrl);
+      if (listingId) {
+        const canonical = canonicalizeUrl(fullUrl);
+        if (!seen.has(canonical)) {
+          seen.add(canonical);
+          out.push({ url: canonical, sourceListingId: listingId });
+          added++;
+        }
       }
     }
     // Nested sub-listings (e.g. multiple units in a building)
@@ -207,11 +211,14 @@ function extractUrlsFromApiResponse(
           const fullUrl = nested.url.startsWith("http")
             ? nested.url
             : `${ORIGIN}${nested.url}`;
-          const canonical = canonicalizeUrl(fullUrl);
-          if (!seen.has(canonical)) {
-            seen.add(canonical);
-            out.push({ url: canonical, sourceListingId: extractListingId(fullUrl) ?? String(nested.id) });
-            added++;
+          const listingId = extractListingId(fullUrl);
+          if (listingId) {
+            const canonical = canonicalizeUrl(fullUrl);
+            if (!seen.has(canonical)) {
+              seen.add(canonical);
+              out.push({ url: canonical, sourceListingId: listingId });
+              added++;
+            }
           }
         }
       }
