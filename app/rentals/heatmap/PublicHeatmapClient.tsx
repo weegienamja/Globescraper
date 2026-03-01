@@ -203,9 +203,6 @@ export function PublicHeatmapClient({
             </a>,{" "}
             <a href="https://www.khmer24.com" target="_blank" rel="noopener noreferrer" style={s.articleLink}>
               Khmer24
-            </a>,{" "}
-            <a href="https://www.fazwaz.com.kh" target="_blank" rel="noopener noreferrer" style={s.articleLink}>
-              FazWaz
             </a>, and others.
           </p>
 
@@ -221,7 +218,7 @@ export function PublicHeatmapClient({
           <h3 style={s.articleSubheading}>Ongoing Project &amp; Data Quality</h3>
           <p style={s.articleText}>
             This is an ongoing, evolving project. While we work hard to keep the
-            data accurate, occasional errors may appear — a listing might be
+            data accurate, occasional errors may appear. A listing might be
             mapped to the wrong district, a price could be mis-converted, or
             duplicate entries may slip through before being detected. We are
             continuously improving our data pipeline and resolving issues as they
