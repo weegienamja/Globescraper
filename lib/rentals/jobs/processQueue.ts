@@ -17,6 +17,7 @@ import { scrapeListingLongTermLettings } from "../sources/longtermlettings";
 import { scrapeListingFazWaz } from "../sources/fazwaz";
 import { scrapeListingHomeToGo } from "../sources/hometogo";
 import { computeFingerprint } from "../fingerprint";
+import { generateTitleForListing } from "../title-geocode";
 import { politeDelay } from "../http";
 import { type PipelineLogFn, type PipelineProgressFn, noopLogger, noopProgress } from "../pipelineLogger";
 
@@ -293,6 +294,27 @@ export async function processQueueJob(
                 postedAt: scraped.postedAt,
               },
             });
+
+            // Generate geocoded title for new listings (or those without one)
+            if (wasInserted || !existing?.titleRewritten) {
+              try {
+                const geoTitle = await generateTitleForListing({
+                  latitude: scraped.latitude ?? existing?.latitude ?? null,
+                  longitude: scraped.longitude ?? existing?.longitude ?? null,
+                  district: scraped.district ?? null,
+                  city: scraped.city ?? "Phnom Penh",
+                });
+                if (geoTitle) {
+                  await prisma.rentalListing.update({
+                    where: { id: listingId },
+                    data: { titleRewritten: geoTitle },
+                  });
+                  log("debug", `[${idx}/${items.length}] 📍 Title: ${geoTitle}`);
+                }
+              } catch {
+                // Non-critical — don't fail the listing if geocoding fails
+              }
+            }
 
             await prisma.scrapeQueue.update({
               where: { id: item.id },

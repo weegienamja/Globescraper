@@ -139,6 +139,42 @@ function buildFallbackTitle(listing: ListingForTitle): string {
   return parts.join(", ");
 }
 
+/* ── Single-listing title generator (for pipeline use) ──── */
+
+/**
+ * Generate a title for a single listing. If GPS coords are available,
+ * reverse-geocodes via Nominatim. Otherwise builds from district/city.
+ * Returns the generated title string or null if nothing useful.
+ */
+export async function generateTitleForListing(listing: {
+  latitude: number | null;
+  longitude: number | null;
+  district: string | null;
+  city: string;
+}): Promise<string | null> {
+  const asListingForTitle: ListingForTitle = {
+    id: "",
+    title: "",
+    latitude: listing.latitude,
+    longitude: listing.longitude,
+    district: listing.district,
+    city: listing.city,
+    propertyType: "",
+    bedrooms: null,
+  };
+
+  if (listing.latitude != null && listing.longitude != null) {
+    const addr = await reverseGeocode(listing.latitude, listing.longitude);
+    if (addr) {
+      const title = buildGeoTitle(addr, asListingForTitle);
+      if (title && title.length > 3) return title;
+    }
+  }
+
+  const fallback = buildFallbackTitle(asListingForTitle);
+  return fallback && fallback.length > 3 ? fallback : null;
+}
+
 /* ── Main orchestrator ───────────────────────────────────── */
 
 export async function runTitleGeocoding(
