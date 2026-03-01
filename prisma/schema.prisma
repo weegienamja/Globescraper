@@ -775,6 +775,7 @@ enum JobStatus {
 
 enum QueueStatus {
   PENDING
+  PROCESSING
   DONE
   RETRY
 }

@@ -79,14 +79,23 @@ export async function processQueueJob(
       return { jobRunId: jobRun.id, processed: 0, inserted: 0, updated: 0, deactivated: 0, snapshots: 0, failed: 0 };
     }
 
-    // Get pending items, ordered by priority desc and oldest first
+    // Atomically claim PENDING/RETRY items so parallel workers don't overlap.
+    // Uses raw SQL UPDATE … LIMIT + SELECT to avoid race conditions.
+    const claimTag = `w${Date.now().toString(36)}`;
+    await prisma.$executeRawUnsafe(
+      `UPDATE ScrapeQueue
+       SET status = 'PROCESSING', lastError = ?
+       WHERE source = ? AND status IN ('PENDING','RETRY')
+       ORDER BY priority DESC, createdAt ASC
+       LIMIT ?`,
+      claimTag,
+      source,
+      maxItems,
+    );
+
     const items = await prisma.scrapeQueue.findMany({
-      where: {
-        source,
-        status: { in: [QueueStatus.PENDING, QueueStatus.RETRY] },
-      },
+      where: { source, status: "PROCESSING" as QueueStatus, lastError: claimTag },
       orderBy: [{ priority: "desc" }, { createdAt: "asc" }],
-      take: maxItems,
     });
 
     log("info", `Found ${items.length} pending items in queue`);

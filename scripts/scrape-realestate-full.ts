@@ -23,6 +23,11 @@
  *   npx tsx scripts/scrape-realestate-full.ts --max-process 500
  *   npx tsx scripts/scrape-realestate-full.ts --batch-size 100
  *   npx tsx scripts/scrape-realestate-full.ts --rescrape-days 3
+ *   npx tsx scripts/scrape-realestate-full.ts --workers 3
+ *
+ * The --workers flag spawns N parallel child processes.
+ * Each worker atomically claims items from the queue via SQL UPDATE…LIMIT,
+ * so no two workers process the same listing.
  */
 
 /* ── CLI args ────────────────────────────────────────────── */
@@ -37,8 +42,10 @@ const hasFlag = (name: string) => process.argv.includes(name);
 const MAX_PROCESS = getArg("--max-process", 99999);
 const BATCH_SIZE = getArg("--batch-size", 200); // queue items per process batch
 const RESCRAPE_DAYS = getArg("--rescrape-days", 7); // re-scrape listings older than N days
+const WORKERS = getArg("--workers", 1); // parallel worker processes for scraping
 const DISCOVER_ONLY = hasFlag("--discover-only");
 const PROCESS_ONLY = hasFlag("--process-only");
+const IS_WORKER = hasFlag("--_worker"); // internal flag — true when spawned as child
 
 // Lift pipeline caps so processQueueJob doesn't limit itself
 process.env.RENTALS_MAX_PROCESS = String(BATCH_SIZE);
@@ -510,6 +517,66 @@ async function processAllBatches(): Promise<void> {
 
 /* ── Main ────────────────────────────────────────────────── */
 
+import { execFile } from "child_process";
+import path from "path";
+
+/**
+ * Spawn N worker child processes, each running --process-only --_worker.
+ * The atomic queue claiming ensures no duplicate work.
+ */
+async function spawnWorkers(count: number): Promise<void> {
+  console.log(`\n╔══════════════════════════════════════════════╗`);
+  console.log(`║  Spawning ${count} parallel workers                 ║`);
+  console.log(`╚══════════════════════════════════════════════╝\n`);
+
+  const scriptPath = path.resolve(__dirname, "scrape-realestate-full.ts");
+  const perWorkerMax = Math.ceil(MAX_PROCESS / count);
+
+  const workers = Array.from({ length: count }, (_, i) => {
+    const workerId = i + 1;
+    return new Promise<void>((resolve, reject) => {
+      const args = [
+        scriptPath,
+        "--process-only",
+        "--_worker",
+        "--max-process", String(perWorkerMax),
+        "--batch-size", String(BATCH_SIZE),
+      ];
+      const child = execFile("npx", ["tsx", ...args], {
+        cwd: process.cwd(),
+        env: { ...process.env },
+        maxBuffer: 50 * 1024 * 1024,
+      }, (err) => {
+        if (err) {
+          console.error(`[Worker ${workerId}] exited with error:`, err.message);
+          reject(err);
+        } else {
+          resolve();
+        }
+      });
+
+      // Prefix child stdout/stderr with worker ID
+      child.stdout?.on("data", (data: Buffer) => {
+        const lines = data.toString().trimEnd().split("\n");
+        for (const line of lines) {
+          console.log(`[W${workerId}] ${line}`);
+        }
+      });
+      child.stderr?.on("data", (data: Buffer) => {
+        const lines = data.toString().trimEnd().split("\n");
+        for (const line of lines) {
+          console.error(`[W${workerId}] ${line}`);
+        }
+      });
+    });
+  });
+
+  const results = await Promise.allSettled(workers);
+  const succeeded = results.filter((r) => r.status === "fulfilled").length;
+  const failed = results.filter((r) => r.status === "rejected").length;
+  console.log(`\nWorkers done: ${succeeded} succeeded, ${failed} failed`);
+}
+
 async function main() {
   console.log("\n╔══════════════════════════════════════════════════════╗");
   console.log("║  realestate.com.kh — Full Residential Scrape          ║");
@@ -534,7 +601,12 @@ async function main() {
     }
   }
 
-  await processAllBatches();
+  // If --workers > 1 and this is the main process, spawn children
+  if (WORKERS > 1 && !IS_WORKER) {
+    await spawnWorkers(WORKERS);
+  } else {
+    await processAllBatches();
+  }
 
   const elapsed = ((Date.now() - start) / 1000 / 60).toFixed(1);
   log("info", `\n✔ Full scrape completed in ${elapsed} minutes`);
