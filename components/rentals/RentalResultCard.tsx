@@ -22,7 +22,15 @@ export interface RentalCardData {
   firstSeenAt: Date;
 }
 
-export function RentalResultCard({ listing }: { listing: RentalCardData }) {
+export function RentalResultCard({
+  listing,
+  saved,
+  onToggleSave,
+}: {
+  listing: RentalCardData;
+  saved: boolean;
+  onToggleSave: () => void;
+}) {
   const images = parseImages(listing.imageUrlsJson);
   const displayTitle = listing.titleRewritten || listing.title;
   const desc = listing.descriptionRewritten || listing.description || "";
@@ -68,14 +76,14 @@ export function RentalResultCard({ listing }: { listing: RentalCardData }) {
           </button>
           <button
             type="button"
-            className="rental-card__save-btn"
-            aria-label="Save this listing"
-            onClick={(e) => e.stopPropagation()}
+            className={"rental-card__save-btn" + (saved ? " rental-card__save-btn--active" : "")}
+            aria-label={saved ? "Remove from saved" : "Save this listing"}
+            onClick={(e) => { e.stopPropagation(); onToggleSave(); }}
           >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill={saved ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" aria-hidden="true">
               <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
             </svg>
-            Save
+            {saved ? "Saved" : "Save"}
           </button>
         </div>
       </div>

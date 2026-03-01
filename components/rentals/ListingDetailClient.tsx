@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ListingGallery } from "@/components/rentals/ListingGallery";
 import { ListingFactsCard } from "@/components/rentals/ListingFactsCard";
 import { AmenitiesList } from "@/components/rentals/AmenitiesList";
+import { useSavedListings } from "@/components/rentals/useSavedListings";
 
 interface DetailListing {
   id: string;
@@ -29,6 +30,7 @@ interface DetailListing {
 
 export function ListingDetailClient({ listing }: { listing: DetailListing }) {
   const [showModal, setShowModal] = useState(false);
+  const { isSaved, toggleSaved } = useSavedListings();
 
   const displayTitle = listing.titleRewritten || listing.title;
   const desc = listing.descriptionRewritten || listing.description || "";
@@ -123,6 +125,8 @@ export function ListingDetailClient({ listing }: { listing: DetailListing }) {
           sizeSqm={listing.sizeSqm}
           city={listing.city}
           district={listing.district}
+          saved={isSaved(listing.id)}
+          onToggleSave={() => toggleSaved(listing.id)}
           onEnquire={() => setShowModal(true)}
         />
       </div>
