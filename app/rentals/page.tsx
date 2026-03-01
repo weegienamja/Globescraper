@@ -14,16 +14,22 @@ export const metadata: Metadata = {
 
 const PER_PAGE = 7;
 
+interface SearchParams {
+  page?: string;
+  city?: string;
+  district?: string;
+  min?: string;
+  max?: string;
+  type?: string;
+  beds?: string;
+  maxBeds?: string;
+  baths?: string;
+  maxBaths?: string;
+  sort?: string;
+}
+
 interface Props {
-  searchParams: Promise<{
-    page?: string;
-    city?: string;
-    district?: string;
-    min?: string;
-    max?: string;
-    type?: string;
-    beds?: string;
-  }>;
+  searchParams: Promise<SearchParams>;
 }
 
 export default async function RentalsPage({ searchParams }: Props) {
@@ -31,7 +37,9 @@ export default async function RentalsPage({ searchParams }: Props) {
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
 
   const where = buildWhere(sp);
-  const [listings, total] = await Promise.all([
+  const orderBy = buildOrderBy(sp.sort);
+
+  const [listings, total, cities, districts] = await Promise.all([
     prisma.rentalListing.findMany({
       where,
       select: {
@@ -50,11 +58,17 @@ export default async function RentalsPage({ searchParams }: Props) {
         postedAt: true,
         firstSeenAt: true,
       },
-      orderBy: [{ lastSeenAt: "desc" }, { firstSeenAt: "desc" }],
+      orderBy,
       skip: (page - 1) * PER_PAGE,
       take: PER_PAGE,
     }),
     prisma.rentalListing.count({ where }),
+    prisma.rentalListing
+      .findMany({ where: { isActive: true, NOT: { city: "" } }, select: { city: true }, distinct: ["city"], orderBy: { city: "asc" } })
+      .then((rows) => rows.map((r) => r.city).filter((c): c is string => !!c)),
+    prisma.rentalListing
+      .findMany({ where: { isActive: true, NOT: { district: "" } }, select: { district: true }, distinct: ["district"], orderBy: { district: "asc" } })
+      .then((rows) => rows.map((r) => r.district).filter((d): d is string => !!d)),
   ]);
 
   const totalPages = Math.max(1, Math.ceil(total / PER_PAGE));
@@ -67,8 +81,12 @@ export default async function RentalsPage({ searchParams }: Props) {
     if (sp.district) params.set("district", sp.district);
     if (sp.type) params.set("type", sp.type);
     if (sp.beds) params.set("beds", sp.beds);
+    if (sp.maxBeds) params.set("maxBeds", sp.maxBeds);
     if (sp.min) params.set("min", sp.min);
     if (sp.max) params.set("max", sp.max);
+    if (sp.baths) params.set("baths", sp.baths);
+    if (sp.maxBaths) params.set("maxBaths", sp.maxBaths);
+    if (sp.sort) params.set("sort", sp.sort);
     return `/rentals?${params.toString()}`;
   }
 
@@ -80,7 +98,7 @@ export default async function RentalsPage({ searchParams }: Props) {
       </header>
 
       <Suspense fallback={null}>
-        <RentalFilters />
+        <RentalFilters cities={cities} districts={districts} />
       </Suspense>
 
       <RentalResultsList listings={listings} />
@@ -96,30 +114,35 @@ export default async function RentalsPage({ searchParams }: Props) {
 
 /* ── Helpers ─────────────────────────────────────────────── */
 
-function buildWhere(sp: {
-  city?: string;
-  district?: string;
-  min?: string;
-  max?: string;
-  type?: string;
-  beds?: string;
-}): Prisma.RentalListingWhereInput {
+function buildWhere(sp: SearchParams): Prisma.RentalListingWhereInput {
   const where: Prisma.RentalListingWhereInput = { isActive: true };
 
-  if (sp.city) {
-    where.city = { contains: sp.city };
-  }
-  if (sp.district) {
-    where.district = { contains: sp.district };
-  }
+  if (sp.city) where.city = sp.city;
+  if (sp.district) where.district = sp.district;
+
   if (sp.type) {
     where.propertyType = sp.type as Prisma.RentalListingWhereInput["propertyType"];
   }
-  if (sp.beds) {
-    const n = parseInt(sp.beds, 10);
-    if (!isNaN(n)) where.bedrooms = { gte: n };
+
+  /* beds range */
+  const minBeds = sp.beds ? parseInt(sp.beds, 10) : null;
+  const maxBeds = sp.maxBeds ? parseInt(sp.maxBeds, 10) : null;
+  if (minBeds != null || maxBeds != null) {
+    where.bedrooms = {};
+    if (minBeds != null && !isNaN(minBeds)) where.bedrooms.gte = minBeds;
+    if (maxBeds != null && !isNaN(maxBeds)) where.bedrooms.lte = maxBeds;
   }
 
+  /* baths range */
+  const minBaths = sp.baths ? parseInt(sp.baths, 10) : null;
+  const maxBaths = sp.maxBaths ? parseInt(sp.maxBaths, 10) : null;
+  if (minBaths != null || maxBaths != null) {
+    where.bathrooms = {};
+    if (minBaths != null && !isNaN(minBaths)) where.bathrooms.gte = minBaths;
+    if (maxBaths != null && !isNaN(maxBaths)) where.bathrooms.lte = maxBaths;
+  }
+
+  /* price range */
   const minPrice = sp.min ? parseFloat(sp.min) : null;
   const maxPrice = sp.max ? parseFloat(sp.max) : null;
   if (minPrice != null || maxPrice != null) {
@@ -129,6 +152,19 @@ function buildWhere(sp: {
   }
 
   return where;
+}
+
+function buildOrderBy(sort?: string): Prisma.RentalListingOrderByWithRelationInput[] {
+  switch (sort) {
+    case "price_asc":
+      return [{ priceMonthlyUsd: "asc" }];
+    case "price_desc":
+      return [{ priceMonthlyUsd: "desc" }];
+    case "beds_desc":
+      return [{ bedrooms: "desc" }, { lastSeenAt: "desc" }];
+    default:
+      return [{ lastSeenAt: "desc" }, { firstSeenAt: "desc" }];
+  }
 }
 
 function buildFilterSummary(
