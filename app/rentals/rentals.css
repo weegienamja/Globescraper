@@ -770,7 +770,7 @@
   transition: opacity 0.2s;
 }
 
-.card-carousel:hover .card-carousel__arrow {
+.rental-card:hover .card-carousel__arrow {
   opacity: 1;
 }
 

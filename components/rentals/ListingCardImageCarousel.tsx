@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 
 interface Props {
   images: string[];
@@ -12,8 +12,8 @@ interface Props {
  * Per-card swipeable image carousel.
  *
  * - Each card manages its own image index locally.
- * - Pointer-event based swipe (touch only) preserves vertical scroll.
- * - Desktop: hover arrows for prev/next.
+ * - Touch-event based swipe preserves vertical scroll.
+ * - Desktop: hover arrows for prev/next (triggered by .rental-card:hover).
  * - No global listeners; everything scoped to the viewport element.
  */
 export function ListingCardImageCarousel({ images, alt }: Props) {
@@ -27,112 +27,116 @@ export function ListingCardImageCarousel({ images, alt }: Props) {
   const startYRef = useRef(0);
   const deltaXRef = useRef(0);
   const isDraggingRef = useRef(false);
-  const isHorizontalRef = useRef<boolean | null>(null); // null = undecided
+  const directionRef = useRef<"h" | "v" | null>(null); // null = undecided
   const didSwipeRef = useRef(false);
+  const indexRef = useRef(0); // mirror of index state for use in listeners
 
-  // ── Apply transform directly (no rerender) ──
+  // Keep indexRef in sync
+  useEffect(() => {
+    indexRef.current = index;
+  }, [index]);
+
+  // ── Apply transform directly to DOM (no rerender) ──
   const applyTranslate = useCallback(
-    (dx: number, animate: boolean) => {
+    (idx: number, dx: number, animate: boolean) => {
       const track = trackRef.current;
       if (!track) return;
-      const pct = -index * 100;
-      const pxOffset = dx;
+      const pct = -idx * 100;
       track.style.transition = animate ? "transform 220ms ease" : "none";
-      track.style.transform = `translateX(calc(${pct}% + ${pxOffset}px))`;
+      track.style.transform = `translateX(calc(${pct}% + ${dx}px))`;
     },
-    [index],
+    [],
   );
 
-  // ── Pointer handlers (touch only) ──
-  const onPointerDown = useCallback(
-    (e: React.PointerEvent) => {
-      if (e.pointerType !== "touch" || total <= 1) return;
-      e.stopPropagation();
+  // ── Touch event handlers (attached via ref for { passive: false }) ──
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (!el || total <= 1) return;
+
+    function onTouchStart(e: TouchEvent) {
+      const t = e.touches[0];
       isDraggingRef.current = true;
-      isHorizontalRef.current = null;
+      directionRef.current = null;
       didSwipeRef.current = false;
-      startXRef.current = e.clientX;
-      startYRef.current = e.clientY;
+      startXRef.current = t.clientX;
+      startYRef.current = t.clientY;
       deltaXRef.current = 0;
-      applyTranslate(0, false);
-      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    },
-    [total, applyTranslate],
-  );
+      applyTranslate(indexRef.current, 0, false);
+    }
 
-  const onPointerMove = useCallback(
-    (e: React.PointerEvent) => {
-      if (!isDraggingRef.current || e.pointerType !== "touch") return;
-      e.stopPropagation();
-
-      const dx = e.clientX - startXRef.current;
-      const dy = e.clientY - startYRef.current;
+    function onTouchMove(e: TouchEvent) {
+      if (!isDraggingRef.current) return;
+      const t = e.touches[0];
+      const dx = t.clientX - startXRef.current;
+      const dy = t.clientY - startYRef.current;
 
       // Decide direction once past threshold
-      if (isHorizontalRef.current === null) {
-        if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+      if (directionRef.current === null) {
+        if (Math.abs(dx) > 8 || Math.abs(dy) > 8) {
           if (Math.abs(dx) > Math.abs(dy)) {
-            isHorizontalRef.current = true;
+            directionRef.current = "h";
           } else {
-            // Vertical - release, let page scroll
-            isHorizontalRef.current = false;
+            directionRef.current = "v";
             isDraggingRef.current = false;
-            applyTranslate(0, true);
-            return;
+            return; // let browser handle vertical scroll
           }
         } else {
-          return; // not enough movement yet
+          return;
         }
       }
 
-      if (!isHorizontalRef.current) return;
+      if (directionRef.current !== "h") return;
 
-      e.preventDefault(); // prevent scroll while swiping horizontally
+      // Prevent vertical scroll while swiping horizontally
+      e.preventDefault();
       deltaXRef.current = dx;
-      applyTranslate(dx, false);
-    },
-    [applyTranslate],
-  );
+      applyTranslate(indexRef.current, dx, false);
+    }
 
-  const onPointerUp = useCallback(
-    (e: React.PointerEvent) => {
-      if (!isDraggingRef.current || e.pointerType !== "touch") return;
-      e.stopPropagation();
+    function onTouchEnd() {
+      if (!isDraggingRef.current) return;
       isDraggingRef.current = false;
 
       const dx = deltaXRef.current;
-      const width = viewportRef.current?.offsetWidth ?? 300;
+      const width = el!.offsetWidth || 300;
       const threshold = width * 0.18;
 
-      if (isHorizontalRef.current) {
+      if (directionRef.current === "h") {
         didSwipeRef.current = Math.abs(dx) > 8;
 
+        let newIdx = indexRef.current;
         if (dx <= -threshold) {
-          // swipe left -> next
-          setIndex((prev) => (prev >= total - 1 ? 0 : prev + 1));
+          newIdx = indexRef.current >= total - 1 ? 0 : indexRef.current + 1;
         } else if (dx >= threshold) {
-          // swipe right -> prev
-          setIndex((prev) => (prev <= 0 ? total - 1 : prev - 1));
+          newIdx = indexRef.current <= 0 ? total - 1 : indexRef.current - 1;
         }
+        setIndex(newIdx);
+        applyTranslate(newIdx, 0, true);
+      } else {
+        applyTranslate(indexRef.current, 0, true);
       }
 
-      // Animate to final position (the setIndex above triggers rerender with new index)
-      // For snap-back case or when setIndex fires, we animate in the effect below
       deltaXRef.current = 0;
-      applyTranslate(0, true);
-    },
-    [total, applyTranslate],
-  );
+    }
 
-  const onPointerCancel = useCallback(
-    (e: React.PointerEvent) => {
-      if (e.pointerType !== "touch") return;
+    function onTouchCancel() {
       isDraggingRef.current = false;
       deltaXRef.current = 0;
-      applyTranslate(0, true);
-    },
-    [applyTranslate],
-  );
+      applyTranslate(indexRef.current, 0, true);
+    }
+
+    el.addEventListener("touchstart", onTouchStart, { passive: true });
+    el.addEventListener("touchmove", onTouchMove, { passive: false });
+    el.addEventListener("touchend", onTouchEnd, { passive: true });
+    el.addEventListener("touchcancel", onTouchCancel, { passive: true });
+
+    return () => {
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchmove", onTouchMove);
+      el.removeEventListener("touchend", onTouchEnd);
+      el.removeEventListener("touchcancel", onTouchCancel);
+    };
+  }, [total, applyTranslate]);
 
   // ── Click guard: block navigation if user swiped ──
   const onClick = useCallback((e: React.MouseEvent) => {
@@ -180,10 +184,6 @@ export function ListingCardImageCarousel({ images, alt }: Props) {
     <div
       ref={viewportRef}
       className="card-carousel"
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onPointerCancel={onPointerCancel}
       onClick={onClick}
     >
       <div
@@ -211,7 +211,7 @@ export function ListingCardImageCarousel({ images, alt }: Props) {
         {index + 1}/{total}
       </span>
 
-      {/* Desktop arrows (hidden on touch via CSS) */}
+      {/* Desktop arrows */}
       {total > 1 && (
         <>
           <button
