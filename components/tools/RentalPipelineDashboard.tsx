@@ -87,6 +87,12 @@ export function RentalPipelineDashboard() {
   const [selectedSource, setSelectedSource] = useState<string>("REALESTATE_KH");
   const abortRef = useRef<AbortController | null>(null);
 
+  /* AI Processing state */
+  const [rewriteBatches, setRewriteBatches] = useState(5);
+  const [rewriteBatchSize, setRewriteBatchSize] = useState(50);
+  const [rewriteSequential, setRewriteSequential] = useState(true);
+  const [reviewBatches, setReviewBatches] = useState(3);
+
   const fetchSummary = useCallback(async () => {
     try {
       const res = await fetch("/api/tools/rentals/summary");
@@ -307,22 +313,22 @@ export function RentalPipelineDashboard() {
       <div style={styles.container}>
         {/* Header */}
         <h1 style={styles.heading}>Rental Data Pipeline</h1>
-        <p style={styles.subtitle}>Manage and monitor your rental data scraping jobs.</p>
+        <p style={styles.subtitle}>Manage and monitor your rental data scraping and processing jobs.</p>
 
-        {/* Action Buttons */}
-        <div style={styles.actionsRow}>
-          {/* Source selector */}
+        {/* ═══ Scraping Pipeline Section ═══ */}
+        <div style={{ ...styles.sectionDivider, justifyContent: "space-between" }}>
+          <span style={styles.sectionDividerLabel}>Scraping Pipeline</span>
           <select
             value={selectedSource}
             onChange={(e) => setSelectedSource(e.target.value)}
             disabled={!!runningJob}
             style={{
-              padding: "8px 12px",
+              padding: "5px 10px",
               background: "#0f172a",
               border: "1px solid #334155",
-              borderRadius: "8px",
-              color: "#e2e8f0",
-              fontSize: "13px",
+              borderRadius: "6px",
+              color: "#94a3b8",
+              fontSize: "12px",
               fontWeight: 500,
               cursor: "pointer",
               outline: "none",
@@ -332,74 +338,33 @@ export function RentalPipelineDashboard() {
             <option value="REALESTATE_KH">Realestate.kh</option>
             <option value="KHMER24">Khmer24</option>
           </select>
+        </div>
+
+        <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" as const, alignItems: "center" }}>
           <button
-            style={{
-              ...styles.actionBtn,
-              background: runningJob ? "#1a2e1a" : "linear-gradient(135deg, #065f46, #047857)",
-              borderColor: "#10b981",
-              color: "#ecfdf5",
-              fontWeight: 600,
-              opacity: runningJob ? 0.6 : 1,
-              minWidth: "180px",
-            }}
-            disabled={!!runningJob}
-            onClick={() => runJob("run-all", "Run Full Pipeline", `source=${selectedSource}`)}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <polygon points="5 3 19 12 5 21 5 3" />
-            </svg>
-            {runningJob === "Run Full Pipeline" ? "Running..." : "▶ Run Full Pipeline"}
-          </button>
-          <div style={{ width: "1px", height: "32px", background: "#334155", alignSelf: "center" }} />
-          <button
-            style={{
-              ...styles.actionBtn,
-              opacity: runningJob ? 0.6 : 1,
-            }}
+            style={{ ...styles.pipelineBtn, opacity: runningJob ? 0.6 : 1 }}
             disabled={!!runningJob}
             onClick={() => runJob("discover", "Discover New Listings", `source=${selectedSource}`)}
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
-              <line x1="8" y1="21" x2="16" y2="21" />
-              <line x1="12" y1="17" x2="12" y2="21" />
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
             </svg>
-            {runningJob === "Discover New Listings" ? "Running..." : "Discover New Listings"}
+            Discover New Listings
           </button>
           <button
-            style={{
-              ...styles.actionBtn,
-              opacity: runningJob ? 0.6 : 1,
-            }}
-            disabled={!!runningJob}
-            onClick={() => runJob("process-queue", "Process Queue Batch", `source=${selectedSource}`)}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-            </svg>
-            {runningJob === "Process Queue Batch" ? "Running..." : "Process Queue Batch"}
-          </button>
-          <button
-            style={{
-              ...styles.actionBtn,
-              opacity: runningJob ? 0.6 : 1,
-            }}
+            style={{ ...styles.pipelineBtn, opacity: runningJob ? 0.6 : 1 }}
             disabled={!!runningJob}
             onClick={() => runJob("build-index", "Build Daily Index")}
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-              <line x1="16" y1="2" x2="16" y2="6" />
-              <line x1="8" y1="2" x2="8" y2="6" />
-              <line x1="3" y1="10" x2="21" y2="10" />
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 12a9 9 0 1 1-6.219-8.56" />
             </svg>
-            {runningJob === "Build Daily Index" ? "Running..." : "Build Daily Index"}
+            Build Daily Index
           </button>
           <button
             style={{
-              ...styles.actionBtn,
-              background: "#1e293b",
-              borderColor: "#f59e0b",
+              ...styles.pipelineBtn,
+              borderColor: "#92400e",
               color: "#f59e0b",
               opacity: runningJob ? 0.6 : 1,
             }}
@@ -420,198 +385,35 @@ export function RentalPipelineDashboard() {
               }
             }}
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
-              <polyline points="22,6 12,13 2,6" />
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="3" y="3" width="18" height="18" rx="2" /><line x1="9" y1="3" x2="9" y2="21" />
             </svg>
-            {runningJob === "Cleaning Data" ? "Cleaning..." : "Clean Up Data"}
+            Clean Up Data
           </button>
-
-          <div style={{ width: "1px", height: "32px", background: "#334155", alignSelf: "center" }} />
-
-          {/* AI Review button */}
           <button
-            style={{
-              ...styles.actionBtn,
-              background: runningJob ? "#1a1e2e" : "linear-gradient(135deg, #4338ca, #6366f1)",
-              borderColor: "#818cf8",
-              color: "#e0e7ff",
-              fontWeight: 600,
-              opacity: runningJob ? 0.6 : 1,
-            }}
+            style={{ ...styles.pipelineBtn, opacity: runningJob ? 0.6 : 1 }}
             disabled={!!runningJob}
-            onClick={async () => {
-              setRunningJob("AI Review");
-              try {
-                const res = await fetch("/api/tools/rentals/ai-reviews", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ limit: 30, source: selectedSource }),
-                });
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                const data = await res.json();
-                setToast({
-                  message: `AI reviewed ${data.reviewed} listings (${data.flagged} flagged)`,
-                  type: "success",
-                });
-              } catch (err) {
-                setToast({ message: `AI Review failed: ${err instanceof Error ? err.message : err}`, type: "error" });
-              } finally {
-                setRunningJob(null);
-              }
-            }}
+            onClick={() => runJob("process-queue", "Process Queue Batch", `source=${selectedSource}`)}
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M9 11l3 3L22 4" />
-              <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
             </svg>
-            {runningJob === "AI Review" ? "Reviewing..." : "🤖 AI Review"}
+            Process Queue Batch
           </button>
-          {/* AI Review — Run All (batch loop) */}
-          <button
-            style={{
-              ...styles.actionBtn,
-              background: runningJob ? "#1a1e2e" : "#1e1b4b",
-              borderColor: "#818cf8",
-              color: "#c7d2fe",
-              fontSize: "12px",
-              opacity: runningJob ? 0.6 : 1,
-              minWidth: "auto",
-              padding: "6px 10px",
-            }}
-            disabled={!!runningJob}
-            title="Run AI Review in continuous batches until all listings are reviewed"
-            onClick={async () => {
-              if (!confirm("Run AI Review on ALL unreviewed listings? This will loop until done.")) return;
-              setRunningJob("AI Review All");
-              let totalReviewed = 0;
-              let totalFlagged = 0;
-              let batchNum = 0;
-              try {
-                while (true) {
-                  batchNum++;
-                  setToast({ message: `AI Review batch #${batchNum} running... (${totalReviewed} done so far)`, type: "success" });
-                  const res = await fetch("/api/tools/rentals/ai-reviews", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ limit: 30, source: selectedSource }),
-                  });
-                  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                  const data = await res.json();
-                  totalReviewed += data.reviewed || 0;
-                  totalFlagged += data.flagged || 0;
-                  if (!data.reviewed || data.reviewed === 0) break;
-                }
-                setToast({ message: `AI Review complete: ${totalReviewed} reviewed, ${totalFlagged} flagged (${batchNum} batches)`, type: "success" });
-              } catch (err) {
-                setToast({ message: `AI Review failed at batch #${batchNum}: ${err instanceof Error ? err.message : err}`, type: "error" });
-              } finally {
-                setRunningJob(null);
-              }
-            }}
-          >
-            ∞
-          </button>
+        </div>
 
-          {/* AI Rewrite button */}
+        <div style={{ display: "flex", gap: "12px", marginTop: "12px", flexWrap: "wrap" as const, alignItems: "center" }}>
           <button
             style={{
-              ...styles.actionBtn,
-              background: runningJob ? "#1a1e2e" : "linear-gradient(135deg, #7c2d12, #c2410c)",
-              borderColor: "#f97316",
-              color: "#fff7ed",
-              fontWeight: 600,
-              opacity: runningJob ? 0.6 : 1,
-            }}
-            disabled={!!runningJob}
-            onClick={async () => {
-              setRunningJob("AI Rewrite");
-              try {
-                const res = await fetch("/api/tools/rentals/ai-rewrite", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ limit: 10, source: selectedSource }),
-                });
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                const data = await res.json();
-                setToast({
-                  message: `AI rewrote ${data.rewritten} descriptions (${data.totalTokens} tokens)`,
-                  type: "success",
-                });
-              } catch (err) {
-                setToast({ message: `AI Rewrite failed: ${err instanceof Error ? err.message : err}`, type: "error" });
-              } finally {
-                setRunningJob(null);
-              }
-            }}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-            </svg>
-            {runningJob === "AI Rewrite" ? "Rewriting..." : "✍️ AI Rewrite"}
-          </button>
-          {/* AI Rewrite — Run All (batch loop) */}
-          <button
-            style={{
-              ...styles.actionBtn,
-              background: runningJob ? "#1a1e2e" : "#431407",
-              borderColor: "#f97316",
-              color: "#fed7aa",
-              fontSize: "12px",
-              opacity: runningJob ? 0.6 : 1,
-              minWidth: "auto",
-              padding: "6px 10px",
-            }}
-            disabled={!!runningJob}
-            title="Run AI Rewrite in continuous batches until all descriptions are rewritten"
-            onClick={async () => {
-              if (!confirm("Run AI Rewrite on ALL unrewritten listings? This will loop until done.")) return;
-              setRunningJob("AI Rewrite All");
-              let totalRewritten = 0;
-              let totalTokens = 0;
-              let batchNum = 0;
-              try {
-                while (true) {
-                  batchNum++;
-                  setToast({ message: `AI Rewrite batch #${batchNum} running... (${totalRewritten} done so far)`, type: "success" });
-                  const res = await fetch("/api/tools/rentals/ai-rewrite", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ limit: 10, source: selectedSource }),
-                  });
-                  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                  const data = await res.json();
-                  totalRewritten += data.rewritten || 0;
-                  totalTokens += data.totalTokens || 0;
-                  if (!data.rewritten || data.rewritten === 0) break;
-                }
-                setToast({ message: `AI Rewrite complete: ${totalRewritten} descriptions (${totalTokens} tokens, ${batchNum} batches)`, type: "success" });
-              } catch (err) {
-                setToast({ message: `AI Rewrite failed at batch #${batchNum}: ${err instanceof Error ? err.message : err}`, type: "error" });
-              } finally {
-                setRunningJob(null);
-              }
-            }}
-          >
-            ∞
-          </button>
-
-          {/* Log toggle */}
-          <button
-            style={{
-              ...styles.actionBtn,
+              ...styles.pipelineBtn,
               background: showLogs ? "#334155" : "#1e293b",
               borderColor: showLogs ? "#818cf8" : "#334155",
             }}
             onClick={() => setShowLogs((v) => !v)}
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
               <polyline points="14 2 14 8 20 8" />
-              <line x1="16" y1="13" x2="8" y2="13" />
-              <line x1="16" y1="17" x2="8" y2="17" />
-              <polyline points="10 9 9 9 8 9" />
             </svg>
             {showLogs ? "Hide Logs" : "Show Logs"}
             {logs.length > 0 && (
@@ -627,25 +429,180 @@ export function RentalPipelineDashboard() {
               </span>
             )}
           </button>
-
-          {/* Analytics link */}
           <a
             href="/tools/rentals/analytics"
             style={{
-              ...styles.actionBtn,
-              background: "#1e293b",
-              borderColor: "#3b82f6",
+              ...styles.pipelineBtn,
+              borderColor: "#1d4ed8",
               color: "#3b82f6",
               textDecoration: "none",
             }}
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <line x1="18" y1="20" x2="18" y2="10" />
               <line x1="12" y1="20" x2="12" y2="4" />
               <line x1="6" y1="20" x2="6" y2="14" />
             </svg>
             Analytics
           </a>
+        </div>
+
+        {/* ═══ AI Processing Section ═══ */}
+        <div style={styles.sectionDivider}>
+          <span style={styles.sectionDividerLabel}>AI Processing</span>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+          {/* AI Rewrite Card */}
+          <div style={styles.aiCard}>
+            <div style={styles.aiCardHeader}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#818cf8" strokeWidth="2">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+              </svg>
+              <span style={styles.aiCardTitle}>AI Rewrite</span>
+            </div>
+            <div style={styles.aiCardBody}>
+              <div style={styles.aiInputGroup}>
+                <label style={styles.aiInputLabel}>Run Batches:</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={rewriteBatches}
+                  onChange={(e) => setRewriteBatches(Math.max(1, parseInt(e.target.value) || 1))}
+                  style={styles.aiNumberInput}
+                  disabled={!!runningJob}
+                />
+              </div>
+              <div style={styles.aiInputGroup}>
+                <label style={styles.aiInputLabel}>Batch Size:</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={rewriteBatchSize}
+                  onChange={(e) => setRewriteBatchSize(Math.max(1, parseInt(e.target.value) || 1))}
+                  style={styles.aiNumberInput}
+                  disabled={!!runningJob}
+                />
+              </div>
+              <button
+                style={{
+                  ...styles.aiStartBtn,
+                  opacity: runningJob ? 0.6 : 1,
+                }}
+                disabled={!!runningJob}
+                onClick={async () => {
+                  setRunningJob("AI Rewrite");
+                  let totalRewritten = 0;
+                  let totalTokens = 0;
+                  try {
+                    for (let i = 0; i < rewriteBatches; i++) {
+                      setToast({ message: `AI Rewrite batch ${i + 1}/${rewriteBatches}... (${totalRewritten} done)`, type: "success" });
+                      const res = await fetch("/api/tools/rentals/ai-rewrite", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ limit: rewriteBatchSize, source: selectedSource }),
+                      });
+                      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                      const data = await res.json();
+                      totalRewritten += data.rewritten || 0;
+                      totalTokens += data.totalTokens || 0;
+                      if (!data.rewritten || data.rewritten === 0) break;
+                      if (rewriteSequential && i < rewriteBatches - 1) {
+                        await new Promise((r) => setTimeout(r, 1000));
+                      }
+                    }
+                    setToast({ message: `AI Rewrite complete: ${totalRewritten} descriptions (${totalTokens} tokens)`, type: "success" });
+                  } catch (err) {
+                    setToast({ message: `AI Rewrite failed: ${err instanceof Error ? err.message : err}`, type: "error" });
+                  } finally {
+                    setRunningJob(null);
+                  }
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                  <polygon points="5 3 19 12 5 21 5 3" />
+                </svg>
+                Start
+              </button>
+            </div>
+            <label style={styles.aiCheckboxRow}>
+              <input
+                type="checkbox"
+                checked={rewriteSequential}
+                onChange={(e) => setRewriteSequential(e.target.checked)}
+                style={styles.aiCheckbox}
+              />
+              <span style={styles.aiCheckboxLabel}>Run Sequentially</span>
+            </label>
+          </div>
+
+          {/* AI Review Card */}
+          <div style={styles.aiCard}>
+            <div style={styles.aiCardHeader}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#818cf8" strokeWidth="2">
+                <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              <span style={styles.aiCardTitle}>AI Review</span>
+            </div>
+            <div style={styles.aiCardBody}>
+              <div style={styles.aiInputGroup}>
+                <label style={styles.aiInputLabel}>Review Batches:</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={reviewBatches}
+                  onChange={(e) => setReviewBatches(Math.max(1, parseInt(e.target.value) || 1))}
+                  style={styles.aiNumberInput}
+                  disabled={!!runningJob}
+                />
+              </div>
+              <div style={{ flex: 1 }} />
+              <button
+                style={{
+                  ...styles.aiStartBtn,
+                  opacity: runningJob ? 0.6 : 1,
+                }}
+                disabled={!!runningJob}
+                onClick={async () => {
+                  setRunningJob("AI Review");
+                  let totalReviewed = 0;
+                  let totalFlagged = 0;
+                  try {
+                    for (let i = 0; i < reviewBatches; i++) {
+                      setToast({ message: `AI Review batch ${i + 1}/${reviewBatches}... (${totalReviewed} done)`, type: "success" });
+                      const res = await fetch("/api/tools/rentals/ai-reviews", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ limit: 30, source: selectedSource }),
+                      });
+                      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                      const data = await res.json();
+                      totalReviewed += data.reviewed || 0;
+                      totalFlagged += data.flagged || 0;
+                      if (!data.reviewed || data.reviewed === 0) break;
+                      if (i < reviewBatches - 1) {
+                        await new Promise((r) => setTimeout(r, 1000));
+                      }
+                    }
+                    setToast({ message: `AI Review complete: ${totalReviewed} reviewed, ${totalFlagged} flagged`, type: "success" });
+                  } catch (err) {
+                    setToast({ message: `AI Review failed: ${err instanceof Error ? err.message : err}`, type: "error" });
+                  } finally {
+                    setRunningJob(null);
+                  }
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                  <polygon points="5 3 19 12 5 21 5 3" />
+                </svg>
+                Start
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Progress Bar */}
@@ -816,26 +773,108 @@ const styles: Record<string, React.CSSProperties> = {
     marginTop: "6px",
     marginBottom: "0",
   },
-  actionsRow: {
+  sectionDivider: {
     display: "flex",
+    alignItems: "center",
     gap: "12px",
-    marginTop: "28px",
-    flexWrap: "wrap" as const,
-    alignItems: "center",
+    marginTop: "32px",
+    marginBottom: "16px",
   },
-  actionBtn: {
+  sectionDividerLabel: {
+    fontSize: "13px",
+    fontWeight: 600,
+    color: "#94a3b8",
+    textTransform: "uppercase" as const,
+    letterSpacing: "0.08em",
+    whiteSpace: "nowrap" as const,
+  },
+  pipelineBtn: {
     display: "flex",
     alignItems: "center",
-    gap: "10px",
-    padding: "14px 24px",
+    gap: "8px",
+    padding: "10px 18px",
     background: "#1e293b",
     border: "1px solid #334155",
-    borderRadius: "12px",
+    borderRadius: "10px",
     color: "#e2e8f0",
-    fontSize: "15px",
+    fontSize: "13px",
     fontWeight: 500,
     cursor: "pointer",
     transition: "background 0.15s, border-color 0.15s",
+  },
+  aiCard: {
+    background: "rgba(15, 23, 42, 0.6)",
+    border: "1px solid #1e293b",
+    borderRadius: "12px",
+    padding: "20px",
+    backdropFilter: "blur(8px)",
+  },
+  aiCardHeader: {
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+    marginBottom: "16px",
+  },
+  aiCardTitle: {
+    fontSize: "16px",
+    fontWeight: 600,
+    color: "#f8fafc",
+  },
+  aiCardBody: {
+    display: "flex",
+    alignItems: "center",
+    gap: "12px",
+    flexWrap: "wrap" as const,
+  },
+  aiInputGroup: {
+    display: "flex",
+    alignItems: "center",
+    gap: "6px",
+  },
+  aiInputLabel: {
+    fontSize: "13px",
+    color: "#94a3b8",
+    whiteSpace: "nowrap" as const,
+  },
+  aiNumberInput: {
+    width: "60px",
+    padding: "6px 8px",
+    background: "#0f172a",
+    border: "1px solid #334155",
+    borderRadius: "6px",
+    color: "#e2e8f0",
+    fontSize: "13px",
+    textAlign: "center" as const,
+  },
+  aiStartBtn: {
+    display: "flex",
+    alignItems: "center",
+    gap: "6px",
+    padding: "8px 18px",
+    background: "#065f46",
+    border: "1px solid #10b981",
+    borderRadius: "8px",
+    color: "#ecfdf5",
+    fontSize: "13px",
+    fontWeight: 600,
+    cursor: "pointer",
+  },
+  aiCheckboxRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    marginTop: "12px",
+    cursor: "pointer",
+  },
+  aiCheckbox: {
+    accentColor: "#6366f1",
+    width: "16px",
+    height: "16px",
+    cursor: "pointer",
+  },
+  aiCheckboxLabel: {
+    fontSize: "13px",
+    color: "#94a3b8",
   },
   statsRow: {
     display: "grid",
