@@ -37,8 +37,12 @@ const DISTRICT_NORMALIZE: Record<string, string> = {
   "boeung trabek": "Boeng Trabaek",
   "toul tompong 1": "Toul Tompong 1",
   "tuol tumpong 1": "Toul Tompong 1",
+  "toul tum poung 1": "Toul Tompong 1",
+  "toul tum pong 1": "Toul Tompong 1",
   "toul tompong 2": "Toul Tompong 2",
   "tuol tumpong 2": "Toul Tompong 2",
+  "toul tum poung 2": "Toul Tompong 2",
+  "toul tum pong 2": "Toul Tompong 2",
   "russian market": "Toul Tompong 1",
   "olympic": "Olympic",
   "tumnob tuek": "Tumnob Tuek",
@@ -61,11 +65,25 @@ const DISTRICT_NORMALIZE: Record<string, string> = {
   "chey chumneah": "Chey Chumneah",
   "phsar chas": "Phsar Chas",
   "boeng reang": "Boeng Reang",
+  "phsar kandal 1": "Phsar Kandal 1",
+  "phsar kandal i": "Phsar Kandal 1",
+  "phsar kandal 2": "Phsar Kandal 2",
+  "phsar kandal ii": "Phsar Kandal 2",
+  "phsar thmei 1": "Phsar Thmei 1",
+  "phsar thmei i": "Phsar Thmei 1",
+  "phsar thmey 1": "Phsar Thmei 1",
+  "phsar thmei 2": "Phsar Thmei 2",
+  "phsar thmei ii": "Phsar Thmei 2",
+  "phsar thmey 2": "Phsar Thmei 2",
+  "phsar thmei 3": "Phsar Thmei 3",
+  "phsar thmei iii": "Phsar Thmei 3",
+  "phsar thmey 3": "Phsar Thmei 3",
   // Generic Daun Penh / ambiguous sangkats → khan level
   "daun penh": "Daun Penh",
   "doun penh": "Daun Penh",
   "phsar kandal": "Daun Penh",
   "phsar thmey": "Daun Penh",
+  "phsar thmei": "Daun Penh",
 
   /* ── 7 Makara sangkats ────────────────────────────── */
   "mittapheap": "Mittapheap",
@@ -136,10 +154,10 @@ const DISTRICT_NORMALIZE: Record<string, string> = {
   "phsar daeum thkov": "Phsar Daeum Thkov",
   "chak angrae leu": "Chak Angrae Leu",
   "chak angrae kraom": "Chak Angrae Kraom",
-  // Generic Meanchey → khan level (GeoJSON parent district = "Stung Meanchey")
-  "meanchey": "Stung Meanchey",
-  "mean chey": "Stung Meanchey",
-  "chak angrae": "Stung Meanchey",
+  // Generic Meanchey → khan level (GeoJSON parent district = "Meanchey")
+  "meanchey": "Meanchey",
+  "mean chey": "Meanchey",
+  "chak angrae": "Meanchey",
 
   /* ── Chbar Ampov sangkats ──────────────────────────── */
   "nirouth": "Nirouth",
