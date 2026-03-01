@@ -9732,6 +9732,42 @@ body.menu-open {
   }
 }
 
+/* ── Heatmap filter grid & pills ─────────────────────────── */
+
+.heatmap-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.heatmap-filter-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 32px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+  box-sizing: border-box;
+}
+
+@media (max-width: 900px) {
+  .heatmap-filter-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .heatmap-filter-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
 /* ── Heatmap compact filter toggle (mobile) ──────────────── */
 
 @media (max-width: 640px) {

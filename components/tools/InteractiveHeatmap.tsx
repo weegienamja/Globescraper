@@ -649,93 +649,86 @@ export function InteractiveHeatmap({ data, height = 450, showListingPoints = tru
           )}
           <div
             className={compactFilters ? "heatmap-filter-bar heatmap-filter-bar--compact" + (filtersOpen ? " heatmap-filter-bar--open" : "") : "heatmap-filter-bar"}
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: "8px",
-              marginBottom: "10px",
-              alignItems: "center",
-            }}
+            style={{ marginBottom: "10px" }}
           >
-          <span style={{ color: "#94a3b8", fontSize: "12px", fontWeight: 600, marginRight: "4px" }}>
+          <span style={{ color: "#94a3b8", fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "6px" }}>
             Filter:
           </span>
-          {allTypes.map((type) => {
-            const active = selectedTypes.has(type);
-            return (
-              <label
-                key={type}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  padding: "4px 10px",
-                  fontSize: "12px",
-                  fontWeight: 600,
-                  borderRadius: "6px",
-                  border: active ? "1px solid #3b82f6" : "1px solid #334155",
-                  background: active ? "#1e3a5f" : "#0f172a",
-                  color: active ? "#93c5fd" : "#64748b",
-                  cursor: "pointer",
-                  transition: "all 0.15s ease",
-                  userSelect: "none",
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={active}
-                  onChange={() => toggleType(type)}
+          <div className="heatmap-filter-grid">
+            {allTypes.map((type) => {
+              const active = selectedTypes.has(type);
+              return (
+                <label
+                  key={type}
+                  className="heatmap-filter-pill"
                   style={{
-                    accentColor: "#3b82f6",
-                    width: "14px",
-                    height: "14px",
-                    cursor: "pointer",
+                    border: active ? "1px solid #3b82f6" : "1px solid #334155",
+                    background: active ? "#1e3a5f" : "#0f172a",
+                    color: active ? "#93c5fd" : "#64748b",
                   }}
-                />
-                {TYPE_LABELS[type] || type}
-              </label>
-            );
-          })}
-          {selectedTypes.size < allTypes.length && (
-            <button
-              onClick={selectAllTypes}
-              style={{
-                padding: "4px 10px",
-                fontSize: "11px",
-                borderRadius: "6px",
-                border: "1px solid #334155",
-                background: "transparent",
-                color: "#64748b",
-                cursor: "pointer",
-              }}
-            >
-              Select All
-            </button>
-          )}
-          {/* Divider */}
-          {showListingPoints && (
-            <>
-              <span style={{ color: "#1e293b", fontSize: "12px", margin: "0 2px" }}>|</span>
+                >
+                  <input
+                    type="checkbox"
+                    checked={active}
+                    onChange={() => toggleType(type)}
+                    style={{
+                      accentColor: "#3b82f6",
+                      width: "14px",
+                      height: "14px",
+                      flexShrink: 0,
+                      cursor: "pointer",
+                    }}
+                  />
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {TYPE_LABELS[type] || type}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+          <div style={{ display: "flex", gap: "8px", alignItems: "center", marginTop: "8px" }}>
+            {selectedTypes.size < allTypes.length && (
               <button
-                onClick={() => setShowPoints((v) => !v)}
+                onClick={selectAllTypes}
                 style={{
                   padding: "4px 10px",
-                  fontSize: "12px",
-                  fontWeight: 600,
+                  fontSize: "11px",
                   borderRadius: "6px",
-                  border: showPoints ? "1px solid #10b981" : "1px solid #334155",
-                  background: showPoints ? "#064e3b" : "#0f172a",
-                  color: showPoints ? "#6ee7b7" : "#64748b",
+                  border: "1px solid #334155",
+                  background: "transparent",
+                  color: "#64748b",
                   cursor: "pointer",
-                  transition: "all 0.15s ease",
                 }}
               >
-                {pointsLoading ? "Loading\u2026" : showPoints
-                  ? `Pins ON (${filteredPoints.length})`
-                  : "Show Pins"}
+                Select All
               </button>
-            </>
-          )}
+            )}
+            {showListingPoints && (
+              <>
+                {selectedTypes.size < allTypes.length && (
+                  <span style={{ color: "#1e293b", fontSize: "12px", margin: "0 2px" }}>|</span>
+                )}
+                <button
+                  onClick={() => setShowPoints((v) => !v)}
+                  style={{
+                    padding: "4px 10px",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    borderRadius: "6px",
+                    border: showPoints ? "1px solid #10b981" : "1px solid #334155",
+                    background: showPoints ? "#064e3b" : "#0f172a",
+                    color: showPoints ? "#6ee7b7" : "#64748b",
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  {pointsLoading ? "Loading\u2026" : showPoints
+                    ? `Pins ON (${filteredPoints.length})`
+                    : "Show Pins"}
+                </button>
+              </>
+            )}
+          </div>
         </div>
         </>
       )}
