@@ -696,6 +696,7 @@
   touch-action: pan-y;
   user-select: none;
   -webkit-user-select: none;
+  z-index: 2;
 }
 
 .card-carousel--empty {
@@ -709,6 +710,8 @@
   font-size: 0.8125rem;
   flex-direction: column;
   gap: 6px;
+  position: relative;
+  z-index: 2;
 }
 
 .card-carousel--empty svg {
