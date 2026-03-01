@@ -244,8 +244,7 @@ export async function runAiReview(options: ReviewOptions = {}): Promise<{
   validateGeminiKey();
 
   // Build query
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const where: any = { isActive: true };
+  const where: Record<string, unknown> = { isActive: true };
 
   if (options.source) {
     where.source = options.source;

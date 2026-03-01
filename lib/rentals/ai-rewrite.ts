@@ -176,8 +176,8 @@ export async function runAiRewrite(options: RewriteOptions = {}): Promise<{
   validateGeminiKey();
 
   // Build query
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const where: any = { isActive: true };
+  // eslint-disable-next-line no-explicit-any
+  const where: Record<string, unknown> = { isActive: true };
 
   if (options.source) {
     where.source = options.source;
