@@ -2,8 +2,13 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useState, useRef, useEffect } from "react";
+import { ADVANCED_PARAM_KEYS, ALL_PARAM_KEYS } from "@/lib/rentalsQuery";
 
-/* ── Static option data ───────────────────────────────────── */
+/* ================================================================
+   Static option data
+   ================================================================ */
+
+// -- Quick filter options --
 
 const PROPERTY_TYPES = [
   { value: "", label: "Property Type" },
@@ -18,63 +23,78 @@ const PROPERTY_TYPES = [
 
 const PRICE_OPTIONS = buildPriceOptions();
 
+// bedsMin: single selector => bedrooms >= N
 const BED_OPTIONS = [
-  { value: "", label: "Min Beds" },
-  ...Array.from({ length: 5 }, (_, i) => ({
-    value: String(i + 1),
-    label: i < 4 ? String(i + 1) : "5+",
-  })),
+  { value: "", label: "Any Beds" },
+  { value: "0", label: "Studio" },
+  { value: "1", label: "1+" },
+  { value: "2", label: "2+" },
+  { value: "3", label: "3+" },
+  { value: "4", label: "4+" },
+  { value: "5", label: "5+" },
 ];
 
-const MAX_BED_OPTIONS = [
-  { value: "", label: "Max Beds" },
-  ...Array.from({ length: 5 }, (_, i) => ({
-    value: String(i + 1),
-    label: String(i + 1),
-  })),
-];
-
-const BATH_OPTIONS = [
-  { value: "", label: "Min Baths" },
-  ...Array.from({ length: 4 }, (_, i) => ({
-    value: String(i + 1),
-    label: i < 3 ? String(i + 1) : "4+",
-  })),
-];
-
-const MAX_BATH_OPTIONS = [
-  { value: "", label: "Max Baths" },
-  ...Array.from({ length: 4 }, (_, i) => ({
-    value: String(i + 1),
-    label: String(i + 1),
-  })),
-];
-
+// sort: controls orderBy on the server
 const SORT_OPTIONS = [
   { value: "", label: "Newest Listed" },
-  { value: "price_asc", label: "Lowest Price" },
-  { value: "price_desc", label: "Highest Price" },
-  { value: "beds_desc", label: "Most Bedrooms" },
+  { value: "updated", label: "Recently Updated" },
+  { value: "price_asc", label: "Price Low to High" },
+  { value: "price_desc", label: "Price High to Low" },
+  { value: "size_desc", label: "Size Large to Small" },
 ];
 
-/* ── Component ────────────────────────────────────────────── */
+// -- Advanced filter options --
+
+const BATH_MIN_OPTIONS = [
+  { value: "", label: "Min Baths" },
+  { value: "1", label: "1" },
+  { value: "2", label: "2" },
+  { value: "3", label: "3" },
+  { value: "4", label: "4+" },
+];
+
+const BATH_MAX_OPTIONS = [
+  { value: "", label: "Max Baths" },
+  { value: "1", label: "1" },
+  { value: "2", label: "2" },
+  { value: "3", label: "3" },
+  { value: "4", label: "4" },
+];
+
+// dateAdded: filter by firstSeenAt window
+const DATE_ADDED_OPTIONS = [
+  { value: "", label: "Anytime" },
+  { value: "24h", label: "Last 24 hours" },
+  { value: "3d", label: "Last 3 days" },
+  { value: "7d", label: "Last 7 days" },
+  { value: "14d", label: "Last 14 days" },
+  { value: "1m", label: "Last month" },
+];
+
+/* ================================================================
+   Component
+   ================================================================ */
 
 interface RentalFiltersProps {
+  /** Distinct city values from DB */
   cities: string[];
+  /** Distinct district values from DB (for the selected city, or all) */
   districts: string[];
 }
 
 export function RentalFilters({ cities, districts }: RentalFiltersProps) {
   const router = useRouter();
   const sp = useSearchParams();
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [advOpen, setAdvOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const [panelHeight, setPanelHeight] = useState(0);
 
-  /* Measure inner height whenever panel opens */
+  // Re-measure expandable panel height when it opens or re-renders
   useEffect(() => {
     if (panelRef.current) setPanelHeight(panelRef.current.scrollHeight);
-  }, [filtersOpen]);
+  }, [advOpen]);
+
+  /* ----- Helpers to read / write URL search params ----- */
 
   const apply = useCallback(
     (overrides: Record<string, string>) => {
@@ -83,41 +103,68 @@ export function RentalFilters({ cities, districts }: RentalFiltersProps) {
         if (v) params.set(k, v);
         else params.delete(k);
       }
+      // Always reset to page 1 when filters change
       params.set("page", "1");
       router.push(`/rentals?${params.toString()}`);
     },
     [router, sp],
   );
 
+  // Collect every named input in the form and push to URL
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
-    apply({
-      city: (fd.get("city") as string) || "",
-      district: (fd.get("district") as string) || "",
-      type: (fd.get("type") as string) || "",
-      beds: (fd.get("beds") as string) || "",
-      maxBeds: (fd.get("maxBeds") as string) || "",
-      min: (fd.get("min") as string) || "",
-      max: (fd.get("max") as string) || "",
-      baths: (fd.get("baths") as string) || "",
-      maxBaths: (fd.get("maxBaths") as string) || "",
-      sort: (fd.get("sort") as string) || "",
-    });
+    const overrides: Record<string, string> = {};
+    // Quick filters
+    for (const key of [
+      "city", "district", "minPrice", "maxPrice",
+      "bedsMin", "propertyType", "sort",
+    ]) {
+      overrides[key] = (fd.get(key) as string) || "";
+    }
+    // Advanced filters
+    for (const key of ADVANCED_PARAM_KEYS) {
+      // Checkboxes: present in FormData only when checked
+      if (key === "available" || key === "photos" || key === "geo") {
+        overrides[key] = fd.has(key) ? "1" : "";
+      } else {
+        overrides[key] = (fd.get(key) as string) || "";
+      }
+    }
+    apply(overrides);
   };
 
-  /* Count active extra-panel filters for badge */
-  const extraFilterCount = [
-    sp.get("baths"),
-    sp.get("maxBaths"),
-    sp.get("maxBeds"),
-    sp.get("sort"),
-  ].filter(Boolean).length;
+  /* ----- Clear handlers ----- */
+
+  // Clear All: wipe every filter and reset page
+  const clearAll = () => router.push("/rentals");
+
+  // Clear Advanced: remove only advanced params, keep quick filters
+  const clearAdvanced = () => {
+    const params = new URLSearchParams(sp.toString());
+    for (const key of ADVANCED_PARAM_KEYS) params.delete(key);
+    params.set("page", "1");
+    router.push(`/rentals?${params.toString()}`);
+  };
+
+  /* ----- Active advanced filter count for badge -----
+     Counts non-empty advanced params. "available" defaults to on
+     so we only count it if it is explicitly "1". dateAdded only
+     counts if not "" (Anytime). */
+  const advancedFilterCount = ADVANCED_PARAM_KEYS.filter((key) => {
+    const v = sp.get(key);
+    if (!v) return false;
+    if (key === "dateAdded" && v === "anytime") return false;
+    return true;
+  }).length;
 
   return (
     <form className="rentals-filters" onSubmit={handleSubmit}>
-      {/* ── Top bar ─────────────────────────────────────── */}
+      {/* ============================================================
+          ROW 1: City, District, Min Price, Max Price
+          ============================================================ */}
       <div className="rentals-filters__bar">
+        {/* city -> RentalListing.city exact match */}
         <select
           name="city"
           className="rentals-filters__select"
@@ -130,6 +177,7 @@ export function RentalFilters({ cities, districts }: RentalFiltersProps) {
           ))}
         </select>
 
+        {/* district -> RentalListing.district exact match */}
         <select
           name="district"
           className="rentals-filters__select"
@@ -142,60 +190,53 @@ export function RentalFilters({ cities, districts }: RentalFiltersProps) {
           ))}
         </select>
 
-        <div className="rentals-filters__pair">
-          <select
-            name="min"
-            className="rentals-filters__select rentals-filters__select--sm"
-            defaultValue={sp.get("min") ?? ""}
-            aria-label="Minimum price"
-          >
-            <option value="">Min Price</option>
-            {PRICE_OPTIONS.map((p) => (
-              <option key={p.value} value={p.value}>{p.label}</option>
-            ))}
-          </select>
-          <span className="rentals-filters__pair-sep">–</span>
-          <select
-            name="max"
-            className="rentals-filters__select rentals-filters__select--sm"
-            defaultValue={sp.get("max") ?? ""}
-            aria-label="Maximum price"
-          >
-            <option value="">Max Price</option>
-            {PRICE_OPTIONS.map((p) => (
-              <option key={p.value} value={p.value}>{p.label}</option>
-            ))}
-          </select>
-        </div>
-
-        <div className="rentals-filters__pair">
-          <select
-            name="beds"
-            className="rentals-filters__select rentals-filters__select--sm"
-            defaultValue={sp.get("beds") ?? ""}
-            aria-label="Minimum bedrooms"
-          >
-            {BED_OPTIONS.map((b) => (
-              <option key={b.value} value={b.value}>{b.label}</option>
-            ))}
-          </select>
-          <span className="rentals-filters__pair-sep">–</span>
-          <select
-            name="maxBeds"
-            className="rentals-filters__select rentals-filters__select--sm"
-            defaultValue={sp.get("maxBeds") ?? ""}
-            aria-label="Maximum bedrooms"
-          >
-            {MAX_BED_OPTIONS.map((b) => (
-              <option key={b.value} value={b.value}>{b.label}</option>
-            ))}
-          </select>
-        </div>
+        {/* minPrice / maxPrice -> priceMonthlyUsd range */}
+        <select
+          name="minPrice"
+          className="rentals-filters__select"
+          defaultValue={sp.get("minPrice") ?? ""}
+          aria-label="Minimum price"
+        >
+          <option value="">Min Price</option>
+          {PRICE_OPTIONS.map((p) => (
+            <option key={p.value} value={p.value}>{p.label}</option>
+          ))}
+        </select>
 
         <select
-          name="type"
+          name="maxPrice"
           className="rentals-filters__select"
-          defaultValue={sp.get("type") ?? ""}
+          defaultValue={sp.get("maxPrice") ?? ""}
+          aria-label="Maximum price"
+        >
+          <option value="">Max Price</option>
+          {PRICE_OPTIONS.map((p) => (
+            <option key={p.value} value={p.value}>{p.label}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* ============================================================
+          ROW 2: Beds, Property Type, Sort By, Filters toggle, actions
+          ============================================================ */}
+      <div className="rentals-filters__bar rentals-filters__bar--row2">
+        {/* bedsMin -> bedrooms >= N */}
+        <select
+          name="bedsMin"
+          className="rentals-filters__select"
+          defaultValue={sp.get("bedsMin") ?? ""}
+          aria-label="Minimum bedrooms"
+        >
+          {BED_OPTIONS.map((b) => (
+            <option key={b.value} value={b.value}>{b.label}</option>
+          ))}
+        </select>
+
+        {/* propertyType -> propertyType enum */}
+        <select
+          name="propertyType"
+          className="rentals-filters__select"
+          defaultValue={sp.get("propertyType") ?? ""}
           aria-label="Filter by property type"
         >
           {PROPERTY_TYPES.map((t) => (
@@ -203,12 +244,29 @@ export function RentalFilters({ cities, districts }: RentalFiltersProps) {
           ))}
         </select>
 
+        {/* sort -> orderBy clause (see lib/rentalsQuery.ts) */}
+        <select
+          name="sort"
+          className="rentals-filters__select"
+          defaultValue={sp.get("sort") ?? ""}
+          aria-label="Sort results"
+        >
+          {SORT_OPTIONS.map((s) => (
+            <option key={s.value} value={s.value}>{s.label}</option>
+          ))}
+        </select>
+
+        {/* Advanced Filters toggle */}
         <button
           type="button"
-          className={`rentals-filters__toggle${filtersOpen ? " rentals-filters__toggle--open" : ""}${extraFilterCount > 0 ? " rentals-filters__toggle--active" : ""}`}
-          onClick={() => setFiltersOpen((v) => !v)}
-          aria-expanded={filtersOpen}
-          aria-controls="filters-panel"
+          className={
+            "rentals-filters__toggle"
+            + (advOpen ? " rentals-filters__toggle--open" : "")
+            + (advancedFilterCount > 0 ? " rentals-filters__toggle--active" : "")
+          }
+          onClick={() => setAdvOpen((v) => !v)}
+          aria-expanded={advOpen}
+          aria-controls="adv-filters-panel"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
             <line x1="4" y1="6" x2="20" y2="6" />
@@ -218,59 +276,153 @@ export function RentalFilters({ cities, districts }: RentalFiltersProps) {
             <circle cx="16" cy="12" r="2" fill="currentColor" />
             <circle cx="10" cy="18" r="2" fill="currentColor" />
           </svg>
-          Filters
-          {extraFilterCount > 0 && (
-            <span className="rentals-filters__badge">{extraFilterCount}</span>
-          )}
+          {/* Show count only when advanced filters are active */}
+          {advancedFilterCount > 0 ? `Filters (${advancedFilterCount})` : "Filters"}
           <svg className="rentals-filters__chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
             <path d="m6 9 6 6 6-6" />
           </svg>
         </button>
-      </div>
 
-      {/* ── Collapsible panel ───────────────────────────── */}
-      <div
-        id="filters-panel"
-        className="rentals-filters__panel"
-        style={{ maxHeight: filtersOpen ? panelHeight + 32 : 0, opacity: filtersOpen ? 1 : 0 }}
-      >
-        <div ref={panelRef} className="rentals-filters__panel-inner">
-          <div className="rentals-filters__section">
-            <h3 className="rentals-filters__section-title">Bathrooms</h3>
-            <div className="rentals-filters__pair">
-              <select name="baths" className="rentals-filters__select" defaultValue={sp.get("baths") ?? ""} aria-label="Minimum bathrooms">
-                {BATH_OPTIONS.map((b) => <option key={b.value} value={b.value}>{b.label}</option>)}
-              </select>
-              <span className="rentals-filters__pair-sep">–</span>
-              <select name="maxBaths" className="rentals-filters__select" defaultValue={sp.get("maxBaths") ?? ""} aria-label="Maximum bathrooms">
-                {MAX_BATH_OPTIONS.map((b) => <option key={b.value} value={b.value}>{b.label}</option>)}
-              </select>
-            </div>
-          </div>
-
-          <div className="rentals-filters__section">
-            <h3 className="rentals-filters__section-title">Sort by</h3>
-            <select name="sort" className="rentals-filters__select" defaultValue={sp.get("sort") ?? ""} aria-label="Sort results">
-              {SORT_OPTIONS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-            </select>
-          </div>
+        {/* Actions: right-aligned on desktop */}
+        <div className="rentals-filters__actions">
+          <button
+            type="button"
+            className="rentals-filters__clear"
+            onClick={clearAll}
+            aria-label="Clear all filters"
+          >
+            Clear All
+          </button>
+          <button type="submit" className="rentals-filters__btn" aria-label="Apply filters">
+            Search
+          </button>
         </div>
       </div>
 
-      {/* ── Actions ─────────────────────────────────────── */}
-      <div className="rentals-filters__actions">
-        <button type="button" className="rentals-filters__clear" onClick={() => router.push("/rentals")} aria-label="Clear all filters">
-          Clear
-        </button>
-        <button type="submit" className="rentals-filters__btn" aria-label="Apply filters">
-          Search
-        </button>
+      {/* ============================================================
+          ADVANCED FILTERS panel (collapsible)
+          ============================================================ */}
+      <div
+        id="adv-filters-panel"
+        className="rentals-filters__panel"
+        style={{
+          maxHeight: advOpen ? panelHeight + 40 : 0,
+          opacity: advOpen ? 1 : 0,
+        }}
+      >
+        <div ref={panelRef} className="rentals-filters__panel-inner">
+          <h3 className="rentals-filters__panel-heading">Advanced Filters</h3>
+
+          <div className="rentals-filters__adv-grid">
+            {/* ---------- Left column ---------- */}
+            <div className="rentals-filters__adv-col">
+              {/* Bathrooms: bathsMin / bathsMax -> bathrooms range */}
+              <div className="rentals-filters__section">
+                <h4 className="rentals-filters__section-title">Bathrooms</h4>
+                <div className="rentals-filters__pair">
+                  <select name="bathsMin" className="rentals-filters__select" defaultValue={sp.get("bathsMin") ?? ""} aria-label="Minimum bathrooms">
+                    {BATH_MIN_OPTIONS.map((b) => <option key={b.value} value={b.value}>{b.label}</option>)}
+                  </select>
+                  <span className="rentals-filters__pair-sep">-</span>
+                  <select name="bathsMax" className="rentals-filters__select" defaultValue={sp.get("bathsMax") ?? ""} aria-label="Maximum bathrooms">
+                    {BATH_MAX_OPTIONS.map((b) => <option key={b.value} value={b.value}>{b.label}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              {/* Size (sqm): sizeMin / sizeMax -> sizeSqm range */}
+              <div className="rentals-filters__section">
+                <h4 className="rentals-filters__section-title">Size (sqm)</h4>
+                <div className="rentals-filters__pair">
+                  <input
+                    name="sizeMin"
+                    type="number"
+                    min="0"
+                    className="rentals-filters__input"
+                    placeholder="Min Size"
+                    defaultValue={sp.get("sizeMin") ?? ""}
+                    aria-label="Minimum size in sqm"
+                  />
+                  <span className="rentals-filters__pair-sep">sqm</span>
+                  <span className="rentals-filters__pair-sep">-</span>
+                  <input
+                    name="sizeMax"
+                    type="number"
+                    min="0"
+                    className="rentals-filters__input"
+                    placeholder="Max Size"
+                    defaultValue={sp.get("sizeMax") ?? ""}
+                    aria-label="Maximum size in sqm"
+                  />
+                  <span className="rentals-filters__pair-sep">sqm</span>
+                </div>
+              </div>
+
+              {/* Date added: dateAdded -> firstSeenAt >= cutoff */}
+              <div className="rentals-filters__section">
+                <h4 className="rentals-filters__section-title">Date added</h4>
+                <select name="dateAdded" className="rentals-filters__select" defaultValue={sp.get("dateAdded") ?? ""} aria-label="Date added filter">
+                  {DATE_ADDED_OPTIONS.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
+                </select>
+              </div>
+            </div>
+
+            {/* ---------- Right column ---------- */}
+            <div className="rentals-filters__adv-col">
+              {/* Availability and quality toggles */}
+              <div className="rentals-filters__section">
+                <h4 className="rentals-filters__section-title">Availability and quality toggles</h4>
+                <label className="rentals-filters__checkbox">
+                  <input type="checkbox" name="available" value="1" defaultChecked={sp.get("available") === "1"} />
+                  Available only
+                </label>
+                {/* photos=1 -> imageUrlsJson contains at least one URL */}
+                <label className="rentals-filters__checkbox">
+                  <input type="checkbox" name="photos" value="1" defaultChecked={sp.get("photos") === "1"} />
+                  Has photos only
+                </label>
+                {/* geo=1 -> latitude and longitude both not null */}
+                <label className="rentals-filters__checkbox">
+                  <input type="checkbox" name="geo" value="1" defaultChecked={sp.get("geo") === "1"} />
+                  Has exact location only
+                </label>
+              </div>
+            </div>
+          </div>
+
+          {/* Advanced panel footer actions */}
+          <div className="rentals-filters__adv-actions">
+            <button
+              type="button"
+              className="rentals-filters__clear rentals-filters__clear--small"
+              onClick={clearAdvanced}
+              aria-label="Clear advanced filters only"
+            >
+              Clear Advanced
+            </button>
+            <button
+              type="button"
+              className="rentals-filters__clear"
+              onClick={clearAll}
+              aria-label="Clear all filters"
+            >
+              Clear All
+            </button>
+            <button type="submit" className="rentals-filters__btn" aria-label="Apply filters">
+              Search
+            </button>
+          </div>
+        </div>
       </div>
     </form>
   );
 }
 
-/* ── Helpers ──────────────────────────────────────────────── */
+/* ================================================================
+   Price option builder
+   $50 increments up to $500, then $100 to $1000, $250 to $2000,
+   $500 to $5000, then $7500 and $10000.
+   ================================================================ */
 
 function buildPriceOptions(): { value: string; label: string }[] {
   const ticks: number[] = [];
@@ -279,5 +431,8 @@ function buildPriceOptions(): { value: string; label: string }[] {
   for (let p = 1250; p <= 2000; p += 250) ticks.push(p);
   for (let p = 2500; p <= 5000; p += 500) ticks.push(p);
   ticks.push(7500, 10000);
-  return ticks.map((p) => ({ value: String(p), label: `$${p.toLocaleString()} pcm` }));
+  return ticks.map((p) => ({
+    value: String(p),
+    label: `$${p.toLocaleString()} pcm`,
+  }));
 }
