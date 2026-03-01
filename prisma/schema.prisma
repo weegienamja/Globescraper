@@ -821,6 +821,8 @@ model RentalListing {
   isActive           Boolean      @default(true)
   manualOverride     Boolean      @default(false)
   contentFingerprint String?      @db.VarChar(64)
+  descriptionRewritten   String?  @db.Text
+  descriptionRewrittenAt DateTime?
 
   snapshots          RentalSnapshot[]
   aiReviews          RentalAiReview[]

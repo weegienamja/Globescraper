@@ -23,6 +23,8 @@ interface Listing {
   isActive: boolean;
   imageUrlsJson: string | null;
   amenitiesJson: string | null;
+  descriptionRewritten: string | null;
+  descriptionRewrittenAt: string | null;
   _count: { snapshots: number };
   snapshots: Snapshot[];
   priceChange: {
@@ -79,6 +81,7 @@ export function ListingsTable({ initialDistrict }: ListingsTableProps = {}) {
   const [sort, setSort] = useState("lastSeenAt");
   const [order, setOrder] = useState<"asc" | "desc">("desc");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [aiStatus, setAiStatus] = useState("");
 
   const fetchListings = useCallback(async () => {
     setLoading(true);
@@ -92,6 +95,7 @@ export function ListingsTable({ initialDistrict }: ListingsTableProps = {}) {
       if (propertyType) params.set("propertyType", propertyType);
       if (district) params.set("district", district);
       if (search) params.set("search", search);
+      if (aiStatus) params.set("aiStatus", aiStatus);
 
       const res = await fetch(`/api/tools/rentals/listings?${params}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -102,7 +106,7 @@ export function ListingsTable({ initialDistrict }: ListingsTableProps = {}) {
     } finally {
       setLoading(false);
     }
-  }, [page, source, propertyType, district, search, sort, order]);
+  }, [page, source, propertyType, district, search, sort, order, aiStatus]);
 
   useEffect(() => {
     fetchListings();
@@ -230,6 +234,18 @@ export function ListingsTable({ initialDistrict }: ListingsTableProps = {}) {
           <option value="SERVICED_APARTMENT">Serviced Apartment</option>
           <option value="PENTHOUSE">Penthouse</option>
           <option value="LONG_TERM_RENTAL">Long Term Rental</option>
+        </select>
+        <select
+          style={s.select}
+          value={aiStatus}
+          onChange={(e) => { setAiStatus(e.target.value); setPage(1); }}
+        >
+          <option value="">AI Status: All</option>
+          <option value="reviewed">✓ AI Reviewed</option>
+          <option value="unreviewed">— Not Reviewed</option>
+          <option value="flagged">⚠ Flagged</option>
+          <option value="rewritten">✍ Desc Rewritten</option>
+          <option value="unrewritten">— Desc Not Rewritten</option>
         </select>
         {district && (
           <div style={{
@@ -555,6 +571,34 @@ export function ListingsTable({ initialDistrict }: ListingsTableProps = {}) {
                                 </span>
                               </div>
                             )}
+                            {/* ── AI Rewritten Description ── */}
+                            {l.descriptionRewritten && (
+                              <div style={{ marginTop: "8px" }}>
+                                <div style={s.expandRow}>
+                                  <span style={s.expandLabel}>
+                                    ✍️ AI Description:
+                                    {l.descriptionRewrittenAt && (
+                                      <span style={{ fontWeight: 400, color: "#475569", marginLeft: "6px", fontSize: "11px" }}>
+                                        (rewritten {new Date(l.descriptionRewrittenAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })})
+                                      </span>
+                                    )}
+                                  </span>
+                                  <span style={{
+                                    ...s.expandValue,
+                                    color: "#cbd5e1",
+                                    fontSize: "13px",
+                                    lineHeight: "1.5",
+                                    whiteSpace: "pre-wrap" as const,
+                                    background: "rgba(99, 102, 241, 0.06)",
+                                    padding: "8px 12px",
+                                    borderRadius: "6px",
+                                    border: "1px solid rgba(99, 102, 241, 0.15)",
+                                  }}>
+                                    {l.descriptionRewritten}
+                                  </span>
+                                </div>
+                              </div>
+                            )}
                             <div style={s.expandRow}>
                               <span style={s.expandLabel}>URL:</span>
                               <a
@@ -679,24 +723,40 @@ export function ListingsTable({ initialDistrict }: ListingsTableProps = {}) {
                       {formatDate(l.lastSeenAt)}
                     </td>
                     <td style={s.td}>
-                      {l.aiReview ? (
-                        <span
-                          title={l.aiReview.reason || "AI reviewed"}
-                          style={{
-                            ...s.badge,
-                            background: l.aiReview.flagged
-                              ? "rgba(251, 191, 36, 0.15)"
-                              : "rgba(34, 197, 94, 0.1)",
-                            color: l.aiReview.flagged ? "#fbbf24" : "#4ade80",
-                            fontSize: "11px",
-                            cursor: "help",
-                          }}
-                        >
-                          {l.aiReview.flagged ? "⚠" : "✓"} {(l.aiReview.confidence * 100).toFixed(0)}%
-                        </span>
-                      ) : (
-                        <span style={{ color: "#334155", fontSize: "12px" }}>—</span>
-                      )}
+                      <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                        {l.aiReview ? (
+                          <span
+                            title={l.aiReview.reason || "AI reviewed"}
+                            style={{
+                              ...s.badge,
+                              background: l.aiReview.flagged
+                                ? "rgba(251, 191, 36, 0.15)"
+                                : "rgba(34, 197, 94, 0.1)",
+                              color: l.aiReview.flagged ? "#fbbf24" : "#4ade80",
+                              fontSize: "11px",
+                              cursor: "help",
+                            }}
+                          >
+                            {l.aiReview.flagged ? "⚠" : "✓"} {(l.aiReview.confidence * 100).toFixed(0)}%
+                          </span>
+                        ) : (
+                          <span style={{ color: "#334155", fontSize: "12px" }}>—</span>
+                        )}
+                        {l.descriptionRewritten && (
+                          <span
+                            title="Description rewritten by AI"
+                            style={{
+                              ...s.badge,
+                              background: "rgba(249, 115, 22, 0.12)",
+                              color: "#f97316",
+                              fontSize: "11px",
+                              cursor: "help",
+                            }}
+                          >
+                            ✍
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td style={s.td}>
                       <span style={{

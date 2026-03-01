@@ -427,6 +427,86 @@ export function RentalPipelineDashboard() {
             {runningJob === "Cleaning Data" ? "Cleaning..." : "Clean Up Data"}
           </button>
 
+          <div style={{ width: "1px", height: "32px", background: "#334155", alignSelf: "center" }} />
+
+          {/* AI Review button */}
+          <button
+            style={{
+              ...styles.actionBtn,
+              background: runningJob ? "#1a1e2e" : "linear-gradient(135deg, #4338ca, #6366f1)",
+              borderColor: "#818cf8",
+              color: "#e0e7ff",
+              fontWeight: 600,
+              opacity: runningJob ? 0.6 : 1,
+            }}
+            disabled={!!runningJob}
+            onClick={async () => {
+              setRunningJob("AI Review");
+              try {
+                const res = await fetch("/api/tools/rentals/ai-reviews", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ limit: 30, source: selectedSource }),
+                });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                setToast({
+                  message: `AI reviewed ${data.reviewed} listings (${data.flagged} flagged)`,
+                  type: "success",
+                });
+              } catch (err) {
+                setToast({ message: `AI Review failed: ${err instanceof Error ? err.message : err}`, type: "error" });
+              } finally {
+                setRunningJob(null);
+              }
+            }}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M9 11l3 3L22 4" />
+              <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+            </svg>
+            {runningJob === "AI Review" ? "Reviewing..." : "🤖 AI Review"}
+          </button>
+
+          {/* AI Rewrite button */}
+          <button
+            style={{
+              ...styles.actionBtn,
+              background: runningJob ? "#1a1e2e" : "linear-gradient(135deg, #7c2d12, #c2410c)",
+              borderColor: "#f97316",
+              color: "#fff7ed",
+              fontWeight: 600,
+              opacity: runningJob ? 0.6 : 1,
+            }}
+            disabled={!!runningJob}
+            onClick={async () => {
+              setRunningJob("AI Rewrite");
+              try {
+                const res = await fetch("/api/tools/rentals/ai-rewrite", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ limit: 10, source: selectedSource }),
+                });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                setToast({
+                  message: `AI rewrote ${data.rewritten} descriptions (${data.totalTokens} tokens)`,
+                  type: "success",
+                });
+              } catch (err) {
+                setToast({ message: `AI Rewrite failed: ${err instanceof Error ? err.message : err}`, type: "error" });
+              } finally {
+                setRunningJob(null);
+              }
+            }}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+            </svg>
+            {runningJob === "AI Rewrite" ? "Rewriting..." : "✍️ AI Rewrite"}
+          </button>
+
           {/* Log toggle */}
           <button
             style={{

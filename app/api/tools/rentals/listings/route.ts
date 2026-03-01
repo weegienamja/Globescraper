@@ -35,6 +35,7 @@ export async function GET(req: NextRequest) {
     const propertyType = url.searchParams.get("propertyType") || undefined;
     const search = url.searchParams.get("search") || undefined;
     const districtParam = url.searchParams.get("district") || undefined;
+    const aiStatus = url.searchParams.get("aiStatus") || undefined;
     const sort = url.searchParams.get("sort") || "lastSeenAt";
     const order = url.searchParams.get("order") === "asc" ? "asc" : "desc";
 
@@ -61,6 +62,18 @@ export async function GET(req: NextRequest) {
         { district: { contains: search } },
         { city: { contains: search } },
       ];
+    }
+    // AI status filter
+    if (aiStatus === "reviewed") {
+      where.aiReviews = { some: {} };
+    } else if (aiStatus === "unreviewed") {
+      where.aiReviews = { none: {} };
+    } else if (aiStatus === "flagged") {
+      where.aiReviews = { some: { flagged: true } };
+    } else if (aiStatus === "rewritten") {
+      where.descriptionRewritten = { not: null };
+    } else if (aiStatus === "unrewritten") {
+      where.descriptionRewritten = null;
     }
 
     const allowedSorts = ["lastSeenAt", "firstSeenAt", "priceMonthlyUsd", "title", "district", "sizeSqm", "postedAt"];
@@ -91,6 +104,8 @@ export async function GET(req: NextRequest) {
           imageUrlsJson: true,
           amenitiesJson: true,
           postedAt: true,
+          descriptionRewritten: true,
+          descriptionRewrittenAt: true,
           _count: { select: { snapshots: true } },
           snapshots: {
             orderBy: { scrapedAt: "desc" as const },
