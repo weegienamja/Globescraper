@@ -84,7 +84,6 @@ export function RentalPipelineDashboard() {
   const [logConnected, setLogConnected] = useState(false);
   const [showLogs, setShowLogs] = useState(false);
   const [progress, setProgress] = useState<{ phase: string; percent: number; label: string } | null>(null);
-  const [selectedSource, setSelectedSource] = useState<string>("REALESTATE_KH");
   const abortRef = useRef<AbortController | null>(null);
 
   /* AI Processing state */
@@ -316,35 +315,15 @@ export function RentalPipelineDashboard() {
         <p style={styles.subtitle}>Manage and monitor your rental data scraping and processing jobs.</p>
 
         {/* ═══ Scraping Pipeline Section ═══ */}
-        <div style={{ ...styles.sectionDivider, justifyContent: "space-between" }}>
+        <div style={styles.sectionDivider}>
           <span style={styles.sectionDividerLabel}>Scraping Pipeline</span>
-          <select
-            value={selectedSource}
-            onChange={(e) => setSelectedSource(e.target.value)}
-            disabled={!!runningJob}
-            style={{
-              padding: "5px 10px",
-              background: "#0f172a",
-              border: "1px solid #334155",
-              borderRadius: "6px",
-              color: "#94a3b8",
-              fontSize: "12px",
-              fontWeight: 500,
-              cursor: "pointer",
-              outline: "none",
-              opacity: runningJob ? 0.6 : 1,
-            }}
-          >
-            <option value="REALESTATE_KH">Realestate.kh</option>
-            <option value="KHMER24">Khmer24</option>
-          </select>
         </div>
 
         <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" as const, alignItems: "center" }}>
           <button
             style={{ ...styles.pipelineBtn, opacity: runningJob ? 0.6 : 1 }}
             disabled={!!runningJob}
-            onClick={() => runJob("discover", "Discover New Listings", `source=${selectedSource}`)}
+            onClick={() => runJob("discover", "Discover New Listings")}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
@@ -393,7 +372,7 @@ export function RentalPipelineDashboard() {
           <button
             style={{ ...styles.pipelineBtn, opacity: runningJob ? 0.6 : 1 }}
             disabled={!!runningJob}
-            onClick={() => runJob("process-queue", "Process Queue Batch", `source=${selectedSource}`)}
+            onClick={() => runJob("process-queue", "Process Queue Batch")}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
@@ -503,7 +482,7 @@ export function RentalPipelineDashboard() {
                       const res = await fetch("/api/tools/rentals/ai-rewrite", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ limit: rewriteBatchSize, source: selectedSource }),
+                        body: JSON.stringify({ limit: rewriteBatchSize }),
                       });
                       if (!res.ok) throw new Error(`HTTP ${res.status}`);
                       const data = await res.json();
@@ -577,7 +556,7 @@ export function RentalPipelineDashboard() {
                       const res = await fetch("/api/tools/rentals/ai-reviews", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ limit: 30, source: selectedSource }),
+                        body: JSON.stringify({ limit: 30 }),
                       });
                       if (!res.ok) throw new Error(`HTTP ${res.status}`);
                       const data = await res.json();
