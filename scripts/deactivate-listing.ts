@@ -16,7 +16,7 @@ async function main() {
         { id: url },
       ],
     },
-    select: { id: true, title: true, propertyType: true, isActive: true, canonicalUrl: true },
+    select: { id: true, title: true, propertyType: true, isActive: true, manualOverride: true, canonicalUrl: true },
   });
 
   if (!listing) {
@@ -29,14 +29,14 @@ async function main() {
   console.log("  Type:", listing.propertyType, "| Active:", listing.isActive);
   console.log("  URL:", listing.canonicalUrl);
 
-  if (!listing.isActive) {
-    console.log("Already deactivated.");
+  if (!listing.isActive && listing.manualOverride) {
+    console.log("Already deactivated with manual override.");
   } else {
     await prisma.rentalListing.update({
       where: { id: listing.id },
-      data: { isActive: false },
+      data: { isActive: false, manualOverride: true },
     });
-    console.log("✓ Deactivated.");
+    console.log("\u2713 Deactivated (manual override \u2014 scraper will not reactivate).");
   }
 
   await prisma.$disconnect();

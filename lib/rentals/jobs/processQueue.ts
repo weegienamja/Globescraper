@@ -216,6 +216,10 @@ export async function processQueueJob(
             let wasInserted = false;
 
             if (existing) {
+              // Respect manual overrides — don't re-activate or change type
+              // for listings that a human has manually reviewed and deactivated.
+              const isManuallyOverridden = existing.manualOverride;
+
               await prisma.rentalListing.update({
                 where: { id: existing.id },
                 data: {
@@ -225,7 +229,8 @@ export async function processQueueJob(
                   district: scraped.district,
                   latitude: scraped.latitude ?? existing.latitude,
                   longitude: scraped.longitude ?? existing.longitude,
-                  propertyType: scraped.propertyType,
+                  // Keep the human-assigned type if overridden
+                  propertyType: isManuallyOverridden ? existing.propertyType : scraped.propertyType,
                   bedrooms: scraped.bedrooms,
                   bathrooms: scraped.bathrooms,
                   sizeSqm: scraped.sizeSqm,
@@ -236,7 +241,8 @@ export async function processQueueJob(
                   amenitiesJson,
                   postedAt: scraped.postedAt,
                   lastSeenAt: now,
-                  isActive: true,
+                  // Don't reactivate manually deactivated listings
+                  isActive: isManuallyOverridden ? existing.isActive : true,
                   contentFingerprint: fingerprint ?? existing.contentFingerprint,
                 },
               });

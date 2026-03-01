@@ -35,10 +35,12 @@ export async function PATCH(
   // Action: deactivate / activate
   if (body.action === "deactivate") {
     updates.isActive = false;
-    changes.push("deactivated");
+    updates.manualOverride = true;
+    changes.push("deactivated (manual override — scraper will skip)");
   } else if (body.action === "activate") {
     updates.isActive = true;
-    changes.push("activated");
+    updates.manualOverride = false;
+    changes.push("activated (scraper will manage normally)");
   }
 
   // Correct property type

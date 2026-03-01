@@ -819,6 +819,7 @@ model RentalListing {
   latitude           Float?
   longitude          Float?
   isActive           Boolean      @default(true)
+  manualOverride     Boolean      @default(false)
   contentFingerprint String?      @db.VarChar(64)
 
   snapshots          RentalSnapshot[]
