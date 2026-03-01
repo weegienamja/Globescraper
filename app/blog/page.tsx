@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { getPostsMeta, getPagesMeta } from "@/lib/content";
 import { getPublishedAiPosts, inferCategory } from "@/lib/published-posts";
+import { getHeroImage } from "@/lib/contentImages";
 import { BlogCollectionJsonLd, BreadcrumbJsonLd } from "@/components/JsonLd";
 import { BlogPageClient, type BlogPost } from "@/components/BlogPageClient";
 
@@ -62,7 +63,7 @@ export default async function BlogIndex() {
         date: p.date,
         category: p.category || inferCategory(p.title + " " + p.description),
         readingTime: estimateReadingTime(p.markdown),
-        heroImageUrl: p.heroImageUrl,
+        heroImageUrl: p.heroImageUrl || getHeroImage(p.slug),
       });
     }
   }
@@ -77,7 +78,7 @@ export default async function BlogIndex() {
         date: p.date,
         category: inferCategory(p.title + " " + p.description),
         readingTime: estimateReadingTime(p.description),
-        heroImageUrl: null,
+        heroImageUrl: getHeroImage(p.slug),
       });
     }
   }

@@ -131,7 +131,7 @@ export function BlogPageClient({ posts }: { posts: BlogPost[] }) {
             >
               <div className="blog-featured__image-wrap">
                 <Image
-                  src={featured.heroImageUrl || `/images/${featured.slug}.jpg`}
+                  src={featured.heroImageUrl || "/7.png"}
                   alt={cleanTitle(featured.title)}
                   width={640}
                   height={340}
@@ -170,7 +170,7 @@ export function BlogPageClient({ posts }: { posts: BlogPost[] }) {
               <Link href={`/${p.slug}`} className="blog-card">
                 <div className="blog-card__image-wrap">
                   <Image
-                    src={p.heroImageUrl || `/images/${p.slug}.jpg`}
+                    src={p.heroImageUrl || "/7.png"}
                     alt={cleanTitle(p.title)}
                     width={160}
                     height={100}
@@ -213,7 +213,7 @@ export function BlogPageClient({ posts }: { posts: BlogPost[] }) {
               <Link key={p.slug} href={`/${p.slug}`} className="blog-sidebar__item">
                 <div className="blog-sidebar__thumb-wrap">
                   <Image
-                    src={p.heroImageUrl || `/images/${p.slug}.jpg`}
+                    src={p.heroImageUrl || "/7.png"}
                     alt={cleanTitle(p.title)}
                     width={64}
                     height={64}
