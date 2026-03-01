@@ -41,8 +41,8 @@ interface BatchResult {
 
 /* ── Constants ───────────────────────────────────────────── */
 
-/** Smaller batches than review since descriptions are longer */
-const BATCH_SIZE = 5;
+/** Default batch size — safe up to ~50 on paid Gemini tiers */
+const DEFAULT_BATCH_SIZE = 30;
 
 /* ── Prompt ──────────────────────────────────────────────── */
 
@@ -157,6 +157,8 @@ export interface RewriteOptions {
   unrewritten?: boolean;
   /** Maximum number of listings to rewrite */
   limit?: number;
+  /** Listings per Gemini call (default 30) */
+  batchSize?: number;
   /** Dry run — don't persist, just preview */
   dryRun?: boolean;
   /** Only rewrite listings of a specific source */
@@ -211,9 +213,10 @@ export async function runAiRewrite(options: RewriteOptions = {}): Promise<{
   if (listings.length === 0) return { rewritten: 0, totalTokens: 0 };
 
   // Process in batches
+  const batchSize = options.batchSize ?? DEFAULT_BATCH_SIZE;
   const batches: ListingForRewrite[][] = [];
-  for (let i = 0; i < listings.length; i += BATCH_SIZE) {
-    batches.push(listings.slice(i, i + BATCH_SIZE));
+  for (let i = 0; i < listings.length; i += batchSize) {
+    batches.push(listings.slice(i, i + batchSize));
   }
 
   let totalRewritten = 0;

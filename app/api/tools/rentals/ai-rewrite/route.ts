@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json().catch(() => ({}));
-    const limit = Math.min(25, Math.max(1, body.limit || 10));
+    const limit = Math.min(50, Math.max(1, body.limit || 30));
     const source = body.source || undefined;
     const force = !!body.force;
 

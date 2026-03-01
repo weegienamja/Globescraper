@@ -480,11 +480,13 @@ export function RentalPipelineDashboard() {
                 disabled={!!runningJob}
                 onClick={async () => {
                   setRunningJob("AI Rewrite");
+                  setProgress({ phase: "AI Rewrite", percent: 0, label: "Starting..." });
                   let totalRewritten = 0;
                   let totalTokens = 0;
                   try {
                     for (let i = 0; i < rewriteBatches; i++) {
-                      setToast({ message: `AI Rewrite batch ${i + 1}/${rewriteBatches}... (${totalRewritten} done)`, type: "success" });
+                      const pct = Math.round(((i) / rewriteBatches) * 100);
+                      setProgress({ phase: "AI Rewrite", percent: pct, label: `Batch ${i + 1}/${rewriteBatches} — ${totalRewritten} rewritten, ${totalTokens} tokens` });
                       const res = await fetch("/api/tools/rentals/ai-rewrite", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
@@ -494,6 +496,8 @@ export function RentalPipelineDashboard() {
                       const data = await res.json();
                       totalRewritten += data.rewritten || 0;
                       totalTokens += data.totalTokens || 0;
+                      const donePct = Math.round(((i + 1) / rewriteBatches) * 100);
+                      setProgress({ phase: "AI Rewrite", percent: donePct, label: `Batch ${i + 1}/${rewriteBatches} done — ${totalRewritten} rewritten, ${totalTokens} tokens` });
                       if (!data.rewritten || data.rewritten === 0) break;
                       if (rewriteSequential && i < rewriteBatches - 1) {
                         await new Promise((r) => setTimeout(r, 1000));
@@ -504,6 +508,7 @@ export function RentalPipelineDashboard() {
                     setToast({ message: `AI Rewrite failed: ${err instanceof Error ? err.message : err}`, type: "error" });
                   } finally {
                     setRunningJob(null);
+                    setProgress(null);
                   }
                 }}
               >
@@ -554,11 +559,13 @@ export function RentalPipelineDashboard() {
                 disabled={!!runningJob}
                 onClick={async () => {
                   setRunningJob("AI Review");
+                  setProgress({ phase: "AI Review", percent: 0, label: "Starting..." });
                   let totalReviewed = 0;
                   let totalFlagged = 0;
                   try {
                     for (let i = 0; i < reviewBatches; i++) {
-                      setToast({ message: `AI Review batch ${i + 1}/${reviewBatches}... (${totalReviewed} done)`, type: "success" });
+                      const pct = Math.round(((i) / reviewBatches) * 100);
+                      setProgress({ phase: "AI Review", percent: pct, label: `Batch ${i + 1}/${reviewBatches} — ${totalReviewed} reviewed, ${totalFlagged} flagged` });
                       const res = await fetch("/api/tools/rentals/ai-reviews", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
@@ -568,6 +575,8 @@ export function RentalPipelineDashboard() {
                       const data = await res.json();
                       totalReviewed += data.reviewed || 0;
                       totalFlagged += data.flagged || 0;
+                      const donePct = Math.round(((i + 1) / reviewBatches) * 100);
+                      setProgress({ phase: "AI Review", percent: donePct, label: `Batch ${i + 1}/${reviewBatches} done — ${totalReviewed} reviewed, ${totalFlagged} flagged` });
                       if (!data.reviewed || data.reviewed === 0) break;
                       if (i < reviewBatches - 1) {
                         await new Promise((r) => setTimeout(r, 1000));
@@ -578,6 +587,7 @@ export function RentalPipelineDashboard() {
                     setToast({ message: `AI Review failed: ${err instanceof Error ? err.message : err}`, type: "error" });
                   } finally {
                     setRunningJob(null);
+                    setProgress(null);
                   }
                 }}
               >

@@ -10,6 +10,7 @@
  *   npx tsx scripts/ai-rewrite-descriptions.ts --limit 50        # only first 50
  *   npx tsx scripts/ai-rewrite-descriptions.ts --source REALESTATE_KH
  *   npx tsx scripts/ai-rewrite-descriptions.ts --force           # re-rewrite already done
+ *   npx tsx scripts/ai-rewrite-descriptions.ts --batch-size 50   # listings per Gemini call
  *
  * Requires: GEMINI_API_KEY in .env / .env.local
  */
@@ -59,6 +60,12 @@ async function main() {
   const source =
     sourceIdx !== -1 && args[sourceIdx + 1] ? args[sourceIdx + 1] : undefined;
 
+  const batchIdx = args.indexOf("--batch-size");
+  const batchSize =
+    batchIdx !== -1 && args[batchIdx + 1]
+      ? parseInt(args[batchIdx + 1], 10)
+      : undefined;
+
   console.log("╔══════════════════════════════════════════╗");
   console.log("║  Gemini AI Description Rewriter          ║");
   console.log("╠══════════════════════════════════════════╣");
@@ -67,6 +74,8 @@ async function main() {
   );
   if (limit) console.log(`║  Limit:  ${String(limit).padEnd(31)}║`);
   if (source) console.log(`║  Source: ${source.padEnd(31)}║`);
+  if (batchSize)
+    console.log(`║  Batch:  ${String(batchSize).padEnd(31)}║`);
   if (force) console.log(`║  Force:  Re-rewrite already done          ║`);
   console.log("╚══════════════════════════════════════════╝\n");
 
@@ -75,6 +84,7 @@ async function main() {
     unrewritten: !force,
     force,
     limit,
+    batchSize,
     source,
   });
 
