@@ -2,7 +2,8 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useState, useRef, useEffect } from "react";
-import { ADVANCED_PARAM_KEYS, ALL_PARAM_KEYS } from "@/lib/rentalsQuery";
+import { ADVANCED_PARAM_KEYS, ALL_PARAM_KEYS, AMENITY_PARAM_KEYS } from "@/lib/rentalsQuery";
+import { FILTERABLE_FACILITIES, FILTERABLE_AMENITIES } from "@/lib/amenityClassification";
 
 /* ================================================================
    Static option data
@@ -130,6 +131,10 @@ export function RentalFilters({ cities, districts }: RentalFiltersProps) {
       } else {
         overrides[key] = (fd.get(key) as string) || "";
       }
+    }
+    // Amenity / facility checkboxes (each is a separate param key)
+    for (const key of AMENITY_PARAM_KEYS) {
+      overrides[key] = fd.has(key) ? "1" : "";
     }
     apply(overrides);
   };
@@ -390,6 +395,38 @@ export function RentalFilters({ cities, districts }: RentalFiltersProps) {
             </div>
           </div>
 
+          {/* ---------- Must-have Facilities (full width) ---------- */}
+          <div className="rentals-filters__section">
+            <h4 className="rentals-filters__section-title">Must-have Facilities</h4>
+            <div className="rentals-filters__checkbox-grid">
+              {FILTERABLE_FACILITIES.map((name) => {
+                const key = amenityKey(name);
+                return (
+                  <label key={key} className="rentals-filters__checkbox">
+                    <input type="checkbox" name={key} value="1" defaultChecked={sp.get(key) === "1"} />
+                    {name}
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* ---------- Must-have Amenities (full width) ---------- */}
+          <div className="rentals-filters__section">
+            <h4 className="rentals-filters__section-title">Must-have Amenities</h4>
+            <div className="rentals-filters__checkbox-grid">
+              {FILTERABLE_AMENITIES.map((name) => {
+                const key = amenityKey(name);
+                return (
+                  <label key={key} className="rentals-filters__checkbox">
+                    <input type="checkbox" name={key} value="1" defaultChecked={sp.get(key) === "1"} />
+                    {name}
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+
           {/* Advanced panel footer actions */}
           <div className="rentals-filters__adv-actions">
             <button
@@ -435,4 +472,17 @@ function buildPriceOptions(): { value: string; label: string }[] {
     value: String(p),
     label: `$${p.toLocaleString()} pcm`,
   }));
+}
+
+/**
+ * Convert a human amenity name like "Swimming Pool" to a URL-safe
+ * param key like "f_swimmingPool".
+ */
+function amenityKey(name: string): string {
+  const camel = name
+    .replace(/[^a-zA-Z0-9 ]/g, "")
+    .split(" ")
+    .map((w, i) => (i === 0 ? w.toLowerCase() : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()))
+    .join("");
+  return `f_${camel}`;
 }

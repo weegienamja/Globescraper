@@ -23,6 +23,37 @@
  */
 
 import type { Prisma } from "@prisma/client";
+import {
+  FILTERABLE_FACILITIES,
+  FILTERABLE_AMENITIES,
+} from "@/lib/amenityClassification";
+
+/**
+ * Convert a human amenity name like "Swimming Pool" to a URL-safe
+ * param key like "f_swimmingPool".  Must match the same function in
+ * RentalFilters.tsx.
+ */
+function amenityKey(name: string): string {
+  const camel = name
+    .replace(/[^a-zA-Z0-9 ]/g, "")
+    .split(" ")
+    .map((w, i) =>
+      i === 0
+        ? w.toLowerCase()
+        : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase(),
+    )
+    .join("");
+  return `f_${camel}`;
+}
+
+/** Map from URL param key -> original amenity name for Prisma contains check. */
+const AMENITY_PARAM_MAP: Record<string, string> = {};
+for (const name of [...FILTERABLE_FACILITIES, ...FILTERABLE_AMENITIES]) {
+  AMENITY_PARAM_MAP[amenityKey(name)] = name;
+}
+
+/** All amenity/facility param keys (f_swimmingPool, f_gym, …) */
+export const AMENITY_PARAM_KEYS = Object.keys(AMENITY_PARAM_MAP);
 
 export interface RentalSearchParams {
   page?: string;
@@ -42,6 +73,8 @@ export interface RentalSearchParams {
   available?: string;
   photos?: string;
   geo?: string;
+  // Amenity / facility must-haves (dynamic f_* keys)
+  [key: string]: string | undefined;
 }
 
 /**
@@ -58,6 +91,7 @@ export const ADVANCED_PARAM_KEYS = [
   "available",
   "photos",
   "geo",
+  ...AMENITY_PARAM_KEYS,
 ] as const;
 
 /** Every param key the filter system writes to the URL. */
@@ -144,6 +178,21 @@ export function buildRentalsWhere(
   if (sp.geo === "1") {
     where.latitude = { not: null };
     where.longitude = { not: null };
+  }
+
+  // Amenity / facility must-haves: each active f_* param requires
+  // the amenitiesJson text column to contain the amenity name.
+  const amenityConditions: Prisma.RentalListingWhereInput[] = [];
+  for (const key of AMENITY_PARAM_KEYS) {
+    if (sp[key] === "1") {
+      const name = AMENITY_PARAM_MAP[key];
+      if (name) {
+        amenityConditions.push({ amenitiesJson: { contains: name } });
+      }
+    }
+  }
+  if (amenityConditions.length > 0) {
+    where.AND = amenityConditions;
   }
 
   return where;

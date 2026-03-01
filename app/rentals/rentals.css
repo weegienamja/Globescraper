@@ -263,6 +263,13 @@
   cursor: pointer;
 }
 
+/* Multi-column checkbox grid for must-haves */
+.rentals-filters__checkbox-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 2px 16px;
+}
+
 /* Advanced panel footer */
 .rentals-filters__adv-actions {
   display: flex;
@@ -848,7 +855,26 @@
   white-space: pre-wrap;
 }
 
-/* Amenities */
+/* Amenities - split by Facilities / Amenities */
+.listing-amenities-split {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.listing-amenities-split__group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.listing-amenities-split__heading {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 0 4px;
+}
+
 .listing-amenities {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));

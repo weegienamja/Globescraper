@@ -1,15 +1,39 @@
+import { classifyAmenities } from "@/lib/amenityClassification";
+
 export function AmenitiesList({ amenitiesJson }: { amenitiesJson: string | null }) {
   const items = parseAmenities(amenitiesJson);
   if (items.length === 0) return null;
 
+  const { facilities, amenities } = classifyAmenities(items);
+
   return (
-    <div className="listing-amenities">
-      {items.map((item, i) => (
-        <div key={i} className="listing-amenities__item">
-          <span className="listing-amenities__dot" aria-hidden="true" />
-          {item}
+    <div className="listing-amenities-split">
+      {facilities.length > 0 && (
+        <div className="listing-amenities-split__group">
+          <h3 className="listing-amenities-split__heading">Facilities</h3>
+          <div className="listing-amenities">
+            {facilities.map((item, i) => (
+              <div key={i} className="listing-amenities__item">
+                <span className="listing-amenities__dot" aria-hidden="true" />
+                {item}
+              </div>
+            ))}
+          </div>
         </div>
-      ))}
+      )}
+      {amenities.length > 0 && (
+        <div className="listing-amenities-split__group">
+          <h3 className="listing-amenities-split__heading">Amenities</h3>
+          <div className="listing-amenities">
+            {amenities.map((item, i) => (
+              <div key={i} className="listing-amenities__item">
+                <span className="listing-amenities__dot" aria-hidden="true" />
+                {item}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

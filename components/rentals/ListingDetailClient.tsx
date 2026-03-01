@@ -68,10 +68,9 @@ export function ListingDetailClient({ listing }: { listing: DetailListing }) {
             </section>
           )}
 
-          {/* Amenities / Key Features */}
+          {/* Facilities & Amenities */}
           {listing.amenitiesJson && (
             <section className="listing-detail__section">
-              <h2 className="listing-detail__section-title">Key features</h2>
               <AmenitiesList amenitiesJson={listing.amenitiesJson} />
             </section>
           )}
