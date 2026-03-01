@@ -410,7 +410,7 @@ export function ListingsTable({ initialDistrict }: ListingsTableProps = {}) {
                           })()}
                         </a>
                         {l.titleRewritten && (
-                          <span title="AI-rewritten title" style={{ color: "#818cf8", fontSize: "11px", marginLeft: "4px" }}>✏️</span>
+                          <span title="Geocoded title" style={{ color: "#10b981", fontSize: "11px", marginLeft: "4px" }}>📍</span>
                         )}
                         {expanded && (
                           <div style={s.expandedInfo}>
@@ -421,7 +421,7 @@ export function ListingsTable({ initialDistrict }: ListingsTableProps = {}) {
                               </div>
                             )}
                             <div style={s.expandRow}>
-                              <span style={s.expandLabel}>{l.titleRewritten ? "Rewritten Title:" : "Full Title:"}</span>
+                              <span style={s.expandLabel}>{l.titleRewritten ? "Geocoded Title:" : "Full Title:"}</span>
                               <span style={s.expandValue}>{l.titleRewritten || l.title}</span>
                             </div>
                             {l.sizeSqm && (

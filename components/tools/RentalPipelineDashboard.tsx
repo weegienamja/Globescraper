@@ -91,6 +91,7 @@ export function RentalPipelineDashboard() {
   const [rewriteBatchSize, setRewriteBatchSize] = useState(50);
   const [rewriteSequential, setRewriteSequential] = useState(true);
   const [reviewBatches, setReviewBatches] = useState(3);
+  const [titleLimit, setTitleLimit] = useState(50);
 
   const fetchSummary = useCallback(async () => {
     try {
@@ -431,7 +432,7 @@ export function RentalPipelineDashboard() {
           <span style={styles.sectionDividerLabel}>AI Processing</span>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px" }}>
           {/* AI Rewrite Card */}
           <div style={styles.aiCard}>
             <div style={styles.aiCardHeader}>
@@ -580,6 +581,69 @@ export function RentalPipelineDashboard() {
                 </svg>
                 Start
               </button>
+            </div>
+          </div>
+
+          {/* Generate Titles Card */}
+          <div style={styles.aiCard}>
+            <div style={styles.aiCardHeader}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2">
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                <circle cx="12" cy="10" r="3" />
+              </svg>
+              <span style={styles.aiCardTitle}>Generate Titles</span>
+            </div>
+            <div style={styles.aiCardBody}>
+              <div style={styles.aiInputGroup}>
+                <label style={styles.aiInputLabel}>Listings:</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={200}
+                  value={titleLimit}
+                  onChange={(e) => setTitleLimit(Math.max(1, parseInt(e.target.value) || 1))}
+                  style={styles.aiNumberInput}
+                  disabled={!!runningJob}
+                />
+              </div>
+              <div style={{ flex: 1 }} />
+              <button
+                style={{
+                  ...styles.aiStartBtn,
+                  opacity: runningJob ? 0.6 : 1,
+                }}
+                disabled={!!runningJob}
+                onClick={async () => {
+                  setRunningJob("Generating Titles");
+                  try {
+                    setToast({ message: `Geocoding titles for up to ${titleLimit} listings...`, type: "success" });
+                    const res = await fetch("/api/tools/rentals/title-geocode", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ limit: titleLimit }),
+                    });
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    const data = await res.json();
+                    setToast({
+                      message: `Titles generated: ${data.titled} total (${data.geocoded} geocoded, ${data.fallback} fallback)`,
+                      type: "success",
+                    });
+                  } catch (err) {
+                    setToast({ message: `Title generation failed: ${err instanceof Error ? err.message : err}`, type: "error" });
+                  } finally {
+                    setRunningJob(null);
+                  }
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                  <polygon points="5 3 19 12 5 21 5 3" />
+                </svg>
+                Start
+              </button>
+            </div>
+            <div style={{ marginTop: "10px", fontSize: "11px", color: "#64748b", lineHeight: 1.4 }}>
+              GPS → Street, Area, District, City<br />
+              No GPS → District, City
             </div>
           </div>
         </div>
