@@ -103,29 +103,14 @@ export function PublicHeatmapClient({
 
         {/* Map card */}
         <div style={s.mapCard}>
-          <div style={{ position: "relative" }}>
             <InteractiveHeatmap
               data={data}
               height={520}
               showListingPoints={false}
               listingsLinkBase="/rentals"
               compactFilters
+              onEnlarge={toggleFullscreen}
             />
-            {/* Enlarge button */}
-            <button
-              onClick={toggleFullscreen}
-              style={s.enlargeBtn}
-              aria-label="View fullscreen"
-              title="Enlarge map"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="15 3 21 3 21 9" />
-                <polyline points="9 21 3 21 3 15" />
-                <line x1="21" y1="3" x2="14" y2="10" />
-                <line x1="3" y1="21" x2="10" y2="14" />
-              </svg>
-            </button>
-          </div>
 
           {/* Legend */}
           <div style={{ display: "flex", gap: "24px", flexWrap: "wrap", marginTop: "16px" }}>
@@ -337,24 +322,6 @@ const s: Record<string, React.CSSProperties> = {
     background: "#3b82f6",
     borderRadius: "8px",
     textDecoration: "none",
-  },
-  enlargeBtn: {
-    position: "absolute",
-    top: "12px",
-    right: "12px",
-    zIndex: 1000,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: "36px",
-    height: "36px",
-    background: "rgba(15, 23, 42, 0.85)",
-    border: "1px solid #334155",
-    borderRadius: "8px",
-    color: "#cbd5e1",
-    cursor: "pointer",
-    backdropFilter: "blur(4px)",
-    transition: "background 0.15s, color 0.15s",
   },
   fullscreenOverlay: {
     position: "fixed",

@@ -86,6 +86,8 @@ interface Props {
   hideFilters?: boolean;
   /** Wrap filters in a collapsible dropdown on mobile (default false). */
   compactFilters?: boolean;
+  /** When provided, renders an enlarge button pinned to the top-right of the map. */
+  onEnlarge?: () => void;
 }
 
 /** Human-readable labels for property type enum values */
@@ -99,7 +101,7 @@ const TYPE_LABELS: Record<string, string> = {
   TOWNHOUSE: "Townhouse",
 };
 
-export function InteractiveHeatmap({ data, height = 450, showListingPoints = true, listingsLinkBase = "/tools/rentals/listings", hideFilters = false, compactFilters = false }: Props) {
+export function InteractiveHeatmap({ data, height = 450, showListingPoints = true, listingsLinkBase = "/tools/rentals/listings", hideFilters = false, compactFilters = false, onEnlarge }: Props) {
   const mapRef = useRef<HTMLDivElement>(null);
   const leafletMap = useRef<L.Map | null>(null);
   const [geoJson, setGeoJson] = useState<GeoJSON.FeatureCollection | null>(null);
@@ -737,15 +739,49 @@ export function InteractiveHeatmap({ data, height = 450, showListingPoints = tru
         </div>
         </>
       )}
-      <div
-        ref={mapRef}
-        style={{
-          height,
-          borderRadius: "10px",
-          border: "1px solid #334155",
-          overflow: "hidden",
-        }}
-      />
+      <div style={{ position: "relative" }}>
+        <div
+          ref={mapRef}
+          style={{
+            height,
+            borderRadius: "10px",
+            border: "1px solid #334155",
+            overflow: "hidden",
+          }}
+        />
+        {onEnlarge && (
+          <button
+            onClick={onEnlarge}
+            aria-label="View fullscreen"
+            title="Enlarge map"
+            style={{
+              position: "absolute",
+              top: "12px",
+              right: "12px",
+              zIndex: 1000,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: "36px",
+              height: "36px",
+              background: "rgba(15, 23, 42, 0.85)",
+              border: "1px solid #334155",
+              borderRadius: "8px",
+              color: "#cbd5e1",
+              cursor: "pointer",
+              backdropFilter: "blur(4px)",
+              transition: "background 0.15s, color 0.15s",
+            }}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 3 21 3 21 9" />
+              <polyline points="9 21 3 21 3 15" />
+              <line x1="21" y1="3" x2="14" y2="10" />
+              <line x1="3" y1="21" x2="10" y2="14" />
+            </svg>
+          </button>
+        )}
+      </div>
     </>
   );
 }
