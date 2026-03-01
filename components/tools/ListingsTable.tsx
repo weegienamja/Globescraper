@@ -68,11 +68,9 @@ interface ListingsData {
 interface ListingsTableProps {
   /** Pre-filter to a specific district (canonical name from heatmap). */
   initialDistrict?: string;
-  /** When true, re-fetch the current page every 5 s so new rows appear live. */
-  polling?: boolean;
 }
 
-export function ListingsTable({ initialDistrict, polling }: ListingsTableProps = {}) {
+export function ListingsTable({ initialDistrict }: ListingsTableProps = {}) {
   const [data, setData] = useState<ListingsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -115,12 +113,11 @@ export function ListingsTable({ initialDistrict, polling }: ListingsTableProps =
     fetchListings();
   }, [fetchListings]);
 
-  // Re-fetch every 5s while polling is active
+  // Always poll every 5s so new listings appear live during terminal scrapes
   useEffect(() => {
-    if (!polling) return;
     const id = setInterval(fetchListings, 5_000);
     return () => clearInterval(id);
-  }, [polling, fetchListings]);
+  }, [fetchListings]);
 
   const handleSort = (field: string) => {
     if (sort === field) {

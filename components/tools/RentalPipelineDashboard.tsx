@@ -110,12 +110,11 @@ export function RentalPipelineDashboard() {
     fetchSummary();
   }, [fetchSummary]);
 
-  // Poll stats every 3s while a job is running
+  // Always poll stats every 3s so cards update live during terminal scrapes
   useEffect(() => {
-    if (!runningJob) return;
     const id = setInterval(fetchSummary, 3_000);
     return () => clearInterval(id);
-  }, [runningJob, fetchSummary]);
+  }, [fetchSummary]);
 
   // Auto-dismiss toast
   useEffect(() => {
@@ -727,7 +726,7 @@ export function RentalPipelineDashboard() {
         </div>
 
         {/* Scraped Listings Browser */}
-        <ListingsTable polling={!!runningJob} />
+        <ListingsTable />
       </div>
     </div>
   );
