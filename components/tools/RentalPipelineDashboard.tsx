@@ -110,10 +110,10 @@ export function RentalPipelineDashboard() {
     fetchSummary();
   }, [fetchSummary]);
 
-  // Poll stats every 15s while a job is running
+  // Poll stats every 3s while a job is running
   useEffect(() => {
     if (!runningJob) return;
-    const id = setInterval(fetchSummary, 15_000);
+    const id = setInterval(fetchSummary, 3_000);
     return () => clearInterval(id);
   }, [runningJob, fetchSummary]);
 
