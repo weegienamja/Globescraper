@@ -129,7 +129,7 @@ export async function processQueueJob(
                 });
                 log("info", `[${idx}/${items.length}] ⊘ Marked listing INACTIVE (no longer available on site)`);
               } else {
-                log("warn", `[${idx}/${items.length}] ✗ Filtered out (not condo/apartment or empty)`);
+                log("warn", `[${idx}/${items.length}] ✗ Filtered out (could not parse listing)`);
               }
 
               await prisma.scrapeQueue.update({
@@ -139,7 +139,7 @@ export async function processQueueJob(
                   attempts: item.attempts + 1,
                   lastError: goneListing
                     ? "Listing no longer available — marked inactive"
-                    : "Failed to scrape or filtered out (not condo/apartment)",
+                    : "Failed to scrape or filtered out",
                 },
               });
               return { type: goneListing ? "deactivated" as const : "failed" as const };
@@ -258,6 +258,7 @@ export async function processQueueJob(
                 district: scraped.district,
                 bedrooms: scraped.bedrooms,
                 propertyType: scraped.propertyType,
+                priceOriginal: scraped.priceOriginal,
                 priceMonthlyUsd: scraped.priceMonthlyUsd,
                 postedAt: scraped.postedAt,
               },

@@ -168,10 +168,11 @@ export async function scrapeListingIpsCambodia(
 
   // Classify
   const propertyType = classifyPropertyType(title, description);
-  if (!shouldIngest(propertyType)) {
-    log("debug", `Skipping: classified as ${propertyType} (not condo/apartment)`);
+  if (!propertyType) {
+    log("debug", `Skipped non-residential listing: ${title.slice(0, 80)}`);
     return null;
   }
+  log("debug", `Classified as: ${propertyType}`);
 
   // Price — look for "$X,XXX / month" pattern common on IPS
   let priceText: string | null = null;

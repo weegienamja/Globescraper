@@ -1,27 +1,41 @@
 /**
  * Realestate.com.kh source adapter for rental listings.
  *
- * Discover: fetches category index pages for condo/apartment rentals.
+ * Discover: uses the internal JSON API at /api/portal/pages/results/
+ * to paginate through residential rental categories.
  * ScrapeListing: fetches an individual listing page, parses fields.
  *
- * NOTE: If content is heavily JS-rendered, a Playwright fallback may be
- * needed. For MVP we use fetch + cheerio and degrade gracefully.
+ * The site is a Next.js SPA — HTML pages don't paginate with ?page=N.
+ * The JSON API is the only reliable way to discover listings.
  */
 
 import * as cheerio from "cheerio";
 import { fetchHtml, politeDelay } from "../http";
 import { canonicalizeUrl } from "../url";
-import { classifyPropertyType, shouldIngest } from "../classify";
+import { classifyPropertyType } from "../classify";
 import { parsePriceMonthlyUsd, parseBedsBathsSize, parseDistrict, parseCity, parseAmenities } from "../parse";
-import { DISCOVER_MAX_PAGES, DISCOVER_MAX_URLS } from "../config";
+import { USER_AGENT } from "../config";
 import type { PropertyType } from "@prisma/client";
 import { type PipelineLogFn, noopLogger } from "../pipelineLogger";
 
-/* ── Category URLs ───────────────────────────────────────── */
+/* ── API constants ───────────────────────────────────────── */
 
-const CATEGORY_URLS = [
-  "https://www.realestate.com.kh/rent/condos/",
-  "https://www.realestate.com.kh/rent/apartments/",
+const API_BASE = "https://www.realestate.com.kh/api/portal/pages/results/";
+const API_PAGE_SIZE = 100;
+const API_MAX_PAGE = 50;
+const ORIGIN = "https://www.realestate.com.kh";
+
+/**
+ * Category API pathnames for residential property types.
+ * - /rent/condo/ returns the same results as /rent/apartment/ (deduplicated)
+ * - /rent/townhouse/ is not a valid API pathname (included in house results)
+ */
+const CATEGORY_PATHNAMES = [
+  { pathname: "/rent/apartment/", label: "apartment" },
+  { pathname: "/rent/serviced-apartment/", label: "serviced-apartment" },
+  { pathname: "/rent/penthouse/", label: "penthouse" },
+  { pathname: "/rent/house/", label: "house" },
+  { pathname: "/rent/villa/", label: "villa" },
 ];
 
 /* ── Types ───────────────────────────────────────────────── */
@@ -49,121 +63,140 @@ export interface ScrapedListing {
   postedAt: Date | null;
 }
 
+/* ── API types ───────────────────────────────────────────── */
+
+interface ApiListingResult {
+  id: number;
+  url: string;
+  headline: string;
+  nested?: ApiListingResult[];
+}
+
+interface ApiPageResponse {
+  count: number;
+  last_page: number;
+  results: ApiListingResult[];
+}
+
+/* ── API fetch helper ────────────────────────────────────── */
+
+async function fetchApiPage(
+  pathname: string,
+  page: number,
+  log: PipelineLogFn
+): Promise<ApiPageResponse | null> {
+  const qs = new URLSearchParams({
+    pathname,
+    page_size: String(API_PAGE_SIZE),
+    page: String(page),
+    search_languages: "en",
+    order_by: "date-desc",
+  });
+  const url = `${API_BASE}?${qs}`;
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 20_000);
+      const resp = await fetch(url, {
+        headers: {
+          "User-Agent": USER_AGENT,
+          Accept: "application/json",
+          "Accept-Language": "en",
+          "Accept-Currency": "usd",
+        },
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+
+      if (!resp.ok) {
+        if (resp.status === 404 || resp.status === 400) return null;
+        if (attempt < 2 && (resp.status === 429 || resp.status >= 500)) {
+          await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
+          continue;
+        }
+        return null;
+      }
+      return (await resp.json()) as ApiPageResponse;
+    } catch {
+      if (attempt < 2) {
+        await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
+        continue;
+      }
+      log("error", `API fetch failed: ${url}`);
+      return null;
+    }
+  }
+  return null;
+}
+
 /* ── Discover ────────────────────────────────────────────── */
 
 /**
- * Discover listing URLs from realestate.com.kh category pages.
- * Respects DISCOVER_MAX_PAGES and DISCOVER_MAX_URLS caps.
+ * Discover listing URLs from realestate.com.kh using the JSON API.
+ * Paginates each residential category up to 50 pages × 100 results = 5,000 per category.
+ * Uses dual sort order (date-desc + date-asc) for categories > 5,000 to maximize coverage.
  */
 export async function discoverRealestateKh(log: PipelineLogFn = noopLogger): Promise<DiscoveredUrl[]> {
   const urls: DiscoveredUrl[] = [];
-  let pagesVisited = 0;
+  const seen = new Set<string>();
+  let apiCalls = 0;
 
-  for (const baseUrl of CATEGORY_URLS) {
-    if (pagesVisited >= DISCOVER_MAX_PAGES) break;
-    log("info", `Scanning category: ${baseUrl}`);
+  for (const cat of CATEGORY_PATHNAMES) {
+    log("info", `Scanning category: ${cat.label}`);
 
-    let pageUrl: string | null = baseUrl;
-
-    while (pageUrl && pagesVisited < DISCOVER_MAX_PAGES && urls.length < DISCOVER_MAX_URLS) {
-      pagesVisited++;
-      log("info", `Fetching page ${pagesVisited}: ${pageUrl}`);
-      const html = await fetchHtml(pageUrl);
-      if (!html) {
-        log("warn", `No HTML returned for ${pageUrl}`);
-        break;
-      }
-
-      const $ = cheerio.load(html);
-      const beforeCount = urls.length;
-
-      // Extract listing links from article elements (each listing is an <article>)
-      $("article a[href]").each((_i, el) => {
-        if (urls.length >= DISCOVER_MAX_URLS) return false;
-
-        const href = $(el).attr("href");
-        if (!href) return;
-
-        const full = href.startsWith("http")
-          ? href
-          : `https://www.realestate.com.kh${href}`;
-
-        if (!isListingUrl(full)) return;
-
-        const canonical = canonicalizeUrl(full);
-        const sourceId = extractListingId(full);
-
-        if (!urls.some((u) => u.url === canonical)) {
-          urls.push({ url: canonical, sourceListingId: sourceId });
-          log("debug", `Found listing: ${canonical}`, { id: sourceId });
-        }
-      });
-
-      // Also pick up links from .info.listing containers
-      $("div.info.listing a[href]").each((_i, el) => {
-        if (urls.length >= DISCOVER_MAX_URLS) return false;
-
-        const href = $(el).attr("href");
-        if (!href) return;
-
-        const full = href.startsWith("http")
-          ? href
-          : `https://www.realestate.com.kh${href}`;
-
-        if (!isListingUrl(full)) return;
-
-        const canonical = canonicalizeUrl(full);
-        const sourceId = extractListingId(full);
-
-        if (!urls.some((u) => u.url === canonical)) {
-          urls.push({ url: canonical, sourceListingId: sourceId });
-          log("debug", `Found listing: ${canonical}`, { id: sourceId });
-        }
-      });
-
-      const pageFound = urls.length - beforeCount;
-      log("info", `Page ${pagesVisited}: found ${pageFound} new listing links (total: ${urls.length})`);
-
-      // Find next page link — realestate.com.kh uses ?page=N
-      let nextPageUrl: string | null = null;
-      $("a[href]").each((_i, el) => {
-        const href = $(el).attr("href") || "";
-        const text = $(el).text().trim();
-        // Look for "next" link or numbered page links
-        if (text === "›" || text === "Next" || text === "»") {
-          nextPageUrl = href.startsWith("http")
-            ? href
-            : `https://www.realestate.com.kh${href}`;
-          return false;
-        }
-      });
-
-      // Fallback: try incrementing ?page=N
-      if (!nextPageUrl) {
-        const currentUrl = new URL(pageUrl);
-        const currentPage = parseInt(currentUrl.searchParams.get("page") || "1", 10);
-        // Only try next page if we found listings on this page
-        if (urls.length > 0 && currentPage < DISCOVER_MAX_PAGES) {
-          const paginatedUrl: URL = new URL(pageUrl as string);
-          paginatedUrl.searchParams.set("page", String(currentPage + 1));
-          nextPageUrl = paginatedUrl.toString();
-        }
-      }
-
-      if (nextPageUrl && nextPageUrl !== pageUrl) {
-        log("info", `Pagination: moving to ${nextPageUrl}`);
-        pageUrl = nextPageUrl;
-      } else {
-        log("info", `No more pages for this category`);
-        pageUrl = null;
-      }
-
+    const firstPage = await fetchApiPage(cat.pathname, 1, log);
+    apiCalls++;
+    if (!firstPage || firstPage.results.length === 0) {
+      log("warn", `No results for ${cat.label}`);
       await politeDelay();
+      continue;
     }
+
+    const total = firstPage.count;
+    const maxPages = Math.min(API_MAX_PAGE, Math.ceil(total / API_PAGE_SIZE));
+    log("info", `[${cat.label}] ${total} listings, paginating up to ${maxPages} pages`);
+
+    // Extract from first page
+    for (const result of firstPage.results) {
+      addResult(result, seen, urls);
+    }
+
+    // Remaining pages
+    for (let page = 2; page <= maxPages; page++) {
+      await politeDelay();
+      const resp = await fetchApiPage(cat.pathname, page, log);
+      apiCalls++;
+      if (!resp || resp.results.length === 0) break;
+      for (const result of resp.results) {
+        addResult(result, seen, urls);
+      }
+      if (page % 10 === 0) {
+        log("info", `[${cat.label}] page ${page}/${maxPages}: ${urls.length} total URLs`);
+      }
+    }
+
+    log("info", `[${cat.label}] done — ${urls.length} unique URLs so far`);
   }
 
-  log("info", `Discovery complete: ${urls.length} unique URLs from ${pagesVisited} pages`);
+  log("info", `Discovery complete: ${urls.length} unique URLs from ${apiCalls} API calls`);
   return urls;
+}
+
+function addResult(result: ApiListingResult, seen: Set<string>, out: DiscoveredUrl[]): void {
+  if (result.url) {
+    const full = result.url.startsWith("http") ? result.url : `${ORIGIN}${result.url}`;
+    const canonical = canonicalizeUrl(full);
+    if (!seen.has(canonical)) {
+      seen.add(canonical);
+      out.push({ url: canonical, sourceListingId: extractListingId(full) ?? String(result.id) });
+    }
+  }
+  if (result.nested) {
+    for (const nested of result.nested) {
+      addResult(nested, seen, out);
+    }
+  }
 }
 
 /* ── Scrape individual listing ───────────────────────────── */
@@ -205,10 +238,16 @@ export async function scrapeListingRealestateKh(
       .text()
       .trim() || null;
 
-  // Classify
-  const propertyType = classifyPropertyType(title, description);
-  if (!shouldIngest(propertyType)) {
-    log("debug", `Skipping: classified as ${propertyType} (not condo/apartment)`);
+  // Classify — use title + description + URL slug for best accuracy
+  // The URL slug on realestate.com.kh often contains the type:
+  // e.g. /rent/bkk-1/3-bed-4-bath-villa-259490/
+  const urlSlug = url.toLowerCase();
+  const classifyHint = `${title} ${description ?? ""} ${urlSlug}`;
+  const propertyType = classifyPropertyType(classifyHint);
+
+  // Reject non-residential listings
+  if (!propertyType) {
+    log("debug", `Skipped non-residential listing: ${title.slice(0, 80)}`);
     return null;
   }
   log("debug", `Classified as: ${propertyType}`);
@@ -366,31 +405,6 @@ export async function scrapeListingRealestateKh(
 }
 
 /* ── Helpers ─────────────────────────────────────────────── */
-
-function isListingUrl(url: string): boolean {
-  try {
-    const u = new URL(url);
-    if (!u.hostname.includes("realestate.com.kh")) return false;
-
-    const path = u.pathname;
-
-    // Individual listing pages have a numeric ID at the end of the slug:
-    // /rent/<district>/<beds>-bed-<baths>-bath-<type>-<id>/
-    // /new-developments/<project>/<beds>-bed-<baths>-bath-<type>-<id>/
-    // The ID is always a 5-6 digit number at the end
-    if (/\d{5,}\/?\s*$/.test(path)) {
-      // Must contain "rent" or "new-developments" in the path
-      if (path.includes("/rent/") || path.includes("/new-developments/")) {
-        // Exclude category/filter pages (those don't have numeric IDs)
-        return true;
-      }
-    }
-
-    return false;
-  } catch {
-    return false;
-  }
-}
 
 function extractListingId(url: string): string | null {
   // Extract numeric ID from end of URL path

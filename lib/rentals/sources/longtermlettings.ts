@@ -185,10 +185,7 @@ export async function scrapeListingLongTermLettings(
 
   // Classify
   const propertyType = classifyPropertyType(title, description);
-  if (!shouldIngest(propertyType)) {
-    log("debug", `Skipping: classified as ${propertyType}`);
-    return null;
-  }
+  if (!propertyType) return null; // non-residential
 
   // Price — "$450 USD" pattern
   let priceText: string | null = null;

@@ -173,10 +173,7 @@ export async function scrapeListingFazWaz(
 
   // Classify
   const propertyType = classifyPropertyType(title, description);
-  if (!shouldIngest(propertyType)) {
-    log("debug", `Skipping: classified as ${propertyType}`);
-    return null;
-  }
+  if (!propertyType) return null; // non-residential
 
   // Price — FazWaz shows "฿XX,XXX/mo" or "$X,XXX/mo" in the detail page
   let priceText: string | null = null;

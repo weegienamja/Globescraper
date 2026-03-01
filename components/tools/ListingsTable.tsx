@@ -24,6 +24,21 @@ interface Listing {
   imageUrlsJson: string | null;
   amenitiesJson: string | null;
   _count: { snapshots: number };
+  snapshots: Snapshot[];
+  priceChange: {
+    hasPriceChange: boolean;
+    latestPrice: number | null;
+    previousPrice: number | null;
+    priceDirection: "up" | "down" | "same" | null;
+    uniquePriceCount: number;
+  };
+}
+
+interface Snapshot {
+  id: string;
+  scrapedAt: string;
+  priceMonthlyUsd: number | null;
+  priceOriginal: string | null;
 }
 
 interface ListingsData {
@@ -98,15 +113,48 @@ export function ListingsTable({ initialDistrict }: ListingsTableProps = {}) {
   };
 
   const sourceLabel = (s: string) => {
-    if (s === "KHMER24") return "Khmer24";
-    if (s === "REALESTATE_KH") return "Realestate.kh";
-    return s;
+    const map: Record<string, string> = {
+      KHMER24: "Khmer24",
+      REALESTATE_KH: "Realestate.kh",
+      IPS_CAMBODIA: "IPS Cambodia",
+      CAMREALTY: "CamRealty",
+      LONGTERMLETTINGS: "LongTermLettings",
+      FAZWAZ: "FazWaz",
+      HOMETOGO: "HomeToGo",
+    };
+    return map[s] || s;
   };
 
   const typeLabel = (t: string) => {
-    if (t === "CONDO") return "Condo";
-    if (t === "APARTMENT") return "Apartment";
-    return t;
+    const map: Record<string, string> = {
+      APARTMENT: "Apartment",
+      CONDO: "Condo",
+      HOUSE: "House",
+      VILLA: "Long Term Rental",
+      TOWNHOUSE: "Long Term Rental",
+      SERVICED_APARTMENT: "Serviced Apt",
+      PENTHOUSE: "Penthouse",
+      SHOPHOUSE: "Shophouse",
+      LAND: "Land",
+      COMMERCIAL: "Commercial",
+      WAREHOUSE: "Warehouse",
+      OFFICE: "Office",
+      OTHER: "Other",
+    };
+    return map[t] || t;
+  };
+
+  const sourceBadgeColor = (src: string): { bg: string; fg: string } => {
+    const colors: Record<string, { bg: string; fg: string }> = {
+      REALESTATE_KH: { bg: "rgba(244, 114, 182, 0.15)", fg: "#f472b6" },
+      KHMER24:       { bg: "rgba(99, 102, 241, 0.15)",  fg: "#818cf8" },
+      IPS_CAMBODIA:  { bg: "rgba(52, 211, 153, 0.15)",  fg: "#34d399" },
+      CAMREALTY:     { bg: "rgba(251, 191, 36, 0.15)",  fg: "#fbbf24" },
+      FAZWAZ:        { bg: "rgba(96, 165, 250, 0.15)",  fg: "#60a5fa" },
+      LONGTERMLETTINGS: { bg: "rgba(167, 139, 250, 0.15)", fg: "#a78bfa" },
+      HOMETOGO:      { bg: "rgba(248, 113, 113, 0.15)", fg: "#f87171" },
+    };
+    return colors[src] || { bg: "rgba(148, 163, 184, 0.1)", fg: "#94a3b8" };
   };
 
   const sortIcon = (field: string) => {
@@ -152,8 +200,12 @@ export function ListingsTable({ initialDistrict }: ListingsTableProps = {}) {
           onChange={(e) => { setSource(e.target.value); setPage(1); }}
         >
           <option value="">All Sources</option>
-          <option value="KHMER24">Khmer24</option>
           <option value="REALESTATE_KH">Realestate.kh</option>
+          <option value="KHMER24">Khmer24</option>
+          <option value="IPS_CAMBODIA">IPS Cambodia</option>
+          <option value="CAMREALTY">CamRealty</option>
+          <option value="FAZWAZ">FazWaz</option>
+          <option value="LONGTERMLETTINGS">LongTermLettings</option>
         </select>
         <select
           style={s.select}
@@ -161,8 +213,12 @@ export function ListingsTable({ initialDistrict }: ListingsTableProps = {}) {
           onChange={(e) => { setPropertyType(e.target.value); setPage(1); }}
         >
           <option value="">All Types</option>
-          <option value="CONDO">Condo</option>
           <option value="APARTMENT">Apartment</option>
+          <option value="CONDO">Condo</option>
+          <option value="HOUSE">House</option>
+          <option value="SERVICED_APARTMENT">Serviced Apartment</option>
+          <option value="PENTHOUSE">Penthouse</option>
+          <option value="LONG_TERM_RENTAL">Long Term Rental</option>
         </select>
         {district && (
           <div style={{
@@ -256,6 +312,7 @@ export function ListingsTable({ initialDistrict }: ListingsTableProps = {}) {
                   Price/mo{sortIcon("priceMonthlyUsd")}
                 </th>
                 <th style={s.th}>$/m²</th>
+                <th style={s.th}>History</th>
                 <th
                   style={{ ...s.th, cursor: "pointer" }}
                   onClick={() => handleSort("postedAt")}
@@ -379,10 +436,63 @@ export function ListingsTable({ initialDistrict }: ListingsTableProps = {}) {
                                 );
                               } catch { return null; }
                             })()}
-                            <div style={s.expandRow}>
-                              <span style={s.expandLabel}>Snapshots:</span>
-                              <span style={s.expandValue}>{l._count.snapshots}</span>
-                            </div>
+                            {/* ── Price History Timeline ── */}
+                            {l.snapshots && l.snapshots.length > 0 && (
+                              <div style={{ marginTop: "8px" }}>
+                                <div style={s.expandRow}>
+                                  <span style={s.expandLabel}>Price History:</span>
+                                  <span style={{ ...s.expandValue, color: "#64748b" }}>
+                                    {l._count.snapshots} snapshot{l._count.snapshots !== 1 ? "s" : ""}
+                                    {l.priceChange.hasPriceChange && (
+                                      <span style={{
+                                        marginLeft: "8px",
+                                        color: l.priceChange.priceDirection === "down" ? "#34d399" : "#f87171",
+                                        fontWeight: 600,
+                                      }}>
+                                        {l.priceChange.uniquePriceCount} different price{l.priceChange.uniquePriceCount !== 1 ? "s" : ""}
+                                      </span>
+                                    )}
+                                  </span>
+                                </div>
+                                <div style={s.snapshotTimeline}>
+                                  {l.snapshots.map((snap, idx) => {
+                                    const prev = l.snapshots[idx + 1];
+                                    const changed = prev && snap.priceMonthlyUsd !== prev.priceMonthlyUsd;
+                                    const dir = changed && snap.priceMonthlyUsd !== null && prev.priceMonthlyUsd !== null
+                                      ? snap.priceMonthlyUsd > prev.priceMonthlyUsd ? "up" : "down"
+                                      : null;
+                                    return (
+                                      <div key={snap.id} style={s.snapRow}>
+                                        <span style={s.snapDate}>
+                                          {new Date(snap.scrapedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                                        </span>
+                                        <span style={{
+                                          ...s.snapPrice,
+                                          color: changed
+                                            ? dir === "down" ? "#34d399" : "#f87171"
+                                            : "#e2e8f0",
+                                          fontWeight: changed ? 600 : 400,
+                                        }}>
+                                          {snap.priceMonthlyUsd !== null
+                                            ? `$${snap.priceMonthlyUsd.toLocaleString()}/mo`
+                                            : "—"}
+                                          {dir === "up" && " ↑"}
+                                          {dir === "down" && " ↓"}
+                                        </span>
+                                        {snap.priceOriginal && (
+                                          <span style={s.snapOriginal}>({snap.priceOriginal})</span>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                  {l._count.snapshots > l.snapshots.length && (
+                                    <div style={{ ...s.snapRow, color: "#475569", fontStyle: "italic" }}>
+                                      +{l._count.snapshots - l.snapshots.length} older snapshots
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
                             <div style={s.expandRow}>
                               <span style={s.expandLabel}>URL:</span>
                               <a
@@ -402,8 +512,8 @@ export function ListingsTable({ initialDistrict }: ListingsTableProps = {}) {
                     <td style={s.td}>
                       <span style={{
                         ...s.badge,
-                        background: l.source === "KHMER24" ? "rgba(99, 102, 241, 0.15)" : "rgba(244, 114, 182, 0.15)",
-                        color: l.source === "KHMER24" ? "#818cf8" : "#f472b6",
+                        background: sourceBadgeColor(l.source).bg,
+                        color: sourceBadgeColor(l.source).fg,
                       }}>
                         {sourceLabel(l.source)}
                       </span>
@@ -439,6 +549,32 @@ export function ListingsTable({ initialDistrict }: ListingsTableProps = {}) {
                       {l.priceMonthlyUsd && l.sizeSqm
                         ? `$${(l.priceMonthlyUsd / l.sizeSqm).toFixed(1)}`
                         : "—"}
+                    </td>
+                    <td style={s.td}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <span style={{
+                          ...s.badge,
+                          background: l.priceChange.hasPriceChange
+                            ? l.priceChange.priceDirection === "down"
+                              ? "rgba(34, 197, 94, 0.15)"
+                              : "rgba(248, 113, 113, 0.15)"
+                            : "rgba(148, 163, 184, 0.08)",
+                          color: l.priceChange.hasPriceChange
+                            ? l.priceChange.priceDirection === "down"
+                              ? "#34d399"
+                              : "#f87171"
+                            : "#475569",
+                          fontSize: "12px",
+                          fontWeight: l.priceChange.hasPriceChange ? 600 : 400,
+                        }}>
+                          {l._count.snapshots}
+                          {l.priceChange.hasPriceChange && (
+                            <span style={{ marginLeft: "3px" }}>
+                              {l.priceChange.priceDirection === "down" ? "↓" : l.priceChange.priceDirection === "up" ? "↑" : ""}
+                            </span>
+                          )}
+                        </span>
+                      </div>
                     </td>
                     <td style={{ ...s.td, color: "#94a3b8", fontSize: "13px", whiteSpace: "nowrap" }}>
                       {l.postedAt ? formatDate(l.postedAt) : "—"}
@@ -661,6 +797,38 @@ const s: Record<string, React.CSSProperties> = {
   },
   expandValue: {
     color: "#cbd5e1",
+  },
+  snapshotTimeline: {
+    marginTop: "6px",
+    marginLeft: "98px",
+    padding: "8px 12px",
+    background: "rgba(15, 23, 42, 0.6)",
+    border: "1px solid #1e293b",
+    borderRadius: "8px",
+    maxHeight: "200px",
+    overflowY: "auto" as const,
+  },
+  snapRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+    padding: "3px 0",
+    fontSize: "12px",
+    borderBottom: "1px solid rgba(30, 41, 59, 0.4)",
+  },
+  snapDate: {
+    color: "#64748b",
+    minWidth: "100px",
+    flexShrink: 0,
+  },
+  snapPrice: {
+    color: "#e2e8f0",
+    fontVariantNumeric: "tabular-nums",
+    minWidth: "100px",
+  },
+  snapOriginal: {
+    color: "#475569",
+    fontSize: "11px",
   },
   loadingMsg: {
     padding: "40px",

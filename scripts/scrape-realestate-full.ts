@@ -1,8 +1,18 @@
 /**
  * Script: Full realestate.com.kh scrape
  *
- * Crawls ALL pages of the realestate.com.kh search results for
- * Apartment / Condo / ServicedApartment / Penthouse in Phnom Penh.
+ * Uses the internal JSON API at /api/portal/pages/results/ to discover
+ * all residential rental listings on realestate.com.kh/rent/.
+ * The site is a Next.js SPA so HTML pagination doesn't work — the API
+ * is the only reliable way to paginate.
+ *
+ * API constraints:
+ *   page_size capped at 100, last_page capped at 50 → max 5,000 results per query.
+ *   To reach all ~34k listings we use multiple query strategies:
+ *   1. Per-category crawl with date-desc + date-asc sort (covers sets ≤ 10k fully)
+ *   2. Bedroom-filtered queries for large categories (apartment, house)
+ *   3. Extra sort orders (price-asc/desc) for slices > 10k
+ *
  * Discovers listing URLs, skips already-scraped ones, enqueues new ones,
  * and processes the queue through the existing pipeline.
  *
@@ -10,9 +20,9 @@
  *   npx tsx scripts/scrape-realestate-full.ts
  *   npx tsx scripts/scrape-realestate-full.ts --discover-only
  *   npx tsx scripts/scrape-realestate-full.ts --process-only
- *   npx tsx scripts/scrape-realestate-full.ts --max-pages 50
  *   npx tsx scripts/scrape-realestate-full.ts --max-process 500
  *   npx tsx scripts/scrape-realestate-full.ts --batch-size 100
+ *   npx tsx scripts/scrape-realestate-full.ts --rescrape-days 3
  */
 
 /* ── CLI args ────────────────────────────────────────────── */
@@ -24,9 +34,9 @@ function getArg(name: string, fallback: number): number {
 }
 const hasFlag = (name: string) => process.argv.includes(name);
 
-const MAX_PAGES = getArg("--max-pages", 99999);
 const MAX_PROCESS = getArg("--max-process", 99999);
 const BATCH_SIZE = getArg("--batch-size", 200); // queue items per process batch
+const RESCRAPE_DAYS = getArg("--rescrape-days", 7); // re-scrape listings older than N days
 const DISCOVER_ONLY = hasFlag("--discover-only");
 const PROCESS_ONLY = hasFlag("--process-only");
 
@@ -35,31 +45,33 @@ process.env.RENTALS_MAX_PROCESS = String(BATCH_SIZE);
 
 /* ── Imports ─────────────────────────────────────────────── */
 
-import * as cheerio from "cheerio";
 import { prisma } from "../lib/prisma";
 import { QueueStatus, RentalSource } from "@prisma/client";
-import { fetchHtml, politeDelay } from "../lib/rentals/http";
 import { canonicalizeUrl } from "../lib/rentals/url";
 import { processQueueJob } from "../lib/rentals/jobs/processQueue";
 import type { PipelineLogFn, PipelineProgressFn } from "../lib/rentals/pipelineLogger";
+import { USER_AGENT } from "../lib/rentals/config";
 
 /* ── Constants ───────────────────────────────────────────── */
 
 const SOURCE: RentalSource = "REALESTATE_KH";
+const API_BASE = "https://www.realestate.com.kh/api/portal/pages/results/";
+const API_PAGE_SIZE = 100; // server-side max
+const API_MAX_PAGE = 50;   // server-side cap on `last_page`
+const ORIGIN = "https://www.realestate.com.kh";
 
 /**
- * Base search URL for residential rentals in Phnom Penh.
- * Categories: Apartment, Condo, ServicedApartment, Penthouse.
- * Sorted by newest first.
+ * Category API pathnames for residential property types.
+ * - /rent/condo/ is identical to /rent/apartment/ (same 25.5k result set)
+ * - /rent/townhouse/ is invalid in the API (townhouses included in /rent/house/)
  */
-const BASE_SEARCH_URL =
-  "https://www.realestate.com.kh/rent/phnom-penh/" +
-  "?active_tab=popularLocations" +
-  "&categories=Apartment&categories=Condo&categories=ServicedApartment&categories=Penthouse" +
-  "&order_by=date-desc" +
-  "&property_type=residential" +
-  "&q=location%3A%20Phnom%20Penh" +
-  "&search_type=rent";
+const CATEGORIES = [
+  { pathname: "/rent/apartment/", label: "apartment" },
+  { pathname: "/rent/serviced-apartment/", label: "serviced-apartment" },
+  { pathname: "/rent/penthouse/", label: "penthouse" },
+  { pathname: "/rent/house/", label: "house" },
+  { pathname: "/rent/villa/", label: "villa" },
+];
 
 /* ── Logger ──────────────────────────────────────────────── */
 
@@ -77,23 +89,90 @@ const progress: PipelineProgressFn = (p) => {
   if (p.percent >= 100) process.stdout.write("\n");
 };
 
+/* ── API fetch helper ────────────────────────────────────── */
+
+interface ApiResult {
+  id: number;
+  url: string; // relative, e.g. "/rent/bkk-1/3-bed-4-bath-apartment-259490/"
+  headline: string;
+  nested?: ApiResult[];
+}
+
+interface ApiResponse {
+  count: number;
+  last_page: number;
+  results: ApiResult[];
+}
+
+/**
+ * Fetch one page from the realestate.com.kh listing API.
+ * Returns null on error (including "Invalid page" for beyond-data pages).
+ */
+async function fetchApiPage(params: {
+  pathname: string;
+  page: number;
+  order_by?: string;
+  bedrooms?: number;
+}): Promise<ApiResponse | null> {
+  const qs = new URLSearchParams({
+    pathname: params.pathname,
+    page_size: String(API_PAGE_SIZE),
+    page: String(params.page),
+    search_languages: "en",
+  });
+  if (params.order_by) qs.set("order_by", params.order_by);
+  if (params.bedrooms !== undefined) qs.set("bedrooms", String(params.bedrooms));
+
+  const url = `${API_BASE}?${qs}`;
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 20_000);
+
+      const resp = await fetch(url, {
+        headers: {
+          "User-Agent": USER_AGENT,
+          Accept: "application/json",
+          "Accept-Language": "en",
+          "Accept-Currency": "usd",
+        },
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+
+      if (!resp.ok) {
+        // "Invalid page" → beyond available data, not an error
+        if (resp.status === 404 || resp.status === 400) return null;
+        if (resp.status === 429 || resp.status >= 500) {
+          const backoff = Math.pow(2, attempt) * 2000 + Math.random() * 1000;
+          log("warn", `API ${resp.status} for ${url}, retry in ${Math.round(backoff)}ms`);
+          await new Promise((r) => setTimeout(r, backoff));
+          continue;
+        }
+        return null;
+      }
+
+      return (await resp.json()) as ApiResponse;
+    } catch (err) {
+      if (attempt < 2) {
+        const backoff = Math.pow(2, attempt) * 2000 + Math.random() * 1000;
+        log("warn", `API fetch error, retry in ${Math.round(backoff)}ms: ${err}`);
+        await new Promise((r) => setTimeout(r, backoff));
+        continue;
+      }
+      log("error", `API fetch failed permanently: ${url}`);
+      return null;
+    }
+  }
+  return null;
+}
+
 /* ── Helpers ─────────────────────────────────────────────── */
 
-function isListingUrl(url: string): boolean {
-  try {
-    const u = new URL(url);
-    if (!u.hostname.includes("realestate.com.kh")) return false;
-    const path = u.pathname;
-    // Listing pages end with a 5+ digit numeric ID
-    if (/\d{5,}\/?\s*$/.test(path)) {
-      if (path.includes("/rent/") || path.includes("/new-developments/")) {
-        return true;
-      }
-    }
-    return false;
-  } catch {
-    return false;
-  }
+interface DiscoveredUrl {
+  url: string;
+  sourceListingId: string | null;
 }
 
 function extractListingId(url: string): string | null {
@@ -101,9 +180,105 @@ function extractListingId(url: string): string | null {
   return match ? match[1] : null;
 }
 
-interface DiscoveredUrl {
-  url: string;
-  sourceListingId: string | null;
+/** Extract listing URLs from an API response (including nested sub-listings). */
+function extractUrlsFromApiResponse(
+  response: ApiResponse,
+  seen: Set<string>,
+  out: DiscoveredUrl[]
+): number {
+  let added = 0;
+  for (const result of response.results) {
+    // Main listing
+    if (result.url) {
+      const fullUrl = result.url.startsWith("http")
+        ? result.url
+        : `${ORIGIN}${result.url}`;
+      const canonical = canonicalizeUrl(fullUrl);
+      if (!seen.has(canonical)) {
+        seen.add(canonical);
+        out.push({ url: canonical, sourceListingId: extractListingId(fullUrl) ?? String(result.id) });
+        added++;
+      }
+    }
+    // Nested sub-listings (e.g. multiple units in a building)
+    if (result.nested && Array.isArray(result.nested)) {
+      for (const nested of result.nested) {
+        if (nested.url) {
+          const fullUrl = nested.url.startsWith("http")
+            ? nested.url
+            : `${ORIGIN}${nested.url}`;
+          const canonical = canonicalizeUrl(fullUrl);
+          if (!seen.has(canonical)) {
+            seen.add(canonical);
+            out.push({ url: canonical, sourceListingId: extractListingId(fullUrl) ?? String(nested.id) });
+            added++;
+          }
+        }
+      }
+    }
+  }
+  return added;
+}
+
+/** Polite API delay (shorter than HTML scrape delay since API is lighter) */
+function apiDelay(): Promise<void> {
+  const ms = 300 + Math.random() * 200;
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+/* ── Query types ─────────────────────────────────────────── */
+
+interface ApiQuery {
+  pathname: string;
+  order_by: string;
+  bedrooms?: number;
+  label: string;
+}
+
+/**
+ * Build the full query plan for maximum coverage.
+ *
+ * Strategy:
+ * 1. For each category: date-desc + date-asc (covers sets ≤ 10k fully)
+ * 2. For large categories (apartment ≈ 25.5k, house ≈ 9k): bedroom-filtered queries
+ *    - Each bedroom slice is typically < 5k and fits in one pass
+ *    - For apartment/bedrooms=1 (≈ 11.5k): use 4 sort orders
+ *    - For apartment/bedrooms=2 (≈ 6.5k): use 2 sort orders
+ * 3. price-asc + price-desc for apartment/house no-filter (extra coverage)
+ */
+function buildQueryPlan(): ApiQuery[] {
+  const queries: ApiQuery[] = [];
+
+  for (const cat of CATEGORIES) {
+    // Base: dual sort for every category
+    queries.push({ pathname: cat.pathname, order_by: "date-desc", label: `${cat.label}` });
+    queries.push({ pathname: cat.pathname, order_by: "date-asc", label: `${cat.label}/asc` });
+  }
+
+  // Extra sort orders for apartment + house (large categories)
+  for (const big of ["/rent/apartment/", "/rent/house/"]) {
+    const label = big.includes("apartment") ? "apartment" : "house";
+    queries.push({ pathname: big, order_by: "price-asc", label: `${label}/price-asc` });
+    queries.push({ pathname: big, order_by: "price-desc", label: `${label}/price-desc` });
+  }
+
+  // Bedroom-filtered slices for apartment and house
+  for (const big of ["/rent/apartment/", "/rent/house/"]) {
+    const label = big.includes("apartment") ? "apartment" : "house";
+    for (let bed = 0; bed <= 10; bed++) {
+      queries.push({ pathname: big, bedrooms: bed, order_by: "date-desc", label: `${label}/bed=${bed}` });
+    }
+  }
+
+  // Extra sort orders for large bedroom slices in apartment
+  // bed=1 (≈ 11.5k): needs date-asc + price sorts to cover the middle
+  for (const extra of ["date-asc", "price-asc", "price-desc"] as const) {
+    queries.push({ pathname: "/rent/apartment/", bedrooms: 1, order_by: extra, label: `apartment/bed=1/${extra}` });
+  }
+  // bed=2 (≈ 6.5k): date-asc is enough for full coverage with date-desc
+  queries.push({ pathname: "/rent/apartment/", bedrooms: 2, order_by: "date-asc", label: "apartment/bed=2/asc" });
+
+  return queries;
 }
 
 /* ── Phase 1: Discover ───────────────────────────────────── */
@@ -111,83 +286,92 @@ interface DiscoveredUrl {
 async function discoverAll(): Promise<DiscoveredUrl[]> {
   const urls: DiscoveredUrl[] = [];
   const seen = new Set<string>();
-  let page = 1;
-  let emptyPagesInRow = 0;
+  let totalApiCalls = 0;
+
+  const queries = buildQueryPlan();
 
   console.log("\n╔══════════════════════════════════════════════╗");
-  console.log("║  Phase 1 — Discover listing URLs             ║");
+  console.log("║  Phase 1 — Discover via API                  ║");
+  console.log(`║  Queries: ${String(queries.length).padEnd(3)} query sets                    ║`);
+  console.log(`║  Max per query: ${API_PAGE_SIZE} × ${API_MAX_PAGE} = 5,000 results   ║`);
   console.log("╚══════════════════════════════════════════════╝\n");
 
-  while (page <= MAX_PAGES && emptyPagesInRow < 3) {
-    const pageUrl = `${BASE_SEARCH_URL}&page=${page}`;
-    log("info", `Page ${page}: fetching search results…`);
+  for (let qi = 0; qi < queries.length; qi++) {
+    const q = queries[qi];
+    const qLabel = q.bedrooms !== undefined
+      ? `${q.label} [${q.order_by}]`
+      : `${q.label} [${q.order_by}]`;
 
-    const html = await fetchHtml(pageUrl);
-    if (!html) {
-      log("warn", `Page ${page}: no HTML returned, stopping.`);
-      break;
+    // First page: get count to decide if we should bother paginating
+    const firstPage = await fetchApiPage({
+      pathname: q.pathname,
+      page: 1,
+      order_by: q.order_by,
+      bedrooms: q.bedrooms,
+    });
+    totalApiCalls++;
+
+    if (!firstPage || firstPage.results.length === 0) {
+      log("debug", `[${qi + 1}/${queries.length}] ${qLabel}: empty, skipping`);
+      await apiDelay();
+      continue;
     }
 
-    const $ = cheerio.load(html);
-    let found = 0;
+    const totalInSlice = firstPage.count;
+    const maxPages = Math.min(API_MAX_PAGE, Math.ceil(totalInSlice / API_PAGE_SIZE));
+    const beforeCount = urls.length;
+    const added = extractUrlsFromApiResponse(firstPage, seen, urls);
 
-    // Extract listing links from article elements and .info.listing containers
-    const selectors = ["article a[href]", "div.info.listing a[href]", "a[href*='/rent/']"];
-    for (const sel of selectors) {
-      $(sel).each((_i, el) => {
-        const href = $(el).attr("href");
-        if (!href) return;
+    log("info", `[${qi + 1}/${queries.length}] ${qLabel}: ${totalInSlice} total, up to ${maxPages} pages — page 1: +${added} new (${urls.length} total)`);
 
-        const full = href.startsWith("http")
-          ? href
-          : `https://www.realestate.com.kh${href}`;
+    // Paginate remaining pages
+    for (let page = 2; page <= maxPages; page++) {
+      await apiDelay();
 
-        if (!isListingUrl(full)) return;
-
-        const canonical = canonicalizeUrl(full);
-        if (seen.has(canonical)) return;
-        seen.add(canonical);
-
-        urls.push({
-          url: canonical,
-          sourceListingId: extractListingId(full),
-        });
-        found++;
+      const resp = await fetchApiPage({
+        pathname: q.pathname,
+        page,
+        order_by: q.order_by,
+        bedrooms: q.bedrooms,
       });
+      totalApiCalls++;
+
+      if (!resp || resp.results.length === 0) {
+        log("debug", `  page ${page}: empty/error, stopping this query`);
+        break;
+      }
+
+      const pageAdded = extractUrlsFromApiResponse(resp, seen, urls);
+
+      if (page % 10 === 0 || page === maxPages) {
+        log("info", `  page ${page}/${maxPages}: +${pageAdded} new (${urls.length} total)`);
+      }
     }
 
-    if (found === 0) {
-      emptyPagesInRow++;
-      log("warn", `Page ${page}: 0 listings found (${emptyPagesInRow} empty pages in a row)`);
-    } else {
-      emptyPagesInRow = 0;
-      log("info", `Page ${page}: +${found} new URLs (total: ${urls.length})`);
-    }
-
-    page++;
-    await politeDelay();
+    const queryTotal = urls.length - beforeCount;
+    log("info", `  → query added ${queryTotal} new URLs (running total: ${urls.length})`);
   }
 
-  log("info", `Discovery complete: ${urls.length} unique listing URLs from ${page - 1} pages`);
+  log("info", `\nDiscovery complete: ${urls.length} unique listing URLs from ${totalApiCalls} API calls across ${queries.length} query sets`);
   return urls;
 }
 
 /* ── Phase 2: Enqueue (skip already-scraped) ─────────────── */
 
-async function enqueueNewUrls(discovered: DiscoveredUrl[]): Promise<number> {
+async function enqueueNewUrls(discovered: DiscoveredUrl[]): Promise<{ newCount: number; rescrapeCount: number }> {
   console.log("\n╔══════════════════════════════════════════════╗");
-  console.log("║  Phase 2 — Enqueue new listings              ║");
+  console.log("║  Phase 2 — Enqueue new + stale listings       ║");
   console.log("╚══════════════════════════════════════════════╝\n");
 
-  // Get all existing canonical URLs for this source in one query
+  // Get all existing listings with their lastSeenAt for staleness check
   const existingRows = await prisma.rentalListing.findMany({
     where: { source: SOURCE },
-    select: { canonicalUrl: true },
+    select: { canonicalUrl: true, lastSeenAt: true },
   });
-  const existingUrls = new Set(existingRows.map((r) => r.url ?? r.canonicalUrl));
-  log("info", `${existingUrls.size} existing listings in DB for ${SOURCE}`);
+  const existingMap = new Map(existingRows.map((r) => [r.canonicalUrl, r.lastSeenAt]));
+  log("info", `${existingMap.size} existing listings in DB for ${SOURCE}`);
 
-  // Also get anything currently PENDING/RETRY in queue
+  // Get anything currently PENDING/RETRY in queue (don't re-enqueue those)
   const queuedRows = await prisma.scrapeQueue.findMany({
     where: {
       source: SOURCE,
@@ -198,14 +382,32 @@ async function enqueueNewUrls(discovered: DiscoveredUrl[]): Promise<number> {
   const queuedUrls = new Set(queuedRows.map((r) => r.canonicalUrl));
   log("info", `${queuedUrls.size} already pending in queue`);
 
-  const toEnqueue = discovered.filter(
-    (d) => !existingUrls.has(d.url) && !queuedUrls.has(d.url)
-  );
-  log("info", `${toEnqueue.length} new URLs to enqueue (${discovered.length - toEnqueue.length} already scraped/queued)`);
+  const staleCutoff = new Date(Date.now() - RESCRAPE_DAYS * 24 * 60 * 60 * 1000);
+  log("info", `Re-scrape threshold: ${RESCRAPE_DAYS} days (stale if lastSeenAt < ${staleCutoff.toISOString().slice(0, 10)})`);
 
-  if (toEnqueue.length === 0) return 0;
+  const brandNew: DiscoveredUrl[] = [];
+  const stale: DiscoveredUrl[] = [];
 
-  // Batch insert via createMany for speed (fallback to upsert loop if needed)
+  for (const d of discovered) {
+    if (queuedUrls.has(d.url)) continue; // already in queue
+    const lastSeen = existingMap.get(d.url);
+    if (!lastSeen) {
+      brandNew.push(d); // never scraped
+    } else if (lastSeen < staleCutoff) {
+      stale.push(d); // scraped before but stale — re-scrape for price changes
+    }
+    // else: recently scraped, skip
+  }
+
+  const recentlyScraped = discovered.length - brandNew.length - stale.length - queuedUrls.size;
+  log("info", `${brandNew.length} brand new URLs to enqueue`);
+  log("info", `${stale.length} stale URLs to re-scrape (not seen in ${RESCRAPE_DAYS}+ days)`);
+  log("info", `${Math.max(0, recentlyScraped)} recently scraped (skipped)`);
+
+  const toEnqueue = [...brandNew, ...stale];
+  if (toEnqueue.length === 0) return { newCount: 0, rescrapeCount: 0 };
+
+  // Upsert in batches — new items get PENDING, stale items get reset to PENDING
   let queued = 0;
   const UPSERT_BATCH = 50;
   for (let i = 0; i < toEnqueue.length; i += UPSERT_BATCH) {
@@ -231,12 +433,12 @@ async function enqueueNewUrls(discovered: DiscoveredUrl[]): Promise<number> {
       )
     );
     queued += batch.length;
-    if (queued % 200 === 0 || i + UPSERT_BATCH >= toEnqueue.length) {
+    if (queued % 500 === 0 || i + UPSERT_BATCH >= toEnqueue.length) {
       log("info", `Enqueued ${queued}/${toEnqueue.length}`);
     }
   }
 
-  return queued;
+  return { newCount: brandNew.length, rescrapeCount: stale.length };
 }
 
 /* ── Phase 3: Process queue in batches ───────────────────── */
@@ -303,8 +505,9 @@ async function processAllBatches(): Promise<void> {
 
 async function main() {
   console.log("\n╔══════════════════════════════════════════════════════╗");
-  console.log("║  realestate.com.kh — Full Scrape                     ║");
-  console.log("║  Categories: Apartment, Condo, Serviced, Penthouse   ║");
+  console.log("║  realestate.com.kh — Full Residential Scrape          ║");
+  console.log("║  Apartments, Condos, Serviced Apts, Penthouses,       ║");
+  console.log("║  Houses, Villas, Townhouses — via JSON API             ║");
   console.log("╚══════════════════════════════════════════════════════╝\n");
 
   const start = Date.now();
@@ -313,8 +516,8 @@ async function main() {
     const discovered = await discoverAll();
 
     if (discovered.length > 0) {
-      const queued = await enqueueNewUrls(discovered);
-      log("info", `Enqueued ${queued} new listings for scraping`);
+      const { newCount, rescrapeCount } = await enqueueNewUrls(discovered);
+      log("info", `Enqueued ${newCount} new + ${rescrapeCount} stale listings for scraping`);
     }
 
     if (DISCOVER_ONLY) {

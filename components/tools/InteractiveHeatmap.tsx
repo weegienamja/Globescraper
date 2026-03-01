@@ -74,7 +74,9 @@ const TYPE_LABELS: Record<string, string> = {
   APARTMENT: "Apartment",
   SERVICED_APARTMENT: "Serviced Apt",
   PENTHOUSE: "Penthouse",
-  OTHER: "Other",
+  HOUSE: "House",
+  VILLA: "Villa",
+  TOWNHOUSE: "Townhouse",
 };
 
 export function InteractiveHeatmap({ data, height = 450 }: Props) {
@@ -88,7 +90,10 @@ export function InteractiveHeatmap({ data, height = 450 }: Props) {
     const types = new Set<string>();
     for (const row of data) types.add(row.propertyType);
     // Return in preferred display order
-    const order = ["CONDO", "APARTMENT", "SERVICED_APARTMENT", "PENTHOUSE", "OTHER"];
+    const order = [
+      "CONDO", "APARTMENT", "SERVICED_APARTMENT", "PENTHOUSE",
+      "HOUSE", "VILLA", "TOWNHOUSE",
+    ];
     return order.filter((t) => types.has(t));
   }, [data]);
 
@@ -489,12 +494,12 @@ export function InteractiveHeatmap({ data, height = 450 }: Props) {
           box-shadow: 0 8px 24px rgba(0,0,0,0.3);
         }
       `}</style>
-      {/* Property type filter bar */}
+      {/* Property type checkbox filter bar */}
       {allTypes.length > 1 && (
         <div style={{
           display: "flex",
           flexWrap: "wrap",
-          gap: "6px",
+          gap: "8px",
           marginBottom: "10px",
           alignItems: "center",
         }}>
@@ -504,11 +509,13 @@ export function InteractiveHeatmap({ data, height = 450 }: Props) {
           {allTypes.map((type) => {
             const active = selectedTypes.has(type);
             return (
-              <button
+              <label
                 key={type}
-                onClick={() => toggleType(type)}
                 style={{
-                  padding: "4px 12px",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  padding: "4px 10px",
                   fontSize: "12px",
                   fontWeight: 600,
                   borderRadius: "6px",
@@ -517,10 +524,22 @@ export function InteractiveHeatmap({ data, height = 450 }: Props) {
                   color: active ? "#93c5fd" : "#64748b",
                   cursor: "pointer",
                   transition: "all 0.15s ease",
+                  userSelect: "none",
                 }}
               >
+                <input
+                  type="checkbox"
+                  checked={active}
+                  onChange={() => toggleType(type)}
+                  style={{
+                    accentColor: "#3b82f6",
+                    width: "14px",
+                    height: "14px",
+                    cursor: "pointer",
+                  }}
+                />
                 {TYPE_LABELS[type] || type}
-              </button>
+              </label>
             );
           })}
           {selectedTypes.size < allTypes.length && (
@@ -536,7 +555,7 @@ export function InteractiveHeatmap({ data, height = 450 }: Props) {
                 cursor: "pointer",
               }}
             >
-              All
+              Select All
             </button>
           )}
         </div>

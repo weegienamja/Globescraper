@@ -1,70 +1,80 @@
 /**
  * Property type classifier for rental listings.
  *
- * Determines whether a listing is a CONDO, APARTMENT, or OTHER
- * based on title and description keyword matching.
+ * Determines the residential property type (CONDO, APARTMENT, HOUSE,
+ * VILLA, etc.) based on title and description keyword matching.
+ * Non-residential types (commercial, land, etc.) return null and
+ * are rejected by shouldIngest().
  */
 
 import { PropertyType } from "@prisma/client";
 
-/** Keywords that strongly indicate a rejection (house, villa, land, etc.) */
-const REJECT_KEYWORDS = [
-  "house", "villa", "villas", "land", "borey", "townhouse",
-  "shophouse", "shop house", "commercial", "warehouse", "factory",
-  "office space", "flat land", "plot", "lot for", "twin villa",
-];
+/* ── Keyword lists (most-specific first) ─────────────────── */
 
-/** Keywords that strongly indicate PENTHOUSE */
-const PENTHOUSE_KEYWORDS = [
-  "penthouse",
-];
+const PENTHOUSE_KEYWORDS = ["penthouse"];
 
-/** Keywords that strongly indicate SERVICED_APARTMENT */
 const SERVICED_APARTMENT_KEYWORDS = [
   "serviced apartment", "service apartment",
 ];
 
-/** Keywords that strongly indicate CONDO */
-const CONDO_KEYWORDS = [
-  "condo", "condominium",
-];
+const CONDO_KEYWORDS = ["condo", "condominium"];
 
-/** Keywords that strongly indicate APARTMENT */
 const APARTMENT_KEYWORDS = [
   "apartment", "flat", "studio apartment", "studio",
+];
+
+const VILLA_KEYWORDS = [
+  "twin villa", "villa", "villas",
+];
+
+const TOWNHOUSE_KEYWORDS = ["townhouse", "town house", "link house"];
+
+const HOUSE_KEYWORDS = [
+  "house", "borey", "detached",
+];
+
+/** Non-residential keywords — used to reject listings. */
+const NON_RESIDENTIAL_KEYWORDS = [
+  "shophouse", "shop house", "shop-house",
+  "warehouse", "factory", "workshop",
+  "office space", "office", "co-working",
+  "commercial", "retail", "restaurant", "hotel", "guesthouse", "guest house",
+  "flat land", "land for", "land ", "plot", "lot for",
 ];
 
 /**
  * Classify a listing's property type based on title and description.
  *
- * Returns CONDO, APARTMENT, SERVICED_APARTMENT, PENTHOUSE, or OTHER.
- * OTHER should typically be skipped during ingestion.
+ * Returns one of the residential types: CONDO, APARTMENT,
+ * SERVICED_APARTMENT, PENTHOUSE, HOUSE, VILLA, TOWNHOUSE.
+ * Returns null for non-residential listings (commercial, land, etc.).
  */
 export function classifyPropertyType(
   title: string,
   description?: string | null
-): PropertyType {
+): PropertyType | null {
   const text = `${title} ${description ?? ""}`.toLowerCase();
 
-  // Check rejection keywords first (these override)
-  for (const kw of REJECT_KEYWORDS) {
-    if (text.includes(kw)) {
-      // But if it also mentions a positive type, let it through
-      const hasPositive =
-        PENTHOUSE_KEYWORDS.some((k) => text.includes(k)) ||
-        SERVICED_APARTMENT_KEYWORDS.some((k) => text.includes(k)) ||
-        CONDO_KEYWORDS.some((k) => text.includes(k)) ||
-        APARTMENT_KEYWORDS.some((k) => text.includes(k));
-      if (!hasPositive) return PropertyType.OTHER;
-    }
+  // Reject non-residential types early
+  for (const kw of NON_RESIDENTIAL_KEYWORDS) {
+    if (text.includes(kw)) return null;
   }
 
-  // Check positive keywords (most-specific first)
+  // Most-specific first to avoid false positives
   for (const kw of PENTHOUSE_KEYWORDS) {
     if (text.includes(kw)) return PropertyType.PENTHOUSE;
   }
   for (const kw of SERVICED_APARTMENT_KEYWORDS) {
     if (text.includes(kw)) return PropertyType.SERVICED_APARTMENT;
+  }
+  for (const kw of TOWNHOUSE_KEYWORDS) {
+    if (text.includes(kw)) return PropertyType.TOWNHOUSE;
+  }
+  for (const kw of VILLA_KEYWORDS) {
+    if (text.includes(kw)) return PropertyType.VILLA;
+  }
+  for (const kw of HOUSE_KEYWORDS) {
+    if (text.includes(kw)) return PropertyType.HOUSE;
   }
   for (const kw of CONDO_KEYWORDS) {
     if (text.includes(kw)) return PropertyType.CONDO;
@@ -73,17 +83,14 @@ export function classifyPropertyType(
     if (text.includes(kw)) return PropertyType.APARTMENT;
   }
 
-  return PropertyType.OTHER;
+  // Default unclassified residential listing → APARTMENT
+  return PropertyType.APARTMENT;
 }
 
 /**
- * Check whether a property type should be ingested (not OTHER for MVP).
+ * Check whether a property type should be ingested.
+ * Only residential types are accepted (null = non-residential → rejected).
  */
-export function shouldIngest(type: PropertyType): boolean {
-  return (
-    type === PropertyType.CONDO ||
-    type === PropertyType.APARTMENT ||
-    type === PropertyType.SERVICED_APARTMENT ||
-    type === PropertyType.PENTHOUSE
-  );
+export function shouldIngest(type: PropertyType | null): boolean {
+  return type !== null;
 }

@@ -32,7 +32,7 @@ export function safeInt(value: unknown): number | null {
  * Rejects:
  *  - prices explicitly marked as nightly or weekly
  *  - prices with "sale" context but no "rent" context (likely sale prices)
- *  - prices below $50 or above $15,000 (likely errors or sale prices)
+ *  - prices below $50 or above $50,000 (likely errors or sale prices)
  */
 export function parsePriceMonthlyUsd(raw: string | null | undefined): number | null {
   if (!raw) return null;
@@ -61,7 +61,7 @@ export function parsePriceMonthlyUsd(raw: string | null | undefined): number | n
       const bare = cleaned.match(/(\d+(?:\.\d+)?)/);
       if (bare) {
         const n = parseFloat(bare[1]);
-        if (n >= 50 && n <= 15_000) return n;
+        if (n >= 50 && n <= 50_000) return n;
       }
     }
     return null;
@@ -70,8 +70,8 @@ export function parsePriceMonthlyUsd(raw: string | null | undefined): number | n
   const amount = parseFloat(match[1] || match[2]);
   if (!Number.isFinite(amount)) return null;
 
-  // Sanity bounds (max $15k/mo — highest realistic monthly rent)
-  if (amount < 50 || amount > 15_000) return null;
+  // Sanity bounds (max $50k/mo — highest realistic monthly rent for commercial/luxury)
+  if (amount < 50 || amount > 50_000) return null;
 
   return amount;
 }

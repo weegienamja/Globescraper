@@ -176,10 +176,7 @@ export async function scrapeListingCamRealty(
 
   // Classify
   const propertyType = classifyPropertyType(title, description);
-  if (!shouldIngest(propertyType)) {
-    log("debug", `Skipping: classified as ${propertyType}`);
-    return null;
-  }
+  if (!propertyType) return null; // non-residential
 
   // Price — CamRealty uses WordPress property fields
   let priceText: string | null = null;

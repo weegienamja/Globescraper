@@ -189,8 +189,8 @@ export async function scrapeListingKhmer24(
   const categoryDd = getSpecValue($, "Category");
   const classifyText = `${title} ${categoryDd ?? ""} ${description ?? ""}`;
   const propertyType = classifyPropertyType(title, classifyText);
-  if (!shouldIngest(propertyType)) {
-    _log("debug", `Skipping: classified as ${propertyType} (not condo/apartment)`);
+  if (!propertyType) {
+    _log("debug", `Skipped non-residential listing: ${title.slice(0, 80)}`);
     return null;
   }
   _log("debug", `Classified as: ${propertyType}`);

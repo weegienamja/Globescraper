@@ -9,8 +9,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/rentals/api-guard";
 import { prisma } from "@/lib/prisma";
-import { Prisma, RentalSource } from "@prisma/client";
+import { Prisma, PropertyType, RentalSource } from "@prisma/client";
 import { reverseDistrictAliases } from "@/lib/rentals/district-geo";
+
+/** Maps the virtual "LONG_TERM_RENTAL" filter to the underlying enum values. */
+const LONG_TERM_RENTAL_TYPES: PropertyType[] = ["VILLA", "TOWNHOUSE"];
+
+const ALLOWED_PROPERTY_TYPES = new Set<string>([
+  ...Object.values(PropertyType),
+  "LONG_TERM_RENTAL",
+]);
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -34,8 +42,12 @@ export async function GET(req: NextRequest) {
     if (source && Object.values(RentalSource).includes(source as RentalSource)) {
       where.source = source as RentalSource;
     }
-    if (propertyType && (propertyType === "CONDO" || propertyType === "APARTMENT")) {
-      where.propertyType = propertyType;
+    if (propertyType && ALLOWED_PROPERTY_TYPES.has(propertyType)) {
+      if (propertyType === "LONG_TERM_RENTAL") {
+        where.propertyType = { in: LONG_TERM_RENTAL_TYPES };
+      } else {
+        where.propertyType = propertyType as PropertyType;
+      }
     }
     if (districtParam) {
       // Use reverse alias lookup to find all DB district values
@@ -80,13 +92,54 @@ export async function GET(req: NextRequest) {
           amenitiesJson: true,
           postedAt: true,
           _count: { select: { snapshots: true } },
+          snapshots: {
+            orderBy: { scrapedAt: "desc" as const },
+            take: 20,
+            select: {
+              id: true,
+              scrapedAt: true,
+              priceMonthlyUsd: true,
+              priceOriginal: true,
+            },
+          },
         },
       }),
       prisma.rentalListing.count({ where }),
     ]);
 
+    // Derive price-change metadata per listing
+    const enriched = listings.map((l) => {
+      const snaps = l.snapshots;
+      const prices = snaps
+        .map((s) => s.priceMonthlyUsd)
+        .filter((p): p is number => p !== null);
+      const uniquePrices = [...new Set(prices)];
+      const hasPriceChange = uniquePrices.length > 1;
+      const latestPrice = prices[0] ?? null;
+      const previousPrice = prices.length > 1 ? prices[1] : null;
+      const priceDirection =
+        latestPrice !== null && previousPrice !== null
+          ? latestPrice > previousPrice
+            ? "up"
+            : latestPrice < previousPrice
+              ? "down"
+              : "same"
+          : null;
+
+      return {
+        ...l,
+        priceChange: {
+          hasPriceChange,
+          latestPrice,
+          previousPrice,
+          priceDirection,
+          uniquePriceCount: uniquePrices.length,
+        },
+      };
+    });
+
     return NextResponse.json({
-      listings,
+      listings: enriched,
       total,
       page,
       limit,

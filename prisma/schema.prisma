@@ -783,6 +783,15 @@ enum PropertyType {
   APARTMENT
   SERVICED_APARTMENT
   PENTHOUSE
+  HOUSE
+  VILLA
+  TOWNHOUSE
+  // Non-residential (legacy — no longer scraped)
+  SHOPHOUSE
+  LAND
+  COMMERCIAL
+  WAREHOUSE
+  OFFICE
   OTHER
 }
 
@@ -824,6 +833,7 @@ model RentalSnapshot {
   district        String?      @db.VarChar(200)
   bedrooms        Int?
   propertyType    PropertyType
+  priceOriginal   String?      @db.VarChar(200)
   priceMonthlyUsd Float?
   postedAt        DateTime?
 
