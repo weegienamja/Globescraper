@@ -55,7 +55,7 @@ const MAX_PROCESS   = getArg("--max-process", 99999);
 const BATCH_SIZE    = getArg("--batch-size", 20);
 const RESCRAPE_DAYS = getArg("--rescrape-days", 7);
 const WORKERS       = getArg("--workers", 1);
-const COOLDOWN_MS   = getArg("--batch-cooldown", 5000);
+const COOLDOWN_MS   = getArg("--batch-cooldown", 15000);
 const DISCOVER_ONLY = hasFlag("--discover-only");
 const PROCESS_ONLY  = hasFlag("--process-only");
 const IS_WORKER     = hasFlag("--_worker");
@@ -72,6 +72,16 @@ process.env.RENTALS_CONCURRENCY = "1"; // Playwright is sequential per browser
 // Fast mode: shorter waits
 if (FAST_MODE) {
   process.env.PW_WAIT_MS = "2500";
+}
+
+// Limit DB pool to 1 connection per worker to avoid exhausting
+// Hostinger's 500 connections/hour cap across multiple processes
+if (IS_WORKER) {
+  const dbUrl = process.env.DATABASE_URL || "";
+  if (!dbUrl.includes("connection_limit")) {
+    const sep = dbUrl.includes("?") ? "&" : "?";
+    process.env.DATABASE_URL = `${dbUrl}${sep}connection_limit=1`;
+  }
 }
 
 // Set proxy env before any imports that might read it

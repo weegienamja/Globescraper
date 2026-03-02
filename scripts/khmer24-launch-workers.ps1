@@ -54,6 +54,8 @@ Write-Host "`nLaunching $Workers worker terminals..." -ForegroundColor Green
 $logDir = "scripts\logs"
 if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir | Out-Null }
 
+$runId = Get-Date -Format 'yyyy-MM-dd_HHmmss'
+
 for ($i = 0; $i -lt $Workers; $i++) {
     $workerArgs = "npx tsx scripts/khmer24-scrape.ts --process-only --_worker --_worker-id $i --batch-size $BatchSize --max-process $([math]::Ceiling($MaxProcess / $Workers)) --batch-cooldown $Cooldown"
 
@@ -68,14 +70,14 @@ for ($i = 0; $i -lt $Workers; $i++) {
 
     if ($Fast) { $workerArgs += " --fast" }
 
-    $logFile = "$logDir\khmer24-worker-$i-$(Get-Date -Format 'yyyy-MM-dd').log"
+    $logFile = "$logDir\khmer24-worker-$i-$runId.log"
 
     # Launch in a new PowerShell window
     $title = "Khmer24 Worker $i"
     Start-Process powershell -ArgumentList @(
         "-NoProfile",
         "-Command",
-        "Set-Location 'C:\dev\globescraper_nextjs'; `$Host.UI.RawUI.WindowTitle = '$title'; Write-Host 'Worker $i starting...' -ForegroundColor Green; $workerArgs 2>&1 | Tee-Object -FilePath '$logFile' -Append; Write-Host 'Worker $i finished.' -ForegroundColor Yellow; Read-Host 'Press Enter to close'"
+        "Set-Location 'C:\dev\globescraper_nextjs'; `$Host.UI.RawUI.WindowTitle = '$title'; Write-Host 'Worker $i starting...' -ForegroundColor Green; $workerArgs 2>&1 | Tee-Object -FilePath '$logFile'; Write-Host 'Worker $i finished.' -ForegroundColor Yellow; Read-Host 'Press Enter to close'"
     )
 
     # Stagger launches to avoid thundering herd
@@ -83,5 +85,5 @@ for ($i = 0; $i -lt $Workers; $i++) {
 }
 
 Write-Host "`n✅ All $Workers workers launched. Check the new terminal windows." -ForegroundColor Green
-Write-Host "   Logs: scripts\logs\khmer24-worker-*-$(Get-Date -Format 'yyyy-MM-dd').log" -ForegroundColor DarkGray
+Write-Host "   Logs: scripts\logs\khmer24-worker-*-$runId.log" -ForegroundColor DarkGray
 Write-Host "`n   Press Ctrl+C in any worker window to stop it gracefully." -ForegroundColor DarkGray
