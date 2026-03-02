@@ -77,8 +77,7 @@ export default async function RecruiterDashboardPage({
   const teflOnly = params.tefl === "1";
   const stageFilter = typeof params.stage === "string" ? params.stage : "";
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const where: Record<string, any> = {
+  const where: Record<string, unknown> = {
     displayName: { not: null },
     visibility: { not: "PRIVATE" },
     user: {

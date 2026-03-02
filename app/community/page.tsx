@@ -185,8 +185,7 @@ export default async function CommunityPage({
   blockedIds.delete(session.user.id);
 
   // Only show teacher + student profiles
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const where: Record<string, any> = {
+  const where: Record<string, unknown> = {
     displayName: { not: null },
     visibility: { not: "PRIVATE" },
     user: {
