@@ -364,6 +364,7 @@ export function ListingsTable({ initialDistrict }: ListingsTableProps = {}) {
                 </th>
                 <th style={s.th}>AI</th>
                 <th style={s.th}>Status</th>
+                <th style={s.th}></th>
               </tr>
             </thead>
             <tbody>
@@ -821,6 +822,22 @@ export function ListingsTable({ initialDistrict }: ListingsTableProps = {}) {
                         {l.isActive ? "Active" : "Inactive"}
                       </span>
                     </td>
+                    <td style={s.td}>
+                      <a
+                        href={`/rentals/${l.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={s.viewLink}
+                        onClick={(e) => e.stopPropagation()}
+                        title="View on /rentals"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                          <polyline points="15 3 21 3 21 9" />
+                          <line x1="10" y1="14" x2="21" y2="3" />
+                        </svg>
+                      </a>
+                    </td>
                   </tr>
                 );
               })}
@@ -1008,6 +1025,17 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: "12px",
     fontWeight: 500,
   },
+  viewLink: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "28px",
+    height: "28px",
+    borderRadius: "6px",
+    color: "#818cf8",
+    background: "rgba(99, 102, 241, 0.1)",
+    transition: "background 0.15s, color 0.15s",
+  } as React.CSSProperties,
   expandedInfo: {
     marginTop: "8px",
     padding: "10px 0",
