@@ -751,7 +751,7 @@ export function InteractiveHeatmap({ data, height = 450, showListingPoints = tru
               position: "absolute",
               top: "12px",
               right: "12px",
-              zIndex: 1000,
+              zIndex: 10,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
