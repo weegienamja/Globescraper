@@ -92,35 +92,47 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           logSecurityEvent(user.id, "login").catch(() => {});
         }
         // Check if user has a profile on initial sign-in
+        const dbUser = await prisma.user.findUnique({
+          where: { id: user.id },
+          select: { username: true },
+        });
         const profile = await prisma.profile.findUnique({
           where: { userId: user.id },
           select: { id: true, avatarUrl: true },
         });
         token.hasProfile = !!profile;
         token.avatarUrl = profile?.avatarUrl ?? null;
+        token.username = dbUser?.username ?? null;
       }
       // Allow manual refresh (e.g. after profile creation)
       if (trigger === "update" && token.sub) {
+        const dbUser = await prisma.user.findUnique({
+          where: { id: token.sub },
+          select: { role: true, username: true },
+        });
         const profile = await prisma.profile.findUnique({
           where: { userId: token.sub },
           select: { id: true, avatarUrl: true },
         });
         token.hasProfile = !!profile;
         token.avatarUrl = profile?.avatarUrl ?? null;
+        token.role = dbUser?.role ?? token.role;
+        token.username = dbUser?.username ?? null;
       }
       return token;
     },
 
-    // Expose id + role + hasProfile on the client-facing session
+    // Expose id + role + hasProfile + username on the client-facing session
     session({ session, token }) {
       if (token.sub) {
         session.user.id = token.sub;
       }
       if (token.role) {
-        session.user.role = token.role as "USER" | "ADMIN";
+        session.user.role = token.role as "USER" | "ADMIN" | "TEACHER" | "STUDENT" | "RECRUITER";
       }
       session.user.hasProfile = !!token.hasProfile;
       session.user.avatarUrl = token.avatarUrl ?? null;
+      session.user.username = token.username ?? null;
       return session;
     },
   },

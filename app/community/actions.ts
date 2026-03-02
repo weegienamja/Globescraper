@@ -64,6 +64,8 @@ export async function updateCommunityProfile(
     languagesTeaching,
     interests,
     showCityPublicly,
+    teflTesolCertified,
+    movingTimeline,
   } = parsed.data;
 
   // Map community country names to TargetCountry enum values
@@ -72,6 +74,8 @@ export async function updateCommunityProfile(
     Thailand: "THAILAND",
     Cambodia: "CAMBODIA",
     Philippines: "PHILIPPINES",
+    Indonesia: "INDONESIA",
+    Malaysia: "MALAYSIA",
   };
 
   const enumCountries = targetCountries
@@ -106,6 +110,8 @@ export async function updateCommunityProfile(
         languagesTeaching: languagesTeaching ?? [],
         interests: interests ?? [],
         showCityPublicly: showCityPublicly ?? true,
+        teflTesolCertified: teflTesolCertified ?? false,
+        movingTimeline: movingTimeline ?? null,
         targetCountries: {
           create: enumCountries.map((country) => ({ country: country as "VIETNAM" | "THAILAND" | "CAMBODIA" | "PHILIPPINES" | "INDONESIA" | "MALAYSIA" })),
         },
@@ -134,6 +140,8 @@ export async function updateCommunityProfile(
         languagesTeaching: languagesTeaching ?? [],
         interests: interests ?? [],
         showCityPublicly: showCityPublicly ?? true,
+        teflTesolCertified: teflTesolCertified ?? false,
+        movingTimeline: movingTimeline ?? null,
         targetCountries: {
           deleteMany: {},
           create: enumCountries.map((country) => ({ country: country as "VIETNAM" | "THAILAND" | "CAMBODIA" | "PHILIPPINES" | "INDONESIA" | "MALAYSIA" })),

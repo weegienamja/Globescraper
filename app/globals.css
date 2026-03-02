@@ -10213,3 +10213,838 @@ body.menu-open {
     margin-bottom: 10px;
   }
 }
+
+/* ================================================================
+   Community feature additions - roles, onboarding, recruiter, etc.
+   ================================================================ */
+
+/* -- Onboarding pages -- */
+
+.onboarding-page {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 48px 20px 64px;
+}
+
+.onboarding-page h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.onboarding-page__sub {
+  color: var(--text-muted);
+  margin-bottom: 32px;
+}
+
+/* Role selector cards */
+
+.role-cards {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  margin-top: 24px;
+}
+
+@media (min-width: 640px) {
+  .role-cards {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.role-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 24px 16px;
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  background: var(--card-bg);
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s;
+}
+
+.role-card:hover {
+  border-color: var(--accent);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
+  transform: translateY(-2px);
+}
+
+.role-card--selected,
+.role-card:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb, 59, 130, 246), 0.25);
+}
+
+.role-card__emoji {
+  font-size: 2.5rem;
+  margin-bottom: 12px;
+}
+
+.role-card__title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.role-card__desc {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+.role-card__loading {
+  margin-top: 8px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* -- Onboarding form -- */
+
+.onboarding-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.onboarding-form .form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.onboarding-form .form-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.onboarding-form .form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 480px) {
+  .onboarding-form .form-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.onboarding-form .toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+}
+
+.onboarding-form .toggle-row input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+}
+
+/* Chip picker (shared) */
+
+.chip-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip--toggle {
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+  color: var(--text);
+  font-size: 0.813rem;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  user-select: none;
+}
+
+.chip--toggle:hover {
+  border-color: var(--accent);
+}
+
+.chip--toggle.chip--active,
+.chip--toggle[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* Input with add button */
+
+.input-with-add {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.input-with-add .form__input {
+  flex: 1;
+}
+
+/* Removable chip */
+
+.chip--removable {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 16px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.813rem;
+  cursor: pointer;
+}
+
+.chip--removable:hover {
+  opacity: 0.85;
+}
+
+/* -- Community layout (two-column with sidebar) -- */
+
+.community-layout {
+  display: flex;
+  gap: 24px;
+  margin-top: 24px;
+}
+
+.community-layout__main {
+  flex: 1;
+  min-width: 0;
+}
+
+.community-layout__sidebar {
+  width: 300px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+@media (max-width: 900px) {
+  .community-layout {
+    flex-direction: column;
+  }
+  .community-layout__sidebar {
+    width: 100%;
+  }
+}
+
+/* Sidebar cards */
+
+.sidebar-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.sidebar-card__title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+}
+
+.sidebar-card__list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sidebar-card__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sidebar-card__item--compact {
+  gap: 8px;
+}
+
+.sidebar-card__link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.sidebar-card__link:hover {
+  color: var(--accent);
+}
+
+.sidebar-card__avatar-wrap {
+  flex-shrink: 0;
+}
+
+.sidebar-card__avatar-img {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.sidebar-card__avatar-img--sm {
+  width: 32px;
+  height: 32px;
+}
+
+.sidebar-card__avatar-fallback {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.sidebar-card__avatar-fallback--sm {
+  width: 32px;
+  height: 32px;
+  font-size: 0.75rem;
+}
+
+.sidebar-card__detail {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.sidebar-card__name {
+  font-size: 0.875rem;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-card__loc {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.sidebar-card__stats {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 0.875rem;
+}
+
+/* -- Community sort bar -- */
+
+.community-sort {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0 12px;
+}
+
+.community-sort__label {
+  font-size: 0.813rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.community-sort__option {
+  font-size: 0.813rem;
+  padding: 4px 12px;
+  border-radius: 16px;
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: background 0.15s, color 0.15s;
+}
+
+.community-sort__option:hover {
+  background: var(--hover-bg, rgba(255, 255, 255, 0.05));
+  color: var(--text);
+}
+
+.community-sort__option--active {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* -- Invite role cards -- */
+
+.invite-role-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin: 24px 0;
+}
+
+@media (max-width: 640px) {
+  .invite-role-cards {
+    grid-template-columns: 1fr;
+  }
+}
+
+.invite-role-cards--compact {
+  margin: 16px 0;
+}
+
+.invite-role-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px 16px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.invite-role-card--sm {
+  padding: 14px 12px;
+}
+
+.invite-role-card__avatar {
+  font-size: 2rem;
+}
+
+.invite-role-card__title {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.invite-role-card__text {
+  font-size: 0.813rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.invite-role-card__link {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* -- Community card additions -- */
+
+.community-card__avatar-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.community-card__avatar-img {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.community-card__verified {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--card-bg);
+}
+
+.community-card__online-dot {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #22c55e;
+  border: 2px solid var(--card-bg);
+}
+
+.community-card__name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.community-card__stage-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.688rem;
+  font-weight: 500;
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.community-card__stage-pill--sm {
+  font-size: 0.625rem;
+  padding: 1px 6px;
+}
+
+.community-card__active {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.community-card__info {
+  flex: 1;
+  min-width: 0;
+}
+
+.community-card__countries {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+/* Tag variants */
+
+.tag--lang {
+  background: rgba(168, 85, 247, 0.15);
+  color: rgb(168, 85, 247);
+}
+
+.tag--cert {
+  background: rgba(34, 197, 94, 0.15);
+  color: rgb(34, 197, 94);
+}
+
+.tag--country {
+  background: rgba(251, 146, 60, 0.15);
+  color: rgb(251, 146, 60);
+}
+
+/* -- Invite features (logged out) -- */
+
+.invite-features {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  margin: 32px 0;
+}
+
+@media (max-width: 640px) {
+  .invite-features {
+    grid-template-columns: 1fr;
+  }
+}
+
+.invite-feature {
+  text-align: center;
+}
+
+.invite-feature__icon {
+  font-size: 2rem;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.invite-feature__title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.invite-feature__text {
+  font-size: 0.813rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.invite-bottom {
+  text-align: center;
+  padding: 32px 0;
+}
+
+.invite-bottom__text {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+.invite-bottom__text a {
+  color: var(--accent);
+}
+
+/* -- Profile page additions -- */
+
+.profile-notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-size: 0.875rem;
+}
+
+.profile-notice--recruiter {
+  background: rgba(251, 146, 60, 0.1);
+  border: 1px solid rgba(251, 146, 60, 0.3);
+  color: rgb(251, 146, 60);
+}
+
+.profile-notice__icon {
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+.profile-notice__text {
+  margin: 0;
+  line-height: 1.4;
+}
+
+.profile-section__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+/* -- Account locked page -- */
+
+.locked-page {
+  max-width: 480px;
+  margin: 80px auto;
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.locked-page__icon {
+  font-size: 3.5rem;
+  margin-bottom: 16px;
+}
+
+.locked-page h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.locked-page p {
+  color: var(--text-muted);
+  margin-bottom: 12px;
+  line-height: 1.5;
+}
+
+.locked-page a {
+  color: var(--accent);
+}
+
+/* -- Recruiter dashboard -- */
+
+.recruiter-dashboard {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 32px 20px 64px;
+}
+
+.recruiter-dashboard__header {
+  margin-bottom: 24px;
+}
+
+.recruiter-dashboard__header h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.recruiter-dashboard__sub {
+  color: var(--text-muted);
+  margin-top: 4px;
+  font-size: 0.875rem;
+}
+
+.recruiter-dashboard__company {
+  display: inline-flex;
+  align-items: center;
+}
+
+.recruiter-dashboard__count {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  padding: 8px 0 16px;
+}
+
+.recruiter-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  padding: 12px 0;
+}
+
+.recruiter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+@media (max-width: 640px) {
+  .recruiter-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.recruiter-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.recruiter-card__header {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.recruiter-card__avatar-wrap {
+  flex-shrink: 0;
+}
+
+.recruiter-card__avatar-img {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.recruiter-card__avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 1.125rem;
+}
+
+.recruiter-card__info {
+  flex: 1;
+  min-width: 0;
+}
+
+.recruiter-card__name {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 2px;
+}
+
+.recruiter-card__location {
+  font-size: 0.813rem;
+  color: var(--text-muted);
+  margin: 0 0 4px;
+}
+
+.recruiter-card__stage-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.688rem;
+  font-weight: 500;
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--accent);
+}
+
+.recruiter-card__quals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.recruiter-card__countries {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.recruiter-card__footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.recruiter-card__active {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* -- Form checkbox label prominent -- */
+
+.form__checkbox-label--prominent {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card-bg);
+}
+
+.form__checkbox-label--prominent .form__hint {
+  width: 100%;
+  margin-top: 2px;
+}
+
+.form__checkbox-label--inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* -- Empty state -- */
+
+.empty-state {
+  text-align: center;
+  padding: 48px 20px;
+}
+
+.empty-state__icon {
+  font-size: 2.5rem;
+  margin-bottom: 12px;
+}
+
+.empty-state__title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.empty-state__text {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}

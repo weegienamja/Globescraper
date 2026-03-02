@@ -16,6 +16,7 @@ type Props = {
   isOwner: boolean;
   connectionStatus: string | null;
   isBlockedByMe: boolean;
+  hideActions?: boolean;
 };
 
 export function ProfileHeaderCard({
@@ -30,6 +31,7 @@ export function ProfileHeaderCard({
   isOwner,
   connectionStatus,
   isBlockedByMe,
+  hideActions,
 }: Props) {
   return (
     <div className="profile-header-card">
@@ -77,7 +79,7 @@ export function ProfileHeaderCard({
         </div>
 
         <div className="profile-header-card__actions">
-          {isOwner ? (
+          {hideActions ? null : isOwner ? (
             <Link href="/community/edit-profile" className="btn btn--primary btn--sm">
               Edit profile
             </Link>

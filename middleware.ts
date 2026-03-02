@@ -5,13 +5,16 @@ import { getLoginRatelimit } from "@/lib/rate-limit";
 /**
  * Lightweight middleware:
  *
- * 1) Guards /admin routes — checks for session-token cookie presence.
- *    Full session + role validation happens server-side via `requireAdmin()`.
+ * 1) Guards protected routes - checks for session-token cookie presence.
+ *    Full session + role validation happens server-side via requireRole().
  *
  * 2) Rate-limits POST /api/auth/callback/credentials (login attempts).
- *    Uses Upstash Redis when configured; skips in local dev otherwise.
  *
- * Edge-runtime safe — no Prisma, no argon2.
+ * 3) Protects community sub-routes while keeping /community public.
+ *
+ * 4) Protects onboarding routes.
+ *
+ * Edge-runtime safe - no Prisma, no argon2.
  */
 
 const SESSION_COOKIE = "authjs.session-token";
@@ -20,15 +23,13 @@ const SECURE_SESSION_COOKIE = "__Secure-authjs.session-token";
 const CREDENTIALS_CALLBACK = "/api/auth/callback/credentials";
 
 export async function middleware(req: NextRequest) {
-  // ── Rate-limit credential login attempts ──────────────────────
+  // -- Rate-limit credential login attempts --
   if (
     req.method === "POST" &&
     req.nextUrl.pathname === CREDENTIALS_CALLBACK
   ) {
     const limiter = getLoginRatelimit();
     if (limiter) {
-      // Prefer req.ip (set by Vercel, non-spoofable), then x-forwarded-for,
-      // then a dev fallback. Use || (not ??) so empty strings are skipped.
       const ip =
         req.ip
         || req.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
@@ -49,7 +50,7 @@ export async function middleware(req: NextRequest) {
     }
   }
 
-  // ── Auth cookie guard ──────────────────────────────────────
+  // -- Auth cookie guard --
   const pathname = req.nextUrl.pathname;
   const protectedPaths = ["/admin", "/dashboard", "/create-profile", "/tools"];
   // /community and /meetups root pages show invite content for logged-out users;
@@ -57,6 +58,8 @@ export async function middleware(req: NextRequest) {
   const publicExactPages = ["/community", "/meetups"];
   const isProtected =
     protectedPaths.some((p) => pathname.startsWith(p)) ||
+    pathname.startsWith("/onboarding") ||
+    pathname.startsWith("/account-locked") ||
     ((pathname.startsWith("/community") || pathname.startsWith("/meetups")) &&
      !publicExactPages.includes(pathname));
 
@@ -85,6 +88,8 @@ export const config = {
     "/community/:path*",
     "/meetups",
     "/meetups/:path*",
+    "/onboarding/:path*",
+    "/account-locked",
     "/api/auth/callback/credentials",
   ],
 };

@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { CommunityProfileForm } from "./community-profile-form";
+import { isRecruiter, needsOnboarding } from "@/lib/rbac";
+import type { AppRole } from "@/types/next-auth";
 
 const ENUM_COUNTRY_MAP: Record<string, string> = {
   VIETNAM: "Vietnam",
@@ -32,6 +34,12 @@ function safeJsonArray(val: unknown): string[] {
 export default async function EditCommunityProfilePage() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login?callbackUrl=/community/edit-profile");
+
+  const userRole = (session.user.role ?? "USER") as AppRole;
+  // Recruiters manage their own dashboard; redirect them
+  if (isRecruiter(userRole)) redirect("/community/recruiter-dashboard");
+  // Users who haven't picked a role yet must onboard first
+  if (needsOnboarding(userRole)) redirect("/onboarding/who-are-you");
 
   const profile = await prisma.profile.findUnique({
     where: { userId: session.user.id },
@@ -67,6 +75,8 @@ export default async function EditCommunityProfilePage() {
         languagesTeaching: safeJsonArray(profile.languagesTeaching),
         interests: safeJsonArray(profile.interests),
         showCityPublicly: profile.showCityPublicly,
+        teflTesolCertified: profile.teflTesolCertified ?? false,
+        movingTimeline: (profile.movingTimeline as string) ?? "",
       }
     : null;
 
@@ -76,7 +86,7 @@ export default async function EditCommunityProfilePage() {
       <p className="community-form-page__sub">
         This is how you appear to other community members. Your email is never shared.
       </p>
-      <CommunityProfileForm initial={initial} userId={session.user.id} />
+      <CommunityProfileForm initial={initial} userId={session.user.id} role={userRole} />
     </div>
   );
 }

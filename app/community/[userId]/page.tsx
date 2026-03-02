@@ -2,10 +2,10 @@ import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import Link from "next/link";
+import type { Metadata } from "next";
 import {
   getCommunityProfile,
   formatMemberSince,
-  type CommunityProfileViewModel,
 } from "@/lib/community-profile";
 import {
   ProfileHeaderCard,
@@ -18,20 +18,78 @@ import {
   SidebarAccordion,
 } from "@/components/community";
 import { BlockButton, HideButton } from "./profile-actions";
+import { JsonLd } from "@/components/JsonLd";
+import { isRecruiter, SOCIAL_ROLES } from "@/lib/rbac";
+import { touchLastActive } from "@/lib/last-active";
+import type { AppRole } from "@/types/next-auth";
+
+// -- Resolve a slug (username or userId) to a userId --
+async function resolveSlug(slug: string) {
+  // Try username first (more common in new URLs)
+  const byUsername = await prisma.user.findUnique({
+    where: { username: slug },
+    select: { id: true, username: true, role: true },
+  });
+  if (byUsername) return byUsername;
+
+  // Fallback: try userId (backward compat for old links)
+  const byId = await prisma.user.findUnique({
+    where: { id: slug },
+    select: { id: true, username: true, role: true },
+  });
+  return byId ?? null;
+}
 
 export async function generateMetadata({
   params,
 }: {
   params: Promise<{ userId: string }>;
-}) {
-  const { userId } = await params;
+}): Promise<Metadata> {
+  const { userId: slug } = await params;
+  const resolved = await resolveSlug(slug);
+  if (!resolved) return { title: "Profile not found" };
+
   const profile = await prisma.profile.findUnique({
-    where: { userId },
-    select: { displayName: true },
+    where: { userId: resolved.id },
+    select: {
+      displayName: true,
+      currentCity: true,
+      currentCountry: true,
+      bio: true,
+      avatarUrl: true,
+      showCityPublicly: true,
+    },
   });
+
+  if (!profile?.displayName) return { title: "Profile" };
+
+  const locationParts: string[] = [];
+  if (profile.showCityPublicly && profile.currentCity) locationParts.push(profile.currentCity);
+  if (profile.currentCountry) locationParts.push(profile.currentCountry);
+  const locationStr = locationParts.join(", ");
+
+  const title = locationStr
+    ? `${profile.displayName} in ${locationStr} | GlobeScraper Community`
+    : `${profile.displayName} | GlobeScraper Community`;
+
+  const description = profile.bio
+    ? profile.bio.slice(0, 160)
+    : `Community profile for ${profile.displayName}${locationStr ? ` in ${locationStr}` : ""}.`;
+
+  const canonicalSlug = resolved.username ?? resolved.id;
+
   return {
-    title: profile?.displayName ?? "Profile",
-    description: `Community profile for ${profile?.displayName ?? "a GlobeScraper member"}.`,
+    title,
+    description,
+    alternates: { canonical: `/community/${canonicalSlug}` },
+    openGraph: {
+      title,
+      description,
+      url: `/community/${canonicalSlug}`,
+      ...(profile.avatarUrl
+        ? { images: [{ url: profile.avatarUrl, width: 96, height: 96 }] }
+        : {}),
+    },
   };
 }
 
@@ -40,22 +98,43 @@ export default async function CommunityProfilePage({
 }: {
   params: Promise<{ userId: string }>;
 }) {
-  const { userId } = await params;
+  const { userId: slug } = await params;
+  const resolved = await resolveSlug(slug);
+  if (!resolved) notFound();
+
+  const userId = resolved.id;
+
+  // If accessed by userId but user has a username, 301 redirect to canonical URL
+  if (slug === userId && resolved.username) {
+    redirect(`/community/${resolved.username}`);
+  }
+
   const session = await auth();
   const currentUserId = session?.user?.id;
+  const viewerRole = (session?.user?.role ?? "USER") as AppRole;
+  const viewerIsRecruiter = isRecruiter(viewerRole);
 
-  // Basic existence check first
+  // Touch last-active for the viewer
+  if (currentUserId) touchLastActive(currentUserId);
+
+  // Basic existence check
   const rawProfile = await prisma.profile.findUnique({
     where: { userId },
     select: {
       visibility: true,
       displayName: true,
       hiddenFromCommunity: true,
-      user: { select: { disabled: true } },
+      user: { select: { disabled: true, role: true, username: true } },
     },
   });
 
   if (!rawProfile || rawProfile.user.disabled) notFound();
+
+  // Recruiters can only view teacher/student profiles (no social features)
+  const profileRole = rawProfile.user.role as AppRole;
+  if (viewerIsRecruiter && !SOCIAL_ROLES.includes(profileRole)) {
+    notFound();
+  }
 
   // Visibility checks
   if (rawProfile.visibility === "PRIVATE") {
@@ -66,7 +145,8 @@ export default async function CommunityProfilePage({
 
   if (rawProfile.visibility === "MEMBERS_ONLY") {
     if (!currentUserId) {
-      redirect("/login?callbackUrl=/community/" + userId);
+      const canonicalSlug = resolved.username ?? userId;
+      redirect("/login?callbackUrl=/community/" + canonicalSlug);
     }
   }
 
@@ -74,11 +154,10 @@ export default async function CommunityProfilePage({
     if (currentUserId === userId) {
       redirect("/community/edit-profile");
     }
-    // Show a placeholder instead of 404 so connected users aren't confused
     return (
       <div className="profile-page">
         <Link href="/community" className="profile-page__back">
-          ← Back to community
+          &larr; Back to community
         </Link>
         <div className="profile-section" style={{ textAlign: "center", padding: "48px 24px" }}>
           <div style={{ fontSize: "3rem", marginBottom: 16 }}>👤</div>
@@ -98,11 +177,11 @@ export default async function CommunityProfilePage({
   const isOwner = currentUserId === userId;
   const isAdmin = session?.user?.role === "ADMIN";
 
-  // Connection status
+  // Connection/block status - only for social roles (not recruiters)
   let connectionStatus: string | null = null;
   let isBlockedByMe = false;
 
-  if (currentUserId && !isOwner) {
+  if (currentUserId && !isOwner && !viewerIsRecruiter) {
     const [connection, block] = await Promise.all([
       prisma.connectionRequest.findFirst({
         where: {
@@ -134,13 +213,39 @@ export default async function CommunityProfilePage({
     { label: "Connections", value: profile.connectionsCount },
   ];
 
+  // JSON-LD Person schema
+  const canonicalSlug = resolved.username ?? userId;
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Person",
+    name: profile.displayName,
+    url: `https://globescraper.com/community/${canonicalSlug}`,
+    ...(profile.avatarUrl ? { image: profile.avatarUrl } : {}),
+    ...(locationStr ? { address: { "@type": "PostalAddress", addressLocality: locationStr } } : {}),
+    ...(profile.bio ? { description: profile.bio.slice(0, 300) } : {}),
+  };
+
+  // Determine whether to show social features (connect, message, block)
+  const showSocialFeatures = !viewerIsRecruiter;
+
   return (
     <div className="profile-page">
-      <Link href="/community" className="profile-page__back">
-        ← Back to community
+      <JsonLd data={jsonLd} />
+
+      <Link href={viewerIsRecruiter ? "/community/recruiter-dashboard" : "/community"} className="profile-page__back">
+        &larr; {viewerIsRecruiter ? "Back to dashboard" : "Back to community"}
       </Link>
 
-      {/* ── Header Card ────────────────────────── */}
+      {/* Recruiter notice banner */}
+      {viewerIsRecruiter && (
+        <div className="profile-notice profile-notice--recruiter">
+          <span className="profile-notice__icon">🏢</span>
+          <p className="profile-notice__text">
+            You are viewing this profile as a recruiter. Social features (connect, message) are not available.
+          </p>
+        </div>
+      )}
+
       <ProfileHeaderCard
         displayName={profile.displayName}
         avatarUrl={profile.avatarUrl}
@@ -151,13 +256,13 @@ export default async function CommunityProfilePage({
         emailVerified={profile.emailVerified}
         userId={userId}
         isOwner={isOwner}
-        connectionStatus={connectionStatus}
-        isBlockedByMe={isBlockedByMe}
+        connectionStatus={showSocialFeatures ? connectionStatus : null}
+        isBlockedByMe={showSocialFeatures ? isBlockedByMe : false}
+        hideActions={viewerIsRecruiter}
       />
 
-      {/* ── Two-column grid ────────────────────── */}
       <div className="profile-grid">
-        {/* ═══ LEFT COLUMN ═══ */}
+        {/* Left column */}
         <div className="profile-grid__main">
           <RelocationStepper currentStageIndex={profile.relocationStageIndex} />
 
@@ -171,16 +276,16 @@ export default async function CommunityProfilePage({
             </div>
           )}
 
-          {/* Experience & Teaching Info */}
+          {/* Experience and Teaching Info */}
           {(profile.certifications.length > 0 || profile.lookingForLabel || profile.languagesTeaching.length > 0) && (
             <div className="profile-section">
-              <h2 className="profile-section__title">Experience &amp; Teaching Info</h2>
+              <h2 className="profile-section__title">Experience and Teaching Info</h2>
               <ul className="experience-list">
                 {profile.certifications.length > 0 && (
                   <li className="experience-list__item">
                     <span className="experience-list__icon">✅</span>
                     {profile.certifications.join(", ")} Certified
-                    <span className="experience-list__badge">✔</span>
+                    <span className="experience-list__badge">&#10004;</span>
                   </li>
                 )}
                 {profile.lookingForLabel && (
@@ -206,14 +311,26 @@ export default async function CommunityProfilePage({
           {/* Interests chips */}
           <Chips title="Interests" chips={profile.interests} />
 
+          {/* Target countries */}
+          {profile.targetCountries.length > 0 && (
+            <div className="profile-section">
+              <h2 className="profile-section__title">Target Countries</h2>
+              <div className="profile-section__chips">
+                {profile.targetCountries.map((c) => (
+                  <span key={c} className="tag tag--country">{c}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Gallery */}
           <GallerySection images={profile.gallery} displayName={profile.displayName} />
 
           {/* Recent Activity (main column) */}
           <ActivityFeed events={profile.recentActivity} displayName={profile.displayName} />
 
-          {/* Admin/block actions */}
-          {currentUserId && !isOwner && (
+          {/* Admin/block actions - only for social role viewers */}
+          {showSocialFeatures && currentUserId && !isOwner && (
             <div className="profile-section profile-section--actions">
               <BlockButton targetUserId={userId} isBlocked={isBlockedByMe} />
               {isAdmin && (
@@ -235,7 +352,7 @@ export default async function CommunityProfilePage({
           )}
         </div>
 
-        {/* ═══ RIGHT SIDEBAR (desktop) ═══ */}
+        {/* Right sidebar (desktop) */}
         <aside className="profile-grid__sidebar profile-grid__sidebar--desktop">
           <StatCards stats={stats} />
           <TrustPanel
@@ -243,7 +360,7 @@ export default async function CommunityProfilePage({
             phoneVerified={profile.phoneVerified}
             lastActiveAt={profile.lastActiveAt}
             targetUserId={userId}
-            showReport={!!currentUserId && !isOwner}
+            showReport={showSocialFeatures && !!currentUserId && !isOwner}
           />
           {/* Quick recent items */}
           {profile.recentActivity.length > 0 && (
@@ -277,18 +394,18 @@ export default async function CommunityProfilePage({
           )}
         </aside>
 
-        {/* ═══ SIDEBAR (mobile accordion) ═══ */}
+        {/* Sidebar (mobile accordion) */}
         <div className="profile-grid__sidebar profile-grid__sidebar--mobile">
           <SidebarAccordion title="Activity" defaultOpen>
             <StatCards stats={stats} />
           </SidebarAccordion>
-          <SidebarAccordion title="Verification & Trust">
+          <SidebarAccordion title="Verification and Trust">
             <TrustPanel
               emailVerified={profile.emailVerified}
               phoneVerified={profile.phoneVerified}
               lastActiveAt={profile.lastActiveAt}
               targetUserId={userId}
-              showReport={!!currentUserId && !isOwner}
+              showReport={showSocialFeatures && !!currentUserId && !isOwner}
             />
           </SidebarAccordion>
         </div>

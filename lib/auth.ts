@@ -23,3 +23,26 @@ export async function requireAdmin() {
   }
   return session;
 }
+
+/**
+ * Require teacher or student role for community social features.
+ */
+export async function requireCommunityMember() {
+  const session = await requireAuth();
+  const role = session.user.role;
+  if (role !== "TEACHER" && role !== "STUDENT") {
+    redirect("/community");
+  }
+  return session;
+}
+
+/**
+ * Require recruiter role.
+ */
+export async function requireRecruiter() {
+  const session = await requireAuth();
+  if (session.user.role !== "RECRUITER") {
+    redirect("/");
+  }
+  return session;
+}

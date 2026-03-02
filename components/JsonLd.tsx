@@ -1,5 +1,17 @@
 import { siteConfig } from "@/lib/site";
 
+/**
+ * Generic JSON-LD component for arbitrary structured data.
+ */
+export function JsonLd({ data }: { data: Record<string, unknown> }) {
+  return (
+    <script
+      type="application/ld+json"
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }}
+    />
+  );
+}
+
 type WebSiteJsonLdProps = {
   url?: string;
 };

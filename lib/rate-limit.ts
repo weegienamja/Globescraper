@@ -216,3 +216,30 @@ export function getNewsGenRatelimit(): Ratelimit | null {
 
   return _newsGenInstance;
 }
+
+/**
+ * Report rate limiter - 10 reports per 24-hour sliding window per user.
+ */
+
+let _reportInstance: Ratelimit | null | undefined;
+
+export function getReportRatelimit(): Ratelimit | null {
+  if (_reportInstance !== undefined) return _reportInstance;
+
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+
+  if (!url || !token) {
+    _reportInstance = null;
+    return null;
+  }
+
+  _reportInstance = new Ratelimit({
+    redis: new Redis({ url, token }),
+    limiter: Ratelimit.slidingWindow(10, "24 h"),
+    prefix: "ratelimit:report",
+    analytics: true,
+  });
+
+  return _reportInstance;
+}

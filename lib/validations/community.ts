@@ -131,6 +131,9 @@ export const communityProfileSchema = z.object({
   languagesTeaching: z.array(z.string().max(100)).max(10).optional(),
   interests: z.array(z.string().max(100)).max(20).optional(),
   showCityPublicly: z.boolean().optional(),
+  // Role-specific fields
+  teflTesolCertified: z.boolean().optional(),
+  movingTimeline: z.string().max(100).nullable().optional(),
 });
 
 export const connectionRequestSchema = z.object({
@@ -159,7 +162,7 @@ export const meetupSchema = z.object({
 });
 
 export const reportSchema = z.object({
-  targetType: z.enum(["USER", "MEETUP"]),
+  targetType: z.enum(["USER", "MEETUP", "MESSAGE"]),
   targetId: z.string().min(1),
   reason: z.enum(["SPAM", "HARASSMENT", "SCAM", "OTHER"]),
   details: z.string().max(1000).optional().or(z.literal("")),

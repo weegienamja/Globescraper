@@ -18,6 +18,8 @@ import {
   CERTIFICATION_OPTIONS,
   SUGGESTED_INTERESTS,
 } from "@/lib/validations/community";
+import { MOVING_TIMELINES } from "@/lib/validations/onboarding";
+import type { AppRole } from "@/types/next-auth";
 
 const MAX_CLIENT_SIZE = 2 * 1024 * 1024;
 const COMPRESS_QUALITY = 0.8;
@@ -82,14 +84,18 @@ type ProfileData = {
   languagesTeaching: string[];
   interests: string[];
   showCityPublicly: boolean;
+  teflTesolCertified: boolean;
+  movingTimeline: string;
 };
 
 export function CommunityProfileForm({
   initial,
   userId,
+  role,
 }: {
   initial: ProfileData | null;
   userId: string;
+  role: AppRole;
 }) {
   const router = useRouter();
   const { update: updateSession } = useSession();
@@ -124,6 +130,13 @@ export function CommunityProfileForm({
   const [customLang, setCustomLang] = useState("");
   const [interests, setInterests] = useState<string[]>(initial?.interests ?? []);
   const [customInterest, setCustomInterest] = useState("");
+
+  // Role-specific fields
+  const [teflTesolCertified, setTeflTesolCertified] = useState(initial?.teflTesolCertified ?? false);
+  const [movingTimeline, setMovingTimeline] = useState(initial?.movingTimeline ?? "");
+
+  const isTeacher = role === "TEACHER" || role === "USER" || role === "ADMIN";
+  const isStudent = role === "STUDENT";
 
   // Avatar state
   const [avatarUrl, setAvatarUrl] = useState<string | null>(initial?.avatarUrl ?? null);
@@ -263,6 +276,8 @@ export function CommunityProfileForm({
       languagesTeaching,
       interests,
       showCityPublicly,
+      teflTesolCertified,
+      movingTimeline: movingTimeline || null,
     };
 
     startTransition(async () => {
@@ -405,6 +420,36 @@ export function CommunityProfileForm({
           </select>
           <span className="form__hint">Where are you on your relocation journey?</span>
         </label>
+
+        {/* Teacher-specific: TEFL/TESOL certified toggle */}
+        {isTeacher && (
+          <label className="form__checkbox-label form__checkbox-label--prominent">
+            <input
+              type="checkbox"
+              checked={teflTesolCertified}
+              onChange={(e) => setTeflTesolCertified(e.target.checked)}
+            />
+            I have a TEFL/TESOL certification
+            <span className="form__hint">This badge appears on your profile card</span>
+          </label>
+        )}
+
+        {/* Student-specific: Moving timeline */}
+        {isStudent && (
+          <label className="form__label">
+            When are you planning to move?
+            <select
+              value={movingTimeline}
+              onChange={(e) => setMovingTimeline(e.target.value)}
+              className="form__input"
+            >
+              <option value="">Not sure yet</option>
+              {MOVING_TIMELINES.map((t) => (
+                <option key={t.value} value={t.value}>{t.label}</option>
+              ))}
+            </select>
+          </label>
+        )}
 
       </fieldset>
 

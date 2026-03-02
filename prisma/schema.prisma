@@ -11,8 +11,11 @@ datasource db {
 // ─── Auth.js models ───────────────────────────────────────────
 
 enum Role {
-  USER
+  USER       // Default for new signups before role selection
   ADMIN
+  TEACHER
+  STUDENT
+  RECRUITER
 }
 
 enum UserStatus {
@@ -23,18 +26,20 @@ enum UserStatus {
 }
 
 model User {
-  id            String     @id @default(uuid())
-  name          String?
-  email         String     @unique @db.VarChar(255)
-  emailVerified DateTime?
-  passwordHash  String?    @db.VarChar(255)
-  role          Role       @default(USER)
-  status        UserStatus @default(ACTIVE)
-  disabled      Boolean    @default(false)
-  image         String?
-  lastLoginAt   DateTime?
-  lastActiveAt  DateTime?
-  deletedAt     DateTime?
+  id              String     @id @default(uuid())
+  name            String?
+  username        String?    @unique @db.VarChar(40)
+  email           String     @unique @db.VarChar(255)
+  emailVerified   DateTime?
+  passwordHash    String?    @db.VarChar(255)
+  role            Role       @default(USER)
+  status          UserStatus @default(ACTIVE)
+  disabled        Boolean    @default(false)
+  image           String?
+  lastLoginAt     DateTime?
+  lastActiveAt    DateTime?
+  deletedAt       DateTime?
+  suspensionReason String?   @db.VarChar(500)
 
   // Email marketing
   emailMarketingOptIn  Boolean   @default(false)
@@ -62,6 +67,7 @@ model User {
   reports             Report[]
   securityEvents      UserSecurityEvent[]
   emailLogs           EmailLog[]
+  recruiterProfile    RecruiterProfile?
 }
 
 model Account {
@@ -253,7 +259,7 @@ model Profile {
   meetupExploring       Boolean             @default(false)
   hiddenFromCommunity   Boolean             @default(false)
 
-  // ── New community profile fields ───────────────────────
+  // -- Community profile fields --
   relocationStage       RelocationStage     @default(PLANNING)
   lookingFor            LookingFor?         
   replyTimeHint         ReplyTimeHint?      
@@ -262,6 +268,14 @@ model Profile {
   interests             Json?               // string[] e.g. ["Motorbikes", "Coffee shops"]
   showCityPublicly      Boolean             @default(true)
   phoneVerified         Boolean             @default(false)
+
+  // -- Teacher-specific fields --
+  teflTesolCertified    Boolean             @default(false)
+  comfortableSubjects   Json?               // string[] e.g. ["Grammar", "Conversation"]
+  desiredCities         Json?               // string[] e.g. ["Ho Chi Minh City"]
+
+  // -- Student-specific fields --
+  movingTimeline        String?             @db.VarChar(100)
 
   createdAt             DateTime            @default(now())
   updatedAt             DateTime            @updatedAt
@@ -275,6 +289,7 @@ model Profile {
   @@index([currentCity])
   @@index([visibility])
   @@index([updatedAt])
+  @@index([userId])
 }
 
 model ProfileTargetCountry {
@@ -348,6 +363,14 @@ enum AttendeeStatus {
 enum ReportTargetType {
   USER
   MEETUP
+  MESSAGE
+}
+
+enum ReportStatus {
+  OPEN
+  REVIEWED
+  RESOLVED
+  DISMISSED
 }
 
 enum ReportReason {
@@ -436,6 +459,7 @@ model Report {
   targetId       String           @db.VarChar(191)
   reason         ReportReason
   details        String?          @db.VarChar(1000)
+  status         ReportStatus     @default(OPEN)
   createdAt      DateTime         @default(now())
 
   reporter       User             @relation(fields: [reporterUserId], references: [id], onDelete: Cascade)
@@ -443,6 +467,26 @@ model Report {
   @@index([reporterUserId])
   @@index([targetType, targetId])
   @@index([createdAt])
+  @@index([status])
+}
+
+// -- Recruiter profile (recruiter-specific data) --
+
+model RecruiterProfile {
+  id              String   @id @default(uuid())
+  userId          String   @unique
+  companyName     String?  @db.VarChar(200)
+  website         String?  @db.VarChar(500)
+  verifiedCompany Boolean  @default(false)
+  notes           String?  @db.Text
+  targetCountries Json?    // string[]
+  targetCities    Json?    // string[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 // ─── Canonical connections (new system) ──────────────────────
