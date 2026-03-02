@@ -21,3 +21,15 @@
 # http://user:pass@proxy1.example.com:8080
 # socks5://user:pass@proxy2.example.com:1080
 # http://proxy3.example.com:3128
+
+# Webshare (10 datacenter proxies)
+http://aorxcaql:wleua4eeia4n@31.59.20.176:6754
+http://aorxcaql:wleua4eeia4n@23.95.150.145:6114
+http://aorxcaql:wleua4eeia4n@198.23.239.134:6540
+http://aorxcaql:wleua4eeia4n@45.38.107.97:6014
+http://aorxcaql:wleua4eeia4n@107.172.163.27:6543
+http://aorxcaql:wleua4eeia4n@198.105.121.200:6462
+http://aorxcaql:wleua4eeia4n@64.137.96.74:6641
+http://aorxcaql:wleua4eeia4n@216.10.27.159:6837
+http://aorxcaql:wleua4eeia4n@142.111.67.146:5611
+http://aorxcaql:wleua4eeia4n@194.39.32.164:6461
