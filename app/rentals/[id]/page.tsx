@@ -70,6 +70,13 @@ export default async function ListingDetailPage({ params }: Props) {
       longitude: true,
       canonicalUrl: true,
       source: true,
+      snapshots: {
+        select: {
+          scrapedAt: true,
+          priceMonthlyUsd: true,
+        },
+        orderBy: { scrapedAt: "asc" },
+      },
     },
   });
 
@@ -141,9 +148,24 @@ export default async function ListingDetailPage({ params }: Props) {
     }),
   };
 
+  // Build price history: only entries where price actually changed
+  const priceChanges: { date: string; price: number | null }[] = [];
+  let prevPrice: number | null | undefined = undefined;
+  for (const snap of listing.snapshots) {
+    if (snap.priceMonthlyUsd !== prevPrice) {
+      priceChanges.push({
+        date: snap.scrapedAt.toISOString(),
+        price: snap.priceMonthlyUsd,
+      });
+      prevPrice = snap.priceMonthlyUsd;
+    }
+  }
+
   // Serialize dates for client component
   const serialized = {
     ...listing,
+    snapshots: undefined, // don't pass raw snapshots
+    priceHistory: priceChanges,
     postedAt: listing.postedAt?.toISOString() ?? null,
     firstSeenAt: listing.firstSeenAt.toISOString(),
     lastSeenAt: listing.lastSeenAt.toISOString(),

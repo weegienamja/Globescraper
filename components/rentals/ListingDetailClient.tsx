@@ -28,6 +28,7 @@ interface DetailListing {
   longitude: number | null;
   canonicalUrl: string;
   source: string;
+  priceHistory: { date: string; price: number | null }[];
 }
 
 export function ListingDetailClient({ listing }: { listing: DetailListing }) {
@@ -94,27 +95,39 @@ export function ListingDetailClient({ listing }: { listing: DetailListing }) {
             </section>
           )}
 
-          {/* History */}
+          {/* Price History */}
           <section className="listing-detail__section">
-            <h2 className="listing-detail__section-title">Listing history</h2>
+            <h2 className="listing-detail__section-title">Price History</h2>
             <div className="listing-history">
-              {listing.postedAt && (
-                <div className="listing-history__item">
-                  <span className="listing-history__dot" />
-                  <span className="listing-history__label">Posted</span>
-                  <span>{fmtDate(listing.postedAt)}</span>
-                </div>
+              {listing.priceHistory.length <= 1 ? (
+                <span style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>
+                  No price changes
+                </span>
+              ) : (
+                listing.priceHistory.map((entry, i) => (
+                  <div key={i} className="listing-history__item">
+                    <span className="listing-history__dot" style={{
+                      background: i === 0 ? "#64748b" : entry.price != null && listing.priceHistory[i - 1].price != null
+                        ? entry.price < listing.priceHistory[i - 1].price! ? "#4ade80" : "#f87171"
+                        : "#818cf8"
+                    }} />
+                    <span className="listing-history__label">{fmtDate(entry.date)}</span>
+                    <span style={{ fontWeight: 500 }}>
+                      {entry.price != null ? `$${Math.round(entry.price)}/mo` : "Price removed"}
+                      {i > 0 && entry.price != null && listing.priceHistory[i - 1].price != null && (
+                        <span style={{
+                          marginLeft: "6px",
+                          fontSize: "0.8rem",
+                          color: entry.price < listing.priceHistory[i - 1].price! ? "#4ade80" : "#f87171",
+                        }}>
+                          {entry.price < listing.priceHistory[i - 1].price! ? "↓" : "↑"}
+                          ${Math.abs(Math.round(entry.price - listing.priceHistory[i - 1].price!))}
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                ))
               )}
-              <div className="listing-history__item">
-                <span className="listing-history__dot" />
-                <span className="listing-history__label">First seen</span>
-                <span>{fmtDate(listing.firstSeenAt)}</span>
-              </div>
-              <div className="listing-history__item">
-                <span className="listing-history__dot" />
-                <span className="listing-history__label">Last seen</span>
-                <span>{fmtDate(listing.lastSeenAt)}</span>
-              </div>
             </div>
           </section>
         </div>
