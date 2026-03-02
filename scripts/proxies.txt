@@ -1,0 +1,23 @@
+# Proxy list for Khmer24 multi-worker scraping
+#
+# One proxy per line. Format: protocol://user:password@host:port
+# Lines starting with # are ignored.
+#
+# Each worker gets assigned a proxy in round-robin order.
+# If this file is empty or missing, workers use your direct IP.
+#
+# Free proxy sources (SOCKS5 are best for Playwright):
+#   https://www.webshare.io          — 10 free rotating proxies
+#   https://proxyscrape.com          — free SOCKS5 list
+#   https://www.sslproxies.org       — free HTTP list
+#
+# Paid (recommended for serious volume):
+#   https://brightdata.com           — residential rotating proxies
+#   https://smartproxy.com           — residential, $12.5/GB
+#   https://www.webshare.io/proxy    — datacenter, $3.22/mo for 10 IPs
+#   https://oxylabs.io               — datacenter + residential
+#
+# Examples:
+# http://user:pass@proxy1.example.com:8080
+# socks5://user:pass@proxy2.example.com:1080
+# http://proxy3.example.com:3128

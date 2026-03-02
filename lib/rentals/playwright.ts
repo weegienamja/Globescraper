@@ -4,6 +4,10 @@
  * Uses a single long-lived browser instance with a pool of pages.
  * Headless Chromium renders JS + passes CF challenges automatically.
  *
+ * Supports optional HTTP/SOCKS proxy via:
+ *   - `configureProxy(url)` call from a script
+ *   - `SCRAPE_PROXY` environment variable
+ *
  * ⚠ Only used for LOCAL / CLI scripts — NOT compatible with Vercel
  *   serverless (no headless Chrome there). For deployed (Vercel) usage,
  *   pipe through a proxy or use the simple `fetchHtml` in http.ts.
@@ -13,14 +17,35 @@ import { chromium, type Browser, type BrowserContext } from "playwright";
 
 /* ── Configuration ───────────────────────────────────────── */
 
-const BROWSER_UA =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+const BROWSER_UAS = [
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0",
+];
 
 /** Time to wait after navigation for CF challenge / lazy content (ms) */
-const POST_NAV_WAIT_MS = 5_000;
+const POST_NAV_WAIT_MS = parseInt(process.env.PW_WAIT_MS ?? "5000", 10);
 
 /** Hard timeout for a full page load (ms) */
 const PAGE_TIMEOUT_MS = 30_000;
+
+/* ── Proxy config ────────────────────────────────────────── */
+
+let _proxyUrl: string | null = process.env.SCRAPE_PROXY || null;
+
+/**
+ * Set the proxy URL for all future browser launches.
+ * Call BEFORE any page fetches. Format: http://user:pass@host:port
+ */
+export function configureProxy(url: string | null): void {
+  _proxyUrl = url;
+  // Force browser restart on next request so proxy takes effect
+  if (_context || _browser) {
+    closeBrowser().catch(() => {});
+  }
+}
 
 /* ── Singleton browser management ────────────────────────── */
 
@@ -33,16 +58,24 @@ let _context: BrowserContext | null = null;
 async function getBrowserContext(): Promise<BrowserContext> {
   if (_context) return _context;
 
-  _browser = await chromium.launch({
+  const launchOptions: Parameters<typeof chromium.launch>[0] = {
     headless: true,
     args: [
       "--disable-blink-features=AutomationControlled",
       "--no-sandbox",
     ],
-  });
+  };
+
+  if (_proxyUrl) {
+    launchOptions.proxy = { server: _proxyUrl };
+  }
+
+  _browser = await chromium.launch(launchOptions);
+
+  const ua = BROWSER_UAS[Math.floor(Math.random() * BROWSER_UAS.length)];
 
   _context = await _browser.newContext({
-    userAgent: BROWSER_UA,
+    userAgent: ua,
     viewport: { width: 1280, height: 800 },
     locale: "en-US",
     javaScriptEnabled: true,

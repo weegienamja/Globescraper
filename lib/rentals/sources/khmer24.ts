@@ -30,6 +30,10 @@ import { politeDelay } from "../http";
 const CATEGORY_URLS = [
   "https://www.khmer24.com/en/c-apartment-for-rent",
   "https://www.khmer24.com/en/c-room-for-rent",
+  "https://www.khmer24.com/en/c-house-for-rent",
+  "https://www.khmer24.com/en/c-flat-for-rent",
+  "https://www.khmer24.com/en/c-villa-for-rent",
+  "https://www.khmer24.com/en/c-condo-for-rent",
 ];
 
 /* ── Types ───────────────────────────────────────────────── */
