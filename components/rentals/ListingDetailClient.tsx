@@ -3,6 +3,7 @@
 import { ListingGallery } from "@/components/rentals/ListingGallery";
 import { ListingFactsCard } from "@/components/rentals/ListingFactsCard";
 import { AmenitiesList } from "@/components/rentals/AmenitiesList";
+import { ListingMap } from "@/components/rentals/ListingMap";
 import { useSavedListings } from "@/components/rentals/useSavedListings";
 
 interface DetailListing {
@@ -81,12 +82,14 @@ export function ListingDetailClient({ listing }: { listing: DetailListing }) {
           {listing.latitude && listing.longitude && (
             <section className="listing-detail__section">
               <h2 className="listing-detail__section-title">
-                {displayTitle}
+                Location
               </h2>
               <div className="listing-map">
-                <span>
-                  Approximate location: {listing.latitude.toFixed(4)}, {listing.longitude.toFixed(4)}
-                </span>
+                <ListingMap
+                  lat={listing.latitude}
+                  lng={listing.longitude}
+                  title={displayTitle}
+                />
               </div>
             </section>
           )}

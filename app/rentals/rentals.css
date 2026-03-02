@@ -1349,18 +1349,19 @@
   flex-shrink: 0;
 }
 
-/* Map placeholder */
+/* Map */
 .listing-map {
   width: 100%;
   height: 300px;
   border-radius: 8px;
   background: var(--bg-elevated);
   border: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-muted);
-  font-size: 0.875rem;
+  overflow: hidden;
+}
+
+.listing-map-marker {
+  background: none !important;
+  border: none !important;
 }
 
 /* History */
