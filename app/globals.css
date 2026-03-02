@@ -10130,6 +10130,20 @@ body.menu-open {
   50% { opacity: 0.3; }
 }
 
+/* ── Leaflet stacking-context fix ─────────────────────────
+   Leaflet internally uses z-index up to 1000+ for panes and
+   controls.  Without an explicit stacking context, those values
+   leak into the root context and render above the sticky header
+   (z-index 200) and mobile nav panel (z-index 175).
+   `isolation: isolate` creates a local stacking context so all
+   internal Leaflet z-indexes stay contained within the map.
+   ────────────────────────────────────────────────────────── */
+
+.leaflet-container {
+  isolation: isolate;
+  z-index: 0;         /* fallback for older browsers */
+}
+
 /* ── Leaflet attribution override ────────────────────────── */
 
 .leaflet-control-attribution {
