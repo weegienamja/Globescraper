@@ -1,12 +1,38 @@
 "use client";
 
-import { useState, useMemo, useCallback, useRef, useLayoutEffect } from "react";
+import { useState, useMemo, useCallback, useRef, useEffect, useLayoutEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 
-/* ── Constants (mirrored from server for client use) ──────── */
+/* ── Constants ────────────────────────────────────────────── */
 
 const COMMUNITY_COUNTRIES = ["Vietnam", "Thailand", "Cambodia", "Philippines"] as const;
+
+/** Major cities per country — covers the main expat / teaching hubs */
+const CITIES_BY_COUNTRY: Record<string, string[]> = {
+  Vietnam: [
+    "Ho Chi Minh City", "Hanoi", "Da Nang", "Nha Trang", "Hoi An",
+    "Can Tho", "Hai Phong", "Vung Tau", "Da Lat", "Bien Hoa",
+    "Quy Nhon", "Hue", "Phu Quoc",
+  ],
+  Thailand: [
+    "Bangkok", "Chiang Mai", "Phuket", "Pattaya", "Chiang Rai",
+    "Koh Samui", "Hua Hin", "Krabi", "Udon Thani", "Khon Kaen",
+    "Hat Yai", "Nakhon Ratchasima", "Ayutthaya",
+  ],
+  Cambodia: [
+    "Phnom Penh", "Siem Reap", "Sihanoukville", "Battambang",
+    "Kampot", "Kep", "Kampong Cham",
+  ],
+  Philippines: [
+    "Manila", "Makati", "Cebu City", "Davao City", "Quezon City",
+    "Taguig", "Angeles City", "Iloilo City", "Bacolod", "Baguio",
+    "Dumaguete", "Subic Bay",
+  ],
+};
+
+/** All cities sorted alphabetically */
+const ALL_CITIES = Object.values(CITIES_BY_COUNTRY).flat().sort();
 
 const INTENT_LABELS: Record<string, string> = {
   meetupCoffee: "☕ Coffee meetups",
@@ -65,11 +91,11 @@ export interface CommunityProfile {
   interests: unknown;
   languagesTeaching: unknown;
   certifications: unknown;
-  updatedAt: string;  // serialised Date
+  updatedAt: string;
   user: {
     username: string | null;
     lastActiveAt: string | null;
-    emailVerified: string | null; // serialised Date | null
+    emailVerified: string | null;
     role: string;
   };
   targetCountries: { country: string }[];
@@ -128,15 +154,23 @@ export function CommunityGrid({ profiles, hasSetup }: Props) {
   const [intentFilter, setIntentFilter] = useState("");
   const [sortBy, setSortBy] = useState<SortOption>("relevant");
 
-  /* Debounce city typed input 300ms */
-  const cityTimeout = useRef<ReturnType<typeof setTimeout>>();
-  const [debouncedCity, setDebouncedCity] = useState("");
+  // Available cities based on selected country
+  const availableCities = useMemo(() => {
+    if (countryFilter && CITIES_BY_COUNTRY[countryFilter]) {
+      return CITIES_BY_COUNTRY[countryFilter];
+    }
+    return ALL_CITIES;
+  }, [countryFilter]);
 
-  const handleCityChange = useCallback((val: string) => {
-    setCityFilter(val);
-    if (cityTimeout.current) clearTimeout(cityTimeout.current);
-    cityTimeout.current = setTimeout(() => setDebouncedCity(val), 300);
-  }, []);
+  // Clear city when country changes and the city isn't in the new list
+  const handleCountryChange = useCallback((country: string) => {
+    setCountryFilter(country);
+    if (country && CITIES_BY_COUNTRY[country]) {
+      if (!CITIES_BY_COUNTRY[country].includes(cityFilter)) {
+        setCityFilter("");
+      }
+    }
+  }, [cityFilter]);
 
   /* Filter + sort on the client */
   const filtered = useMemo(() => {
@@ -150,9 +184,9 @@ export function CommunityGrid({ profiles, hasSetup }: Props) {
       );
     }
 
-    // City filter (case-insensitive contains)
-    if (debouncedCity.trim()) {
-      const q = debouncedCity.trim().toLowerCase();
+    // City filter (case-insensitive contains — matches currentCity)
+    if (cityFilter.trim()) {
+      const q = cityFilter.trim().toLowerCase();
       result = result.filter(
         (p) => p.currentCity?.toLowerCase().includes(q),
       );
@@ -178,76 +212,83 @@ export function CommunityGrid({ profiles, hasSetup }: Props) {
           new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
       );
     }
-    // "relevant" = default DB order
 
     return result;
-  }, [profiles, countryFilter, debouncedCity, intentFilter, sortBy]);
+  }, [profiles, countryFilter, cityFilter, intentFilter, sortBy]);
 
-  /* Track which profile IDs are currently visible for animation */
-  const visibleIds = useMemo(() => new Set(filtered.map((p) => p.userId)), [filtered]);
-
-  /* FLIP animation: remember grid positions before render */
+  /* ── Animation: FLIP + enter/exit ─────────────────────── */
   const gridRef = useRef<HTMLDivElement>(null);
-  const positionsRef = useRef<Map<string, DOMRect>>(new Map());
+  const prevFilteredRef = useRef<Set<string>>(new Set(profiles.map((p) => p.userId)));
+  const rectCacheRef = useRef<Map<string, DOMRect>>(new Map());
+  const isFirstRender = useRef(true);
 
-  // Capture positions before DOM update
-  const capturePositions = useCallback(() => {
-    if (!gridRef.current) return;
-    const map = new Map<string, DOMRect>();
-    gridRef.current.querySelectorAll<HTMLElement>("[data-profile-id]").forEach((el) => {
-      const id = el.dataset.profileId!;
-      map.set(id, el.getBoundingClientRect());
-    });
-    positionsRef.current = map;
-  }, []);
-
-  // Before every re-render where filters change, snapshot positions
-  // We do this eagerly on filter change
-  const handleFilterChange = useCallback(
-    (setter: (v: string) => void) => (val: string) => {
-      capturePositions();
-      setter(val);
-    },
-    [capturePositions],
-  );
-
-  // After render, animate from old position to new position (FLIP)
+  // Snapshot card positions BEFORE React commits the new DOM
+  // We call this synchronously at the top of the effect chain
   useLayoutEffect(() => {
-    if (!gridRef.current) return;
-    const oldPositions = positionsRef.current;
-    if (oldPositions.size === 0) return;
+    // On first render, just mark all current cards and skip animation
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      prevFilteredRef.current = new Set(filtered.map((p) => p.userId));
+      return;
+    }
 
-    gridRef.current.querySelectorAll<HTMLElement>("[data-profile-id]").forEach((el) => {
+    const grid = gridRef.current;
+    if (!grid) return;
+
+    const prevIds = prevFilteredRef.current;
+    const nextIds = new Set(filtered.map((p) => p.userId));
+
+    // Animate each card
+    grid.querySelectorAll<HTMLElement>("[data-profile-id]").forEach((el) => {
       const id = el.dataset.profileId!;
-      const oldRect = oldPositions.get(id);
+      const oldRect = rectCacheRef.current.get(id);
       const newRect = el.getBoundingClientRect();
 
-      if (oldRect) {
-        // Element existed before — animate from old position
+      if (!prevIds.has(id)) {
+        // ENTERING — slide up + fade in
+        el.animate(
+          [
+            { opacity: 0, transform: "translateY(24px) scale(0.95)" },
+            { opacity: 1, transform: "translateY(0) scale(1)" },
+          ],
+          { duration: 350, easing: "cubic-bezier(0.4, 0, 0.2, 1)", fill: "both" },
+        );
+      } else if (oldRect) {
+        // MOVING — FLIP from old position
         const dx = oldRect.left - newRect.left;
         const dy = oldRect.top - newRect.top;
-        if (dx !== 0 || dy !== 0) {
-          el.style.transform = `translate(${dx}px, ${dy}px)`;
-          el.style.transition = "none";
-          // Force reflow
-          el.getBoundingClientRect();
-          el.style.transform = "";
-          el.style.transition = "transform 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease";
+        if (Math.abs(dx) > 1 || Math.abs(dy) > 1) {
+          el.animate(
+            [
+              { transform: `translate(${dx}px, ${dy}px)` },
+              { transform: "translate(0, 0)" },
+            ],
+            { duration: 350, easing: "cubic-bezier(0.4, 0, 0.2, 1)" },
+          );
         }
-      } else {
-        // New element entering – fade + slide up
-        el.style.opacity = "0";
-        el.style.transform = "translateY(16px) scale(0.97)";
-        el.style.transition = "none";
-        el.getBoundingClientRect();
-        el.style.opacity = "1";
-        el.style.transform = "";
-        el.style.transition = "transform 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease";
       }
     });
 
-    positionsRef.current = new Map();
+    prevFilteredRef.current = nextIds;
+    rectCacheRef.current.clear();
   }, [filtered]);
+
+  // Snapshot positions before state change triggers re-render
+  const snapshotPositions = useCallback(() => {
+    const grid = gridRef.current;
+    if (!grid) return;
+    const map = new Map<string, DOMRect>();
+    grid.querySelectorAll<HTMLElement>("[data-profile-id]").forEach((el) => {
+      map.set(el.dataset.profileId!, el.getBoundingClientRect());
+    });
+    rectCacheRef.current = map;
+  }, []);
+
+  // Wrap every filter/sort change with a position snapshot
+  const changeCountry = useCallback((v: string) => { snapshotPositions(); handleCountryChange(v); }, [snapshotPositions, handleCountryChange]);
+  const changeCity = useCallback((v: string) => { snapshotPositions(); setCityFilter(v); }, [snapshotPositions]);
+  const changeIntent = useCallback((v: string) => { snapshotPositions(); setIntentFilter(v); }, [snapshotPositions]);
+  const changeSort = useCallback((v: SortOption) => { snapshotPositions(); setSortBy(v); }, [snapshotPositions]);
 
   return (
     <>
@@ -265,10 +306,7 @@ export function CommunityGrid({ profiles, hasSetup }: Props) {
 
         <select
           value={countryFilter}
-          onChange={(e) => {
-            capturePositions();
-            setCountryFilter(e.target.value);
-          }}
+          onChange={(e) => changeCountry(e.target.value)}
           className="form__input form__input--sm"
         >
           <option value="">All countries</option>
@@ -277,23 +315,20 @@ export function CommunityGrid({ profiles, hasSetup }: Props) {
           ))}
         </select>
 
-        <input
-          type="text"
-          placeholder="City..."
+        <select
           value={cityFilter}
-          onChange={(e) => {
-            capturePositions();
-            handleCityChange(e.target.value);
-          }}
+          onChange={(e) => changeCity(e.target.value)}
           className="form__input form__input--sm"
-        />
+        >
+          <option value="">All cities</option>
+          {availableCities.map((c) => (
+            <option key={c} value={c}>{c}</option>
+          ))}
+        </select>
 
         <select
           value={intentFilter}
-          onChange={(e) => {
-            capturePositions();
-            setIntentFilter(e.target.value);
-          }}
+          onChange={(e) => changeIntent(e.target.value)}
           className="form__input form__input--sm"
         >
           <option value="">Any intent</option>
@@ -309,10 +344,7 @@ export function CommunityGrid({ profiles, hasSetup }: Props) {
         {(["relevant", "active", "newest"] as const).map((s) => (
           <button
             key={s}
-            onClick={() => {
-              capturePositions();
-              setSortBy(s);
-            }}
+            onClick={() => changeSort(s)}
             className={`community-sort__option${sortBy === s ? " community-sort__option--active" : ""}`}
           >
             {s === "relevant" ? "Most relevant" : s === "active" ? "Recently active" : "Newest"}
@@ -331,8 +363,7 @@ export function CommunityGrid({ profiles, hasSetup }: Props) {
         </div>
       ) : (
         <div className="community-grid" ref={gridRef}>
-          {profiles.map((p) => {
-            const show = visibleIds.has(p.userId);
+          {filtered.map((p) => {
             const languages = safeJsonArray(p.languagesTeaching);
             const intents = getIntents(p);
             const certs = safeJsonArray(p.certifications);
@@ -344,8 +375,8 @@ export function CommunityGrid({ profiles, hasSetup }: Props) {
                 key={p.userId}
                 href={profileUrl(p)}
                 data-profile-id={p.userId}
-                className={`community-card community-card--animated${show ? " community-card--visible" : ""}`}
-                tabIndex={show ? 0 : -1}
+                className="community-card"
+                tabIndex={0}
               >
                 <div className="community-card__header">
                   <div className="community-card__avatar-wrap">
@@ -383,7 +414,6 @@ export function CommunityGrid({ profiles, hasSetup }: Props) {
                   </div>
                 </div>
 
-                {/* Language + certs row */}
                 {(languages.length > 0 || certs.length > 0) && (
                   <div className="community-card__tags">
                     {languages.map((l) => (
@@ -395,7 +425,6 @@ export function CommunityGrid({ profiles, hasSetup }: Props) {
                   </div>
                 )}
 
-                {/* Available for chips */}
                 {intents.length > 0 && (
                   <div className="community-card__intents">
                     {intents.slice(0, 4).map((i) => (
@@ -407,7 +436,6 @@ export function CommunityGrid({ profiles, hasSetup }: Props) {
                   </div>
                 )}
 
-                {/* Target countries */}
                 {p.targetCountries.length > 0 && (
                   <div className="community-card__countries">
                     {p.targetCountries.map((tc) => (
