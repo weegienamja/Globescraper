@@ -63,7 +63,7 @@ const FAST_MODE     = hasFlag("--fast");
 const PROXY_URL     = getStrArg("--proxy") || process.env.SCRAPE_PROXY || "";
 const WORKER_ID     = getStrArg("--_worker-id") || "0";
 
-// Lift pipeline caps
+// ⚠️ MUST set env vars BEFORE importing config modules (they cache on import)
 process.env.RENTALS_MAX_PAGES   = String(MAX_PAGES);
 process.env.RENTALS_MAX_URLS    = String(MAX_URLS);
 process.env.RENTALS_MAX_PROCESS = String(BATCH_SIZE);
@@ -74,7 +74,12 @@ if (FAST_MODE) {
   process.env.PW_WAIT_MS = "2500";
 }
 
-/* ── Imports ─────────────────────────────────────────────── */
+// Set proxy env before any imports that might read it
+if (PROXY_URL) {
+  process.env.SCRAPE_PROXY = PROXY_URL;
+}
+
+/* ── Imports (AFTER env vars are set) ────────────────────── */
 
 import { prisma } from "../lib/prisma";
 import { QueueStatus, RentalSource } from "@prisma/client";

@@ -67,7 +67,20 @@ async function getBrowserContext(): Promise<BrowserContext> {
   };
 
   if (_proxyUrl) {
-    launchOptions.proxy = { server: _proxyUrl };
+    // Playwright needs server, username, password as separate fields
+    // Parse from URL format: http://user:pass@host:port
+    try {
+      const parsed = new URL(_proxyUrl);
+      const serverOnly = `${parsed.protocol}//${parsed.hostname}:${parsed.port}`;
+      launchOptions.proxy = {
+        server: serverOnly,
+        ...(parsed.username && { username: decodeURIComponent(parsed.username) }),
+        ...(parsed.password && { password: decodeURIComponent(parsed.password) }),
+      };
+    } catch {
+      // Fallback: treat as plain server URL (no auth)
+      launchOptions.proxy = { server: _proxyUrl };
+    }
   }
 
   _browser = await chromium.launch(launchOptions);
@@ -117,12 +130,30 @@ export async function fetchHtmlPlaywright(
       timeout: PAGE_TIMEOUT_MS,
     });
 
-    if (!response || response.status() >= 400) {
+    if (!response) {
+      console.error(`[PW] No response for ${url}`);
+      return null;
+    }
+    if (response.status() >= 400) {
+      console.error(`[PW] HTTP ${response.status()} for ${url}`);
       return null;
     }
 
     // Wait for SPA hydration / dynamic content
     await page.waitForTimeout(options?.waitMs ?? POST_NAV_WAIT_MS);
+
+    // Check for Cloudflare challenge page
+    const title = await page.title();
+    if (title.includes("Just a moment") || title.includes("Attention Required")) {
+      console.error(`[PW] Cloudflare challenge detected for ${url} (title: "${title}")`);
+      // Give extra time for CF challenge to resolve
+      await page.waitForTimeout(8_000);
+      const retryTitle = await page.title();
+      if (retryTitle.includes("Just a moment") || retryTitle.includes("Attention Required")) {
+        console.error(`[PW] CF challenge not resolved after 8s wait for ${url}`);
+        return null;
+      }
+    }
 
     // Optional: scroll to bottom to trigger lazy-loading
     if (options?.scrollToBottom) {
@@ -131,7 +162,9 @@ export async function fetchHtmlPlaywright(
     }
 
     return await page.content();
-  } catch {
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[PW] Error fetching ${url}: ${msg}`);
     return null;
   } finally {
     await page.close();
