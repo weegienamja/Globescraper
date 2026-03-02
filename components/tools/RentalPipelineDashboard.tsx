@@ -500,7 +500,7 @@ export function RentalPipelineDashboard() {
                       setProgress({ phase: "AI Rewrite", percent: donePct, label: `Batch ${i + 1}/${rewriteBatches} done — ${totalRewritten} rewritten, ${totalTokens} tokens` });
                       if (!data.rewritten || data.rewritten === 0) break;
                       if (rewriteSequential && i < rewriteBatches - 1) {
-                        await new Promise((r) => setTimeout(r, 1000));
+                        await new Promise((r) => setTimeout(r, 3000));
                       }
                     }
                     setToast({ message: `AI Rewrite complete: ${totalRewritten} descriptions (${totalTokens} tokens)`, type: "success" });
@@ -579,7 +579,7 @@ export function RentalPipelineDashboard() {
                       setProgress({ phase: "AI Review", percent: donePct, label: `Batch ${i + 1}/${reviewBatches} done — ${totalReviewed} reviewed, ${totalFlagged} flagged` });
                       if (!data.reviewed || data.reviewed === 0) break;
                       if (i < reviewBatches - 1) {
-                        await new Promise((r) => setTimeout(r, 1000));
+                        await new Promise((r) => setTimeout(r, 3000));
                       }
                     }
                     setToast({ message: `AI Review complete: ${totalReviewed} reviewed, ${totalFlagged} flagged`, type: "success" });
