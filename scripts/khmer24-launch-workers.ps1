@@ -4,9 +4,11 @@
 # with its own proxy (if proxies.txt exists).
 #
 # Usage:
-#   .\scripts\khmer24-launch-workers.ps1                    # 3 workers, no proxies
-#   .\scripts\khmer24-launch-workers.ps1 -Workers 5         # 5 workers
-#   .\scripts\khmer24-launch-workers.ps1 -Workers 3 -Fast   # fast mode
+#   .\scripts\khmer24-launch-workers.ps1                        # discover + 3 workers
+#   .\scripts\khmer24-launch-workers.ps1 -Workers 5             # discover + 5 workers
+#   .\scripts\khmer24-launch-workers.ps1 -Workers 3 -Fast       # fast mode
+#   .\scripts\khmer24-launch-workers.ps1 -SkipDiscover          # workers only (queue pre-filled)
+#   .\scripts\khmer24-launch-workers.ps1 -MaxPages 100          # discover more pages
 #
 # Each worker pulls PENDING items from the shared DB queue — no duplication.
 # Press Ctrl+C in any window to gracefully stop that worker.
@@ -17,7 +19,9 @@ param(
     [int]$MaxProcess = 99999,
     [int]$Cooldown = 5000,
     [switch]$Fast,
-    [switch]$DiscoverFirst
+    [switch]$SkipDiscover,
+    [int]$MaxPages = 50,
+    [int]$MaxUrls = 5000
 )
 
 Set-Location "C:\dev\globescraper_nextjs"
@@ -30,16 +34,18 @@ if (Test-Path $proxyFile) {
     Write-Host "Loaded $($proxies.Count) proxies from proxies.txt" -ForegroundColor Cyan
 }
 
-# Phase 1: Run discover once (if requested)
-if ($DiscoverFirst) {
+# Phase 1: Run discover to populate the queue (unless skipped)
+if (-not $SkipDiscover) {
     Write-Host "`n=== Phase 1: Discovering listings ===" -ForegroundColor Yellow
-    $discoverArgs = "npx tsx scripts/khmer24-scrape.ts --discover-only --max-pages 50 --max-urls 5000"
+    $discoverArgs = "npx tsx scripts/khmer24-scrape.ts --discover-only --max-pages $MaxPages --max-urls $MaxUrls"
     if ($proxies.Count -gt 0) {
         $discoverArgs += " --proxy $($proxies[0])"
     }
     if ($Fast) { $discoverArgs += " --fast" }
     Invoke-Expression $discoverArgs
     Write-Host "`n=== Discovery complete. Launching workers... ===" -ForegroundColor Yellow
+} else {
+    Write-Host "`nSkipping discovery (--SkipDiscover). Assuming queue already has items." -ForegroundColor DarkYellow
 }
 
 # Phase 2: Launch worker terminals
