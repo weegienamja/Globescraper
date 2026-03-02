@@ -3,29 +3,12 @@ import { auth } from "@/auth";
 import Link from "next/link";
 import Image from "next/image";
 import { redirect } from "next/navigation";
-import { COMMUNITY_COUNTRIES, INTENT_LABELS } from "@/lib/validations/community";
 import { touchLastActive } from "@/lib/last-active";
 import { needsOnboarding, isRecruiter } from "@/lib/rbac";
+import { CommunityGrid } from "@/components/community/CommunityGrid";
+import type { CommunityProfile } from "@/components/community/CommunityGrid";
 
 export const dynamic = "force-dynamic";
-
-const COUNTRY_ENUM_MAP: Record<string, string> = {
-  Vietnam: "VIETNAM",
-  Thailand: "THAILAND",
-  Cambodia: "CAMBODIA",
-  Philippines: "PHILIPPINES",
-  Indonesia: "INDONESIA",
-  Malaysia: "MALAYSIA",
-};
-
-const ENUM_COUNTRY_MAP: Record<string, string> = {
-  VIETNAM: "Vietnam",
-  THAILAND: "Thailand",
-  CAMBODIA: "Cambodia",
-  PHILIPPINES: "Philippines",
-  INDONESIA: "Indonesia",
-  MALAYSIA: "Malaysia",
-};
 
 const RELOCATION_LABEL: Record<string, string> = {
   PLANNING: "Planning",
@@ -145,13 +128,7 @@ function CommunityInvite() {
   );
 }
 
-type SortOption = "relevant" | "active" | "newest";
-
-export default async function CommunityPage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
+export default async function CommunityPage() {
   const session = await auth();
   if (!session?.user?.id) return <CommunityInvite />;
 
@@ -162,12 +139,6 @@ export default async function CommunityPage({
 
   // Fire-and-forget last active update
   touchLastActive(session.user.id);
-
-  const params = await searchParams;
-  const countryFilter = typeof params.country === "string" ? params.country : "";
-  const cityFilter = typeof params.city === "string" ? params.city : "";
-  const intentFilter = typeof params.intent === "string" ? params.intent : "";
-  const sortBy = (typeof params.sort === "string" ? params.sort : "relevant") as SortOption;
 
   // Get user's blocks to exclude
   const blocks = await prisma.block.findMany({
@@ -184,7 +155,7 @@ export default async function CommunityPage({
   );
   blockedIds.delete(session.user.id);
 
-  // Only show teacher + student profiles
+  // Fetch ALL visible profiles (no server-side filtering — client handles it)
   const where: Record<string, unknown> = {
     displayName: { not: null },
     visibility: { not: "PRIVATE" },
@@ -196,29 +167,10 @@ export default async function CommunityPage({
     userId: { notIn: Array.from(blockedIds) },
   };
 
-  if (countryFilter && COUNTRY_ENUM_MAP[countryFilter]) {
-    where.targetCountries = {
-      some: { country: COUNTRY_ENUM_MAP[countryFilter] },
-    };
-  }
-
-  if (cityFilter) {
-    where.currentCity = { contains: cityFilter };
-  }
-
-  if (intentFilter && intentFilter in INTENT_LABELS) {
-    where[intentFilter] = true;
-  }
-
-  // Sorting
-  let orderBy: Record<string, string> = { updatedAt: "desc" };
-  if (sortBy === "active") orderBy = { updatedAt: "desc" };
-  else if (sortBy === "newest") orderBy = { createdAt: "desc" };
-
   const profiles = await prisma.profile.findMany({
     where,
-    take: 50,
-    orderBy,
+    take: 100,
+    orderBy: { updatedAt: "desc" },
     select: {
       userId: true,
       displayName: true,
@@ -242,6 +194,17 @@ export default async function CommunityPage({
       targetCountries: { select: { country: true } },
     },
   });
+
+  // Serialise dates for the client component
+  const serialised: CommunityProfile[] = profiles.map((p) => ({
+    ...p,
+    updatedAt: p.updatedAt.toISOString(),
+    user: {
+      ...p.user,
+      lastActiveAt: p.user.lastActiveAt?.toISOString() ?? null,
+      emailVerified: p.user.emailVerified?.toISOString() ?? null,
+    },
+  }));
 
   // Check if current user has a community profile
   const myProfile = await prisma.profile.findUnique({
@@ -273,6 +236,10 @@ export default async function CommunityPage({
     }),
   ]);
 
+  function profileUrl(p: typeof profiles[number]): string {
+    return `/community/${p.user.username ?? p.userId}`;
+  }
+
   function timeAgo(date: Date | null): string {
     if (!date) return "";
     const diff = Date.now() - new Date(date).getTime();
@@ -286,27 +253,6 @@ export default async function CommunityPage({
     if (days === 1) return "Active yesterday";
     if (days < 7) return `Active ${days}d ago`;
     return `Active ${Math.floor(days / 7)}w ago`;
-  }
-
-  function getIntents(p: typeof profiles[number]): string[] {
-    const intents: string[] = [];
-    if (p.meetupCoffee) intents.push("Coffee meetups");
-    if (p.meetupCityTour) intents.push("City tour");
-    if (p.meetupJobAdvice) intents.push("Job advice");
-    if (p.meetupStudyGroup) intents.push("Study group");
-    if (p.meetupLanguageExchange) intents.push("Language exchange");
-    if (p.meetupVisaHelp) intents.push("Visa help chat");
-    if (p.meetupSchoolReferrals) intents.push("School referrals");
-    return intents;
-  }
-
-  function safeJsonArray(val: unknown): string[] {
-    if (Array.isArray(val)) return val.filter((v) => typeof v === "string");
-    return [];
-  }
-
-  function profileUrl(p: typeof profiles[number]): string {
-    return `/community/${p.user.username ?? p.userId}`;
   }
 
   return (
@@ -347,161 +293,9 @@ export default async function CommunityPage({
       </div>
 
       <div className="community-layout">
-        {/* Main column */}
+        {/* Main column — client-side filtered grid */}
         <div className="community-layout__main">
-          {/* Filters */}
-          <form method="GET" action="/community" className="community-filters">
-            {hasSetup ? (
-              <Link href="/community/edit-profile" className="btn btn--outline btn--sm community-filters__edit">
-                Edit my profile
-              </Link>
-            ) : (
-              <Link href="/community/edit-profile" className="btn btn--primary btn--sm community-filters__edit">
-                Set up your profile
-              </Link>
-            )}
-
-            <select name="country" defaultValue={countryFilter} className="form__input form__input--sm">
-              <option value="">All countries</option>
-              {COMMUNITY_COUNTRIES.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-
-            <input
-              name="city"
-              type="text"
-              placeholder="City..."
-              defaultValue={cityFilter}
-              className="form__input form__input--sm"
-            />
-
-            <select name="intent" defaultValue={intentFilter} className="form__input form__input--sm">
-              <option value="">Any intent</option>
-              {Object.entries(INTENT_LABELS).map(([key, label]) => (
-                <option key={key} value={key}>{label}</option>
-              ))}
-            </select>
-
-            <button type="submit" className="btn btn--primary btn--sm">
-              Search
-            </button>
-          </form>
-
-          {/* Sort row */}
-          <div className="community-sort">
-            <span className="community-sort__label">Sort:</span>
-            {(["relevant", "active", "newest"] as const).map((s) => (
-              <Link
-                key={s}
-                href={`/community?sort=${s}${countryFilter ? `&country=${countryFilter}` : ""}${cityFilter ? `&city=${cityFilter}` : ""}${intentFilter ? `&intent=${intentFilter}` : ""}`}
-                className={`community-sort__option ${sortBy === s ? "community-sort__option--active" : ""}`}
-              >
-                {s === "relevant" ? "Most relevant" : s === "active" ? "Recently active" : "Newest"}
-              </Link>
-            ))}
-          </div>
-
-          {/* Results */}
-          {profiles.length === 0 ? (
-            <div className="empty-state">
-              <div className="empty-state__icon">🔍</div>
-              <p className="empty-state__title">No profiles found</p>
-              <p className="empty-state__text">
-                Try widening your search or check back later.
-              </p>
-            </div>
-          ) : (
-            <div className="community-grid">
-              {profiles.map((p) => {
-                const languages = safeJsonArray(p.languagesTeaching);
-                const intents = getIntents(p);
-                const certs = safeJsonArray(p.certifications);
-                const active = timeAgo(p.user.lastActiveAt);
-                const isOnline = active === "Online now";
-
-                return (
-                  <Link
-                    key={p.userId}
-                    href={profileUrl(p)}
-                    className="community-card"
-                    tabIndex={0}
-                  >
-                    <div className="community-card__header">
-                      <div className="community-card__avatar-wrap">
-                        {p.avatarUrl ? (
-                          <Image
-                            src={p.avatarUrl}
-                            alt={p.displayName ?? ""}
-                            width={48}
-                            height={48}
-                            className="community-card__avatar-img"
-                          />
-                        ) : (
-                          <div className="community-card__avatar">
-                            {p.displayName?.[0]?.toUpperCase() ?? "?"}
-                          </div>
-                        )}
-                        {p.user.emailVerified && (
-                          <span className="community-card__verified" title="Verified">✓</span>
-                        )}
-                        {isOnline && <span className="community-card__online-dot" />}
-                      </div>
-                      <div className="community-card__info">
-                        <div className="community-card__name-row">
-                          <h3 className="community-card__name">{p.displayName}</h3>
-                          <span className="community-card__stage-pill">
-                            {RELOCATION_LABEL[p.relocationStage] ?? "Planning"}
-                          </span>
-                        </div>
-                        {(p.currentCity || p.currentCountry) && (
-                          <p className="community-card__location">
-                            📍 {[p.currentCity, p.currentCountry].filter(Boolean).join(", ")}
-                          </p>
-                        )}
-                        <p className="community-card__active">{active}</p>
-                      </div>
-                    </div>
-
-                    {/* Language + certs row */}
-                    {(languages.length > 0 || certs.length > 0) && (
-                      <div className="community-card__tags">
-                        {languages.map((l) => (
-                          <span key={l} className="tag tag--lang">{l}</span>
-                        ))}
-                        {certs.length > 0 && (
-                          <span className="tag tag--cert">{certs[0]} Certified</span>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Available for chips */}
-                    {intents.length > 0 && (
-                      <div className="community-card__intents">
-                        {intents.slice(0, 4).map((i) => (
-                          <span key={i} className="intent-badge">{i}</span>
-                        ))}
-                        {intents.length > 4 && (
-                          <span className="intent-badge intent-badge--more">...</span>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Target countries */}
-                    {p.targetCountries.length > 0 && (
-                      <div className="community-card__countries">
-                        {p.targetCountries.map((tc) => (
-                          <span key={tc.country} className="tag tag--country">
-                            {ENUM_COUNTRY_MAP[tc.country] ?? tc.country}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </Link>
-                );
-              })}
-            </div>
-          )}
+          <CommunityGrid profiles={serialised} hasSetup={hasSetup} />
         </div>
 
         {/* Sidebar */}
