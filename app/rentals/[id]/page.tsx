@@ -161,10 +161,10 @@ export default async function ListingDetailPage({ params }: Props) {
     }
   }
 
-  // Serialize dates for client component
+  // Serialize dates for client component (omit raw snapshots)
+  const { snapshots: _snaps, ...listingRest } = listing;
   const serialized = {
-    ...listing,
-    snapshots: undefined, // don't pass raw snapshots
+    ...listingRest,
     priceHistory: priceChanges,
     postedAt: listing.postedAt?.toISOString() ?? null,
     firstSeenAt: listing.firstSeenAt.toISOString(),
